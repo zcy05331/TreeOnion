@@ -474,7 +474,22 @@ RlweCt PirClient::load_resp_from_stream(std::stringstream &resp_stream) {
 }
 
 
+bool PirClient::scheme_compatible(const PirParams &other) const {
+  return pir_params_.scheme_compatible(other);
+}
+
 RlwePt PirClient::decrypt_mod_q(const RlweCt &ct) const {
+  uint64_t max_noise = 0;
+  int budget = 0;
+  RlwePt result = decrypt_mod_q_measured(ct, max_noise, budget);
+  BENCH_PRINT("Noise budget after decryption: " << budget
+              << " (max noise: " << max_noise << ")");
+  return result;
+}
+
+RlwePt PirClient::decrypt_mod_q_measured(const RlweCt &ct,
+                                         uint64_t &max_noise_out,
+                                         int &budget_out) const {
   // 这里是 Algorithm 4 response 的 custom small-q decryption。输入是
   // load_resp_from_stream 恢复出的 single-limb coefficient-form ciphertext。
   // 其中 ternary secret key 原本在旧 full-q limb 下生成，所以 multiplication 前
@@ -513,12 +528,10 @@ RlwePt PirClient::decrypt_mod_q(const RlweCt &ct) const {
     if (noise_abs > max_noise) max_noise = noise_abs;
   }
 
-  int budget = (max_noise > 0)
+  budget_out = (max_noise > 0)
     ? static_cast<int>(std::log2(static_cast<double>(q) / (2.0 * t * max_noise)))
     : static_cast<int>(std::log2(static_cast<double>(q) / (2.0 * t)));
-  BENCH_PRINT("Noise budget after decryption: " << budget
-              << " (max noise: " << max_noise << ")");
-
+  max_noise_out = max_noise;
   return result;
 }
 

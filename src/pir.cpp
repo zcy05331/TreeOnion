@@ -1,4 +1,5 @@
 #include "pir.h"
+#include "bv_keyswitch.h"
 #include "database_constants.h"
 #include "utils.h"
 #include "hexl/hexl.hpp"
@@ -181,22 +182,37 @@ PirParams PirParams::with_query_shape(const PirQueryShapeConfig &shape) const {
 }
 
 bool PirParams::scheme_compatible(const PirParams &other) const {
-  const bool same_composite =
-      composite_rns_.enabled == other.composite_rns_.enabled &&
-      composite_rns_.q1 == other.composite_rns_.q1 &&
-      composite_rns_.q2 == other.composite_rns_.q2 &&
-      composite_rns_.w1 == other.composite_rns_.w1 &&
-      composite_rns_.w2 == other.composite_rns_.w2 &&
-      composite_rns_.w_crt == other.composite_rns_.w_crt &&
-      composite_rns_.q1_inv_mod_q2 == other.composite_rns_.q1_inv_mod_q2;
-  return small_q_ == other.small_q_ && base_log2_ == other.base_log2_ &&
-         base_log2_key_ == other.base_log2_key_ &&
-         plain_mod_ == other.plain_mod_ &&
-         rns_mod_bits_ == other.rns_mod_bits_ &&
-         rns_mods_ == other.rns_mods_ &&
-         rns_tables_.q0_inv_mod_q1 == other.rns_tables_.q0_inv_mod_q1 &&
-         rns_tables_.r64_mod_q == other.rns_tables_.r64_mod_q &&
-         same_composite;
+  return scheme_identity() == other.scheme_identity();
+}
+
+PirSchemeIdentity PirParams::scheme_identity() const {
+  static_assert(sizeof(double) == sizeof(uint64_t));
+  static_assert(std::numeric_limits<double>::is_iec559,
+                "scheme identity requires IEEE-754 double");
+  PirSchemeIdentity id;
+  id.ring_degree = DBConsts::PolyDegree;
+  id.plaintext_modulus = plain_mod_;
+  id.rns_modulus_bits = rns_mod_bits_;
+  id.rns_moduli = rns_mods_;
+  id.response_modulus = small_q_;
+  id.response_modulus_bits = DBConsts::SmallQWidth;
+  id.selector_gadget_rows = l_ep_;
+  id.selector_base_log2 = base_log2_;
+  id.completion_key_gadget_rows = l_key_;
+  id.completion_key_base_log2 = base_log2_key_;
+  id.bv_ks_rows = bvks::gadget_rows();
+  id.bv_ks_base_log2 = bvks::base_log2_for_scheme(*this);
+  id.r64_mod_q = rns_tables_.r64_mod_q;
+  id.q0_inv_mod_q1 = rns_tables_.q0_inv_mod_q1;
+  id.composite_first_dim = composite_rns_.enabled;
+  id.composite_q1 = composite_rns_.q1;
+  id.composite_q2 = composite_rns_.q2;
+  id.composite_w1 = composite_rns_.w1;
+  id.composite_w2 = composite_rns_.w2;
+  id.composite_w_crt = composite_rns_.w_crt;
+  id.composite_q1_inv_mod_q2 = composite_rns_.q1_inv_mod_q2;
+  id.noise_std_dev_ieee754 = std::bit_cast<uint64_t>(get_noise_std_dev());
+  return id;
 }
 
 const size_t PirParams::get_ct_mod_width() const {

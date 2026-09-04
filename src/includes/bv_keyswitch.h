@@ -63,7 +63,15 @@ public:
   std::vector<BvKeySwitchKey> keys;
 
   const BvKeySwitchKey &get(uint32_t galois_k) const;
+  // Non-throwing membership test used by the generic tree path to inspect the
+  // actual automorphism family instead of trusting a claimed height.
+  bool contains(uint32_t galois_k) const noexcept;
 };
+
+// Read-only views of the key-switch gadget shape, so scheme identities never
+// re-derive the base rule that gen_bv_ks_key uses.
+size_t gadget_rows();                                    // L_KS
+size_t base_log2_for_scheme(const PirParams &pir_params); // floor(log2 q / L_KS) + 1
 
 // ============================================================================
 // Key generation (client side)

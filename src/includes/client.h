@@ -58,6 +58,9 @@ public:
 
   inline size_t get_client_id() const { return client_id_; }
 
+  // True when `other` shares this client's HE scheme (any database layout).
+  bool scheme_compatible(const PirParams &other) const;
+
   // Debug/diagnostic first-limb phase/noise estimate. This is not K-aware and
   // is not SEAL-backed invariant_noise_budget.
   int noise_budget(const RlweCt &ct);
@@ -80,6 +83,11 @@ public:
   // 重新编码，使 -1 == old_q-1 变成 small_q-1；随后 phase = c0 + c1*s，
   // 再 round 回 plaintext mod t。
   RlwePt decrypt_mod_q(const RlweCt &ciphertext) const;
+  // Same decryption, but reports the largest centered residue |phase - Delta'm|
+  // (small-q units) and the remaining budget in bits instead of printing them.
+  // The decoder is correct while max_noise < small_q / (2t).
+  RlwePt decrypt_mod_q_measured(const RlweCt &ciphertext, uint64_t &max_noise,
+                                int &budget_bits) const;
 
 
   friend class PirTest;

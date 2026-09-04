@@ -75,6 +75,19 @@ static inline size_t bv_base_log2(const PirParams &pir_params) {
   return q_bits / L_KS + 1;
 }
 
+size_t gadget_rows() { return L_KS; }
+
+size_t base_log2_for_scheme(const PirParams &pir_params) {
+  return bv_base_log2(pir_params);
+}
+
+bool BvGaloisKeys::contains(uint32_t galois_k) const noexcept {
+  for (const BvKeySwitchKey &k : keys) {
+    if (k.galois_k == galois_k) return true;
+  }
+  return false;
+}
+
 // Compute (1 << (i * base_log2)) mod q, safely.
 static inline uint64_t power_of_two_mod(size_t exp_bits, uint64_t q) {
   // Use repeated doubling mod q so we never overflow.
