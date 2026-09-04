@@ -38,3 +38,18 @@ outputs/*
 outputs/merkle_baselines/*
 !outputs/merkle_baselines/.gitkeep
 overleaf/
+
+# Paper sources, backups and LaTeX build products live beside the code but
+# are not part of the implementation repository.
+/paper/
+/paper-backup-*/
+/output/
+/tmp/
+*.aux
+*.bbl
+*.blg
+*.fdb_latexmk
+*.fls
+*.out
+*.synctex.gz
+*.toc
