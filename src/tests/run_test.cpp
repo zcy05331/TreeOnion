@@ -16,6 +16,8 @@ static const std::vector<std::string> kRegressionTests = {
     "tree_kernel", "tree_e2e", "tree_g32", "tree_compress",
     "merkle_baseline", "merkle_benchmark_stats", "layer_layout_planner",
     "merkle_integration", "cuckoo_batch",
+    "tree_superrecord_codec", "tree_superrecord_planner",
+    "tree_superrecord_index", "tree_superrecord_e2e",
 };
 
 void PirTest::run_test(const std::string &test_name) {
@@ -69,6 +71,10 @@ void PirTest::run_test(const std::string &test_name) {
   else if (test_name == "tree_compress")     test_tree_compress();
   else if (test_name == "cuckoo_batch")      test_cuckoo_batch();
   else if (test_name == "cuckoo_bench")      test_cuckoo_benchmark();
+  else if (test_name == "tree_superrecord_codec")   test_tree_superrecord_codec();
+  else if (test_name == "tree_superrecord_planner") test_tree_superrecord_planner();
+  else if (test_name == "tree_superrecord_index")   test_tree_superrecord_index();
+  else if (test_name == "tree_superrecord_e2e")     test_tree_superrecord_e2e();
   else if (test_name == "decrypt_mod_q")     test_decrypt_mod_q();
   else if (test_name == "mod_switch")        test_mod_switch();
   else if (test_name == "db_shape")          test_db_shape();

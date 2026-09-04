@@ -122,6 +122,12 @@ class PirTest {
     // Cuckoo-hash batch PIR baseline: correctness gate and L=22 benchmark.
     void test_cuckoo_batch();
     void test_cuckoo_benchmark();
+    // Generic super-record tree PIR: arbitrary h, dyadic G, minimal P, ragged
+    // N0, one shared sigma selector vector, pooled multi-plane responses.
+    void test_tree_superrecord_codec();
+    void test_tree_superrecord_planner();
+    void test_tree_superrecord_index();
+    void test_tree_superrecord_e2e();
     void test_mod_switch();
     void test_db_shape();
     void test_runtime_layout();
