@@ -75,6 +75,7 @@ void PirTest::run_test(const std::string &test_name) {
   else if (test_name == "tree_superrecord_planner") test_tree_superrecord_planner();
   else if (test_name == "tree_superrecord_index")   test_tree_superrecord_index();
   else if (test_name == "tree_superrecord_e2e")     test_tree_superrecord_e2e();
+  else if (test_name == "tree_superrecord_bench")   test_tree_superrecord_benchmark();
   else if (test_name == "decrypt_mod_q")     test_decrypt_mod_q();
   else if (test_name == "mod_switch")        test_mod_switch();
   else if (test_name == "db_shape")          test_db_shape();

@@ -17,6 +17,11 @@
 #   compress  tree_compress: M7 小环压缩门(固定小形状, 无 DB 档位, 只跑一次)。
 #   cuckoo    cuckoo_bench: cuckoo hash batch PIR baseline(3 hash, 1.5x 桶,
 #             3x 复制)。
+#   superrecord tree_superrecord_bench: 通用 super-record 树 PIR(规划器按
+#             256 位条目枚举 (h,G,P,N0,b,h_q) 候选, 一次跑 Bundle3、h=1 对照与
+#             Pareto 前沿), 同一进程内附带 legacy g=32 对照(同一叶调度)。
+#             旋钮: SUPERRECORD_MAX_FRONTIER SUPERRECORD_MAX_ARITY
+#             SUPERRECORD_SKIP_LEGACY=1。
 # tree/tree-g1/cuckoo 的树高、次数与种子都是运行时旗标
 # (--leaf-count/--experiments/--warmup/--trial-seed), 二进制与档位无关,
 # 全套只构建一次; 同一 TRIAL_SEED 驱动 merkle 与这三种基准的查询调度。
@@ -49,7 +54,7 @@
 #   00_meta.txt 00_cpu.txt 00_status.txt cpu_info.txt
 #   merkle.txt merkle.json(内含 1GB 与 4GB 两档 case)
 #   tree_g32_{1gb,4gb}.txt tree_g1_{1gb,4gb}.txt cuckoo_{1gb,4gb}.txt
-#   compress.txt
+#   superrecord_{1gb,4gb}.txt compress.txt
 # 完整性: 00_status.txt 每行 "<单元> ok|fail|skip [原因]"。任一单元失败
 #   退出码 1; 全部通过但有请求的单元被资源门跳过(矩阵不完整)退出码 3;
 #   只有全部单元 ok 才退出 0。单元失败不中断其余单元。
@@ -232,12 +237,12 @@ run_bin() {  # run_bin <日志名> <参数...>; 单元名 = 日志名去 .txt; �
 # ---------------- 模式选择 ----------------
 MODES=("$@")
 if [[ ${#MODES[@]} -eq 0 ]]; then
-  MODES=(merkle tree tree-g1 compress cuckoo)
+  MODES=(merkle tree tree-g1 compress cuckoo superrecord)
 fi
 has_mode() { local m; for m in "${MODES[@]}"; do [[ "$m" == "$1" ]] && return 0; done; return 1; }
 for MODE in "${MODES[@]}"; do
-  case "${MODE}" in merkle|tree|tree-g1|compress|cuckoo) ;;
-    *) echo "未知模式: ${MODE}(可选 merkle tree tree-g1 compress cuckoo)" >&2; exit 2 ;;
+  case "${MODE}" in merkle|tree|tree-g1|compress|cuckoo|superrecord) ;;
+    *) echo "未知模式: ${MODE}(可选 merkle tree tree-g1 compress cuckoo superrecord)" >&2; exit 2 ;;
   esac
 done
 
@@ -320,6 +325,13 @@ for SCALE in ${SCALES}; do
   if has_mode cuckoo; then
     if mem_gate "cuckoo_${SCALE}" $((1 << (LEAF_POW + 10))); then
       run_bin "cuckoo_${SCALE}.txt" --test cuckoo_bench "${SCALE_ARGS[@]}"
+    fi
+  fi
+  if has_mode superrecord; then
+    # 同一进程含 legacy g=32 对照, 峰值与 tree_g32 同量级(顺序执行, 不叠加)。
+    if mem_gate "superrecord_${SCALE}" $((1 << (LEAF_POW + 10))); then
+      run_bin "superrecord_${SCALE}.txt" --test tree_superrecord_bench \
+        "${SCALE_ARGS[@]}"
     fi
   fi
 done

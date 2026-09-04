@@ -66,6 +66,21 @@ python3 run.py --build-only
 python3 run.py -t fst_dim
 ```
 
+### Generic super-record tree PIR
+
+`src/tree_superrecord_*` implements the entry-size-aware super-record path
+(arbitrary bundle arity h, dyadic record width G, minimal plane count P,
+ragged first dimension N0, one shared sigma selector vector, pooled
+multi-plane responses) planned from `(E, N, policy)`; see
+[docs/TREE_PIR_GENERIC_SUPERRECORD.md](docs/TREE_PIR_GENERIC_SUPERRECORD.md).
+Correctness suites: `tree_superrecord_codec`, `tree_superrecord_planner`,
+`tree_superrecord_index`, `tree_superrecord_e2e` (all in `--test all`).
+Timed comparison against the legacy g=32 path on the same leaf schedule:
+
+```bash
+./build/Onion-PIR --test tree_superrecord_bench --leaf-count 4194304 --warmup 3 --experiments 16
+```
+
 ### Merkle PIR baselines on Apple Silicon
 
 The frozen comparison uses the paper-aligned v2 configuration

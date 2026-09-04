@@ -1,0 +1,12 @@
+commit:      161cf72e0ab870f1c9757b29c978cfa141b614ec (codex/generic-superrecord)
+utc:         20260904T021134Z
+os:          ProductName:		macOS;ProductVersion:		15.7.7;BuildVersion:		24G720;
+cpu:         Apple M4  mem=17179869184B
+arch:        x86_64 under Rosetta 2 (Apple M4), scalar u128 level_mat_mat_32 (no AVX-512)
+compiler:    Apple clang version 17.0.0 (clang-1700.6.3.2)
+config:      CONFIG_N2048_K1_COMP, USE_HEXL=ON (hexl 1.2.6), CMAKE_BUILD_TYPE=Benchmark
+command:     SUPERRECORD_MAX_FRONTIER=4 Onion-PIR --test tree_superrecord_bench --leaf-count 4194304 --warmup 3 --experiments 16
+runs:        run1 = first build (sweep without the same-shape control)
+             run2 = same, decoder bound added to the noise line
+             run3 = adds generic-legacy-shape (h=1, G=32, N0=512, b=7): the reported table
+note:        fanless laptop; the legacy 4 GiB row shows thermal spikes, compare medians
