@@ -1,0 +1,19 @@
+{
+  "schema_version": "cloudlab-tier-checkpoint.v1",
+  "tier": "8gb",
+  "completed": [
+    {
+      "case": "standard",
+      "measured_trials": 100,
+      "correct": true,
+      "mean_server_ms": 10518.81123
+    },
+    {
+      "case": "layerwise",
+      "measured_trials": 100,
+      "correct": true,
+      "mean_server_ms": 20702.12324
+    }
+  ],
+  "tier_complete": false
+}
