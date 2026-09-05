@@ -1,0 +1,148 @@
+{
+  "status": "complete",
+  "accepted_generic_runs": [
+    {
+      "entry_bits": 256,
+      "leaf_count": 4194304,
+      "raw_file": "outputs/superrecord/prototype-133ccce-local/e256-n4194304.json",
+      "analysis_file": "outputs/superrecord/prototype-133ccce-local/e256-n4194304-analysis.json",
+      "eligible_candidates": 4,
+      "measured_blocks": 16,
+      "warmups": 3,
+      "selected": "bundle3",
+      "source_commit": "133ccce7f33eb5a4ebf5886d3d70b1bb6cdc57d7"
+    },
+    {
+      "entry_bits": 13,
+      "leaf_count": 256,
+      "raw_file": "outputs/superrecord/prototype-133ccce-local/e13-n256.json",
+      "analysis_file": "outputs/superrecord/prototype-133ccce-local/e13-n256-analysis.json",
+      "eligible_candidates": 7,
+      "measured_blocks": 16,
+      "warmups": 3,
+      "selected": "minimum-response-count",
+      "source_commit": "133ccce7f33eb5a4ebf5886d3d70b1bb6cdc57d7"
+    },
+    {
+      "entry_bits": 128,
+      "leaf_count": 256,
+      "raw_file": "outputs/superrecord/prototype-133ccce-local/e128-n256.json",
+      "analysis_file": "outputs/superrecord/prototype-133ccce-local/e128-n256-analysis.json",
+      "eligible_candidates": 7,
+      "measured_blocks": 16,
+      "warmups": 3,
+      "selected": "minimum-response-count",
+      "source_commit": "133ccce7f33eb5a4ebf5886d3d70b1bb6cdc57d7"
+    },
+    {
+      "entry_bits": 160,
+      "leaf_count": 256,
+      "raw_file": "outputs/superrecord/prototype-133ccce-local/e160-n256.json",
+      "analysis_file": "outputs/superrecord/prototype-133ccce-local/e160-n256-analysis.json",
+      "eligible_candidates": 7,
+      "measured_blocks": 16,
+      "warmups": 3,
+      "selected": "minimum-response-count",
+      "source_commit": "133ccce7f33eb5a4ebf5886d3d70b1bb6cdc57d7"
+    },
+    {
+      "entry_bits": 192,
+      "leaf_count": 256,
+      "raw_file": "outputs/superrecord/prototype-133ccce-local/e192-n256.json",
+      "analysis_file": "outputs/superrecord/prototype-133ccce-local/e192-n256-analysis.json",
+      "eligible_candidates": 7,
+      "measured_blocks": 16,
+      "warmups": 3,
+      "selected": "minimum-optimized-steady-state",
+      "source_commit": "133ccce7f33eb5a4ebf5886d3d70b1bb6cdc57d7"
+    },
+    {
+      "entry_bits": 256,
+      "leaf_count": 256,
+      "raw_file": "outputs/superrecord/prototype-133ccce-local/e256-n256.json",
+      "analysis_file": "outputs/superrecord/prototype-133ccce-local/e256-n256-analysis.json",
+      "eligible_candidates": 9,
+      "measured_blocks": 16,
+      "warmups": 3,
+      "selected": "frontier-1",
+      "source_commit": "133ccce7f33eb5a4ebf5886d3d70b1bb6cdc57d7"
+    },
+    {
+      "entry_bits": 384,
+      "leaf_count": 256,
+      "raw_file": "outputs/superrecord/prototype-133ccce-local/e384-n256.json",
+      "analysis_file": "outputs/superrecord/prototype-133ccce-local/e384-n256-analysis.json",
+      "eligible_candidates": 7,
+      "measured_blocks": 16,
+      "warmups": 3,
+      "selected": "frontier-1",
+      "source_commit": "133ccce7f33eb5a4ebf5886d3d70b1bb6cdc57d7"
+    },
+    {
+      "entry_bits": 512,
+      "leaf_count": 256,
+      "raw_file": "outputs/superrecord/prototype-133ccce-local/e512-n256.json",
+      "analysis_file": "outputs/superrecord/prototype-133ccce-local/e512-n256-analysis.json",
+      "eligible_candidates": 7,
+      "measured_blocks": 16,
+      "warmups": 3,
+      "selected": "frontier-2",
+      "source_commit": "133ccce7f33eb5a4ebf5886d3d70b1bb6cdc57d7"
+    },
+    {
+      "entry_bits": 768,
+      "leaf_count": 256,
+      "raw_file": "outputs/superrecord/prototype-133ccce-local/e768-n256.json",
+      "analysis_file": "outputs/superrecord/prototype-133ccce-local/e768-n256-analysis.json",
+      "eligible_candidates": 7,
+      "measured_blocks": 16,
+      "warmups": 3,
+      "selected": "frontier-1",
+      "source_commit": "133ccce7f33eb5a4ebf5886d3d70b1bb6cdc57d7"
+    },
+    {
+      "entry_bits": 30000,
+      "leaf_count": 32,
+      "raw_file": "outputs/superrecord/prototype-large-entry-completion/e30000-n32.json",
+      "analysis_file": "outputs/superrecord/prototype-large-entry-completion/e30000-n32-analysis.json",
+      "eligible_candidates": 7,
+      "measured_blocks": 16,
+      "warmups": 3,
+      "selected": "generic-h1-frontier-1",
+      "source_commit": "6204499ae98b928f318db0b931c5da577cb66480"
+    }
+  ],
+  "cpp_commit": "133ccce7f33eb5a4ebf5886d3d70b1bb6cdc57d7",
+  "compiler_supplement": {
+    "compiler": [
+      "/usr/bin/arch",
+      "-x86_64",
+      "/usr/bin/clang++"
+    ],
+    "compiler_version": "Apple clang version 17.0.0 (clang-1700.6.3.2)\nTarget: x86_64-apple-darwin24.6.0\nThread model: posix\nInstalledDir: /Library/Developer/CommandLineTools/usr/bin",
+    "active_config": "CONFIG_N2048_K1_COMP",
+    "target_architectures": "x86_64",
+    "hexl_version": "1.2.6"
+  },
+  "failed_attempt": {
+    "file": "outputs/superrecord/prototype-133ccce-local/e30000-n16.log",
+    "reason": "19 distinct warmup/measured leaf IDs cannot fit 16 leaves",
+    "replacement": "outputs/superrecord/prototype-large-entry-completion/e30000-n32.json"
+  },
+  "treepir": {
+    "upstream_commit": "930063c5aefc441244abb4890fdf35383f3aa956",
+    "seal_commit": "7e21ef9353ef8e6c5e1f646c9ed8ff486d2ddb8c",
+    "raw_file": "outputs/superrecord/treepir-h10-comparison/treepir.json",
+    "server_stats_ms": {
+      "count": 16,
+      "mean": 310.951375,
+      "median": 304.59749999999997,
+      "p95": 354.328,
+      "stddev": 15.21078542734288
+    },
+    "same_leaf_schedule": true,
+    "query_correctness": "19/19",
+    "cross_implementation_pairing": false,
+    "comparison_scope": "different implementations and HE parameter sets; TreePIR 10 nodes and generic 11 nodes; descriptive timing comparison only"
+  }
+}
