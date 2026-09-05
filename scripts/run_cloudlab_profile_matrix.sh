@@ -25,6 +25,7 @@ export SUPERRECORD_COMMIT="$ONIONPIR_BENCH_COMMIT"
 STATUS_FILE="$RUN_ROOT/outputs/profiling/status.tsv"
 [[ -f "$STATUS_FILE" ]] || printf 'scale\tcase\tstatus\texit_code\tutc\n' > "$STATUS_FILE"
 printf '%s\n' "$$" > "$RUN_ROOT/metadata/matrix-controller.pid"
+echo running > "$RUN_ROOT/metadata/matrix.status"
 FAILURES=0
 run_case() {
   local scale="$1" name="$2"; shift 2
