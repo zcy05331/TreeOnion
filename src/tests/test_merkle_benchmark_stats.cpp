@@ -193,7 +193,7 @@ void PirTest::test_merkle_benchmark_stats() {
   MerkleBenchmarkOptions standard_only_options;
   standard_only_options.leaf_count = 256;
   standard_only_options.warmups = 0;
-  standard_only_options.measured_trials = 1;
+  standard_only_options.measured_trials = 2;
   standard_only_options.trial_seed = 0x7374616e64617264ULL;
   standard_only_options.case_selection =
       BenchmarkCaseSelection::standard_onionpir;
@@ -204,6 +204,52 @@ void PirTest::test_merkle_benchmark_stats() {
   require_test(standard_only_report.cases.front().name ==
                    "standard_onionpir",
                "standard-only benchmark omitted the requested case");
+  const auto require_raw_profile_samples =
+      [](const BenchmarkReport &profile_report, const char *label) {
+        for (const BenchmarkCaseResult &profile_case : profile_report.cases) {
+          const size_t measured =
+              profile_report.workload.trial_leaf_indices.size();
+          require_test(profile_case.sample_leaf_indices ==
+                           profile_report.workload.trial_leaf_indices,
+                       std::string(label) + " sample leaf mapping");
+          require_test(profile_case.server_compute_samples_ms.size() ==
+                           measured,
+                       std::string(label) + " server sample count");
+          require_test(profile_case.client_query_samples_ms.size() ==
+                           measured,
+                       std::string(label) + " client sample count");
+          require_test(profile_case.response_serialize_samples_ms.size() ==
+                           measured,
+                       std::string(label) + " serialize sample count");
+          require_test(
+              profile_case.response_load_decrypt_extract_samples_ms.size() ==
+                  measured,
+              std::string(label) + " decode sample count");
+          require_test(profile_case.pipeline_profile_samples_ms.size() ==
+                           measured,
+                       std::string(label) + " pipeline sample count");
+          for (size_t i = 0; i < measured; ++i) {
+            require_test(profile_case.pipeline_profile_samples_ms[i].leaf ==
+                             profile_report.workload.trial_leaf_indices[i],
+                         std::string(label) +
+                             " pipeline sample leaf mapping");
+            const auto &stages =
+                profile_case.pipeline_profile_samples_ms[i].stages;
+            require_test(stages.count("expand") == 1 &&
+                             stages.count("mod_switch") == 1,
+                         std::string(label) +
+                             " pipeline sample stages missing");
+            double stage_sum = 0.0;
+            for (const auto &[stage, ms] : stages) stage_sum += ms;
+            require_test(stage_sum >= 0.0 &&
+                             stage_sum <=
+                                 profile_case.server_compute_samples_ms[i],
+                         std::string(label) +
+                             " pipeline stages exceed server sample");
+          }
+        }
+      };
+  require_raw_profile_samples(standard_only_report, "standard");
 
   MerkleBenchmarkOptions paths_only_options = standard_only_options;
   paths_only_options.case_selection = BenchmarkCaseSelection::merkle_paths;
@@ -214,6 +260,7 @@ void PirTest::test_merkle_benchmark_stats() {
   require_test(paths_only_report.cases[0].name == "merkle_flat" &&
                    paths_only_report.cases[1].name == "merkle_layerwise",
                "paths-only benchmark did not isolate both path cases");
+  require_raw_profile_samples(paths_only_report, "paths");
 
   MerkleBenchmarkOptions layerwise_only_options = standard_only_options;
   layerwise_only_options.case_selection =
@@ -253,6 +300,17 @@ void PirTest::test_merkle_benchmark_stats() {
                  "JSON omitted the per-level layouts");
     require_test(text.find("\"pipeline_profile_ms\": {") != std::string::npos,
                  "JSON omitted the pipeline profile");
+    require_test(text.find("\"client_query_samples_ms\": [") !=
+                     std::string::npos,
+                 "JSON omitted client query samples");
+    require_test(text.find("\"sample_leaf_indices\": [") !=
+                     std::string::npos,
+                 "JSON omitted case sample leaf IDs");
+    require_test(text.find("\"pipeline_profile_samples_ms\": [") !=
+                     std::string::npos,
+                 "JSON omitted pipeline profile samples");
+    require_test(text.find("\"leaf\": ") != std::string::npos,
+                 "JSON omitted per-sample leaf mapping");
     std::filesystem::remove(path);
   }
 
@@ -275,16 +333,16 @@ void PirTest::test_merkle_benchmark_stats() {
   print_benchmark_report(report);
   print_benchmark_report(layerwise_only_report);
 
-  bool rejected_ungated_large_primary = false;
+  bool rejected_too_large_primary = false;
   try {
     MerkleBenchmarkOptions unsafe_options;
-    unsafe_options.leaf_count = size_t{1} << 27;
+    unsafe_options.leaf_count = size_t{1} << 28;
     unsafe_options.warmups = 0;
     unsafe_options.measured_trials = 1;
     (void)run_merkle_benchmark_suite(unsafe_options);
   } catch (const std::invalid_argument &) {
-    rejected_ungated_large_primary = true;
+    rejected_too_large_primary = true;
   }
-  require_test(rejected_ungated_large_primary,
-               "accepted an ungated oversized primary workload");
+  require_test(rejected_too_large_primary,
+               "accepted a primary workload above 2^27 leaves");
 }

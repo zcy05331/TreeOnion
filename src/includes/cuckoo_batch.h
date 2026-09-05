@@ -47,10 +47,28 @@ struct CuckooBucket {
   PirParams params;               // scheme-compatible per-bucket layout
 };
 
+struct CuckooStorageStats {
+  size_t bucket_count = 0;
+  size_t total_member_entries = 0;
+  size_t total_target_plaintexts = 0;
+  size_t total_padded_plaintexts = 0;
+  size_t max_bucket_members = 0;
+  size_t max_bucket_target_plaintexts = 0;
+  size_t max_bucket_plaintexts = 0;
+  uint64_t logical_replicated_bytes = 0;
+  uint64_t logical_padded_bytes = 0;
+  uint64_t public_metadata_bytes = 0;
+  uint64_t estimated_preprocessed_bytes = 0;
+  uint64_t estimated_peak_resident_bytes = 0;
+};
+
 // Enumerate every bucket's member list and pick the minimal scheme-compatible
 // layout per bucket (same scoring as the layerwise planner).
 std::vector<CuckooBucket> build_cuckoo_buckets(const CuckooBatchParams &params,
                                                const PirParams &reference);
+
+CuckooStorageStats summarize_cuckoo_storage(
+    const std::vector<CuckooBucket> &buckets);
 
 // Rank of `ordinal` inside the bucket's sorted member list; throws when the
 // ordinal does not hash into this bucket.

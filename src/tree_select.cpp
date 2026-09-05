@@ -634,16 +634,19 @@ RlweCt select_level_m32(const TreeLevelDatabaseM32 &db, const LevelPlan &plan,
   TIME_START(TREE_SCAN_TIME);
   const size_t out_elems = N * db.rows * 2;
   std::vector<uint64_t> out_lo(out_elems), out_hi(out_elems);
+  TIME_START(TREE_SCAN_CORE_TIME);
   level_mat_mat_32(db.lo.data(), pyramid_m32.lo[pyramid_row].data(),
                    out_lo.data(), db.rows, db.cols, N, crt.q1);
   level_mat_mat_32(db.hi.data(), pyramid_m32.hi[pyramid_row].data(),
                    out_hi.data(), db.rows, db.cols, N, crt.q2);
+  TIME_END(TREE_SCAN_CORE_TIME);
 
   // 复合配置下唯一的 RNS limb 就是 q = q1·q2，INTT 按它做。
   const uint64_t q = scheme.get_rns_mods()[0];
   std::vector<RlweCt> candidates;
   candidates.reserve(db.rows);
   // 逐候选行做 CRT 合成 + INTT，还原成系数形式的 RLWE 密文。
+  TIME_START(TREE_SCAN_FINALIZE_TIME);
   for (size_t row = 0; row < db.rows; ++row) {
     RlweCt ct;
     ct.c0.assign(N, 0);
@@ -673,6 +676,7 @@ RlweCt select_level_m32(const TreeLevelDatabaseM32 &db, const LevelPlan &plan,
     utils::ntt_inv(ct.c1.data(), N, q);
     candidates.push_back(std::move(ct));
   }
+  TIME_END(TREE_SCAN_FINALIZE_TIME);
   TIME_END(TREE_SCAN_TIME);
 
   // Single / CoarsenedAlpha 情形只有单行输出，直接就是 C_ℓ；

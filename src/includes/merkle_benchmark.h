@@ -56,6 +56,11 @@ struct LayerLayoutRecord {
   LayerLayoutFeatures features;
 };
 
+struct PipelineProfileSample {
+  uint64_t leaf = 0;
+  std::map<std::string, double> stages;
+};
+
 struct BenchmarkCaseResult {
   std::string name;
   bool correctness_passed = false;
@@ -72,8 +77,12 @@ struct BenchmarkCaseResult {
   TrialTiming timing;
   CommunicationStats communication;
   // Raw measured samples make means and variance independently auditable.
-  // Warm-up trials are intentionally excluded from both vectors.
+  // Warm-up trials are intentionally excluded from these vectors.
+  std::vector<uint64_t> sample_leaf_indices;
   std::vector<double> server_compute_samples_ms;
+  std::vector<double> client_query_samples_ms;
+  std::vector<double> response_serialize_samples_ms;
+  std::vector<double> response_load_decrypt_extract_samples_ms;
   std::optional<MetricSampleStatistics> server_compute_ms_statistics;
   // Server-side phase breakdown in ms per trial, averaged over measured
   // trials, read from the TimerLogger sections that make_query brackets:
@@ -90,6 +99,7 @@ struct BenchmarkCaseResult {
   // first_dim_query_pack, first_dim_core, first_dim_finalize, other_dim,
   // mod_switch. Sums every PIR call of a path trial.
   std::map<std::string, double> pipeline_profile_ms;
+  std::vector<PipelineProfileSample> pipeline_profile_samples_ms;
   // Layerwise only: which planner policy chose the layouts and what they are.
   std::string layer_layout_policy;
   std::vector<LayerLayoutRecord> layers;

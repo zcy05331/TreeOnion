@@ -1,12 +1,21 @@
 #include "tests.h"
+#include "merkle_benchmark.h"
+#include "tree_compress_bench.h"
 #include "tree_compress.h"
 #include "tree_index.h"
+#include "tree_profile_json.h"
 #include "tree_query.h"
 #include "tree_response.h"
 #include "tree_select.h"
 
 #include <array>
 #include <bit>
+#include <chrono>
+#include <map>
+#include <numeric>
+#include <ostream>
+#include <sstream>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -37,7 +46,208 @@ std::array<uint8_t, 32> assemble_node(const std::vector<uint64_t> &chunks,
   return out;
 }
 
+template <typename T>
+void write_binary(std::ostream &out, const T &value) {
+  out.write(reinterpret_cast<const char *>(&value), sizeof(T));
+}
+
+size_t write_compressed_response_to_stream(
+    const CompressedPathResponse &response, std::ostream &out) {
+  size_t bytes = 0;
+  const auto write_scalar = [&](const auto &value) {
+    write_binary(out, value);
+    bytes += sizeof(value);
+  };
+  write_scalar(response.n2);
+  write_scalar(response.modulus);
+  write_scalar(response.level_count);
+  const size_t offset_count = response.level_offsets.size();
+  const size_t c0_count = response.c0.size();
+  const size_t c1_count = response.c1.size();
+  write_scalar(offset_count);
+  write_scalar(c0_count);
+  write_scalar(c1_count);
+  for (size_t value : response.level_offsets) write_scalar(value);
+  for (uint64_t value : response.c0) write_scalar(value);
+  for (uint64_t value : response.c1) write_scalar(value);
+  return bytes;
+}
+
 }  // namespace
+
+void run_tree_compress_benchmark(PirTest &test) {
+  print_func_name("test_tree_compress_benchmark");
+  constexpr size_t N = DBConsts::PolyDegree;
+  using Clock = std::chrono::steady_clock;
+  const auto ms_since = [](Clock::time_point start) {
+    return std::chrono::duration<double, std::milli>(Clock::now() - start)
+        .count();
+  };
+
+  PirParams scheme;
+  require_applicable(
+      scheme.K() == 1,
+      "compressed response benchmark requires a single-limb (K = 1) scheme");
+  const uint64_t t = scheme.get_plain_mod();
+  const size_t chunk_bits = std::bit_width(t) - 1;
+  const size_t g = std::bit_ceil((size_t{255} / chunk_bits) + 1);
+  const size_t L = test.bench_tree_height(24);
+  const size_t key_height = scheme.get_expan_height();
+  size_t chosen_a = 2;
+  for (size_t a = 20; a >= 2; --a) {
+    try {
+      (void)make_tree_pir_params_for_scheme(L, a, g, scheme, key_height);
+      chosen_a = a;
+      break;
+    } catch (const std::invalid_argument &) {
+    }
+  }
+  const TreePirParams tree =
+      make_tree_pir_params_for_scheme(L, chosen_a, g, scheme, key_height);
+  require_applicable(2 * tree.L < tree.rho,
+                     "compressed benchmark requires even-aligned 2L < rho");
+  const TreeNodeChunkSource source = [&](size_t level, size_t index,
+                                         size_t chunk) {
+    return synthetic_tree_node_bytes_chunk(level, index, chunk, t);
+  };
+
+  PirClient client(scheme);
+  SharedPirSessionKeys keys =
+      client.create_session_keys(std::bit_width(N) - 1);
+  TreeRingSwitchBundle ring = client.create_ring_switch_bundle(N / 2);
+  const PirParams qparams = tree_query_expansion_params(tree, scheme);
+  PirServer server(qparams);
+  server.set_client_session_keys(client.get_client_id(), keys);
+
+  const auto setup_start = Clock::now();
+  const PreprocessedTree db = preprocess_tree_mvp(tree, source, scheme);
+  const double setup_ms = ms_since(setup_start);
+
+  const size_t kWarmups = test.bench_warmups.value_or(3);
+  const size_t kTrials = test.bench_measured_trials.value_or(100);
+  const uint64_t trial_seed =
+      test.bench_trial_seed.value_or(0x7472656543376d70ULL);
+  const BenchmarkTrialPlan plan =
+      make_benchmark_trial_plan(tree.N, kWarmups, kTrials, trial_seed);
+
+  std::vector<double> query_ms, unpack_ms, path_ms, decode_ms;
+  size_t actual_response_bytes = 0;
+  std::vector<tree_profile_json::Sample> json_samples;
+  CLEAN_TIMER();
+  const auto run_trial = [&](size_t leaf, bool measured, size_t trial) {
+    auto start = Clock::now();
+    RlweCt query = make_tree_query(client, scheme, tree, leaf);
+    const double q_ms = ms_since(start);
+
+    TreeQueryUnpackTiming unpack_timing;
+    start = Clock::now();
+    ExpandedTreeQuery unpacked = unpack_tree_query(
+        server, scheme, tree, client.get_client_id(), query, &unpack_timing);
+    const double u_ms = ms_since(start);
+
+    start = Clock::now();
+    CompressedPathResponse response = answer_path_compressed(
+        db, unpacked, server, client.get_client_id(), tree, scheme, ring.keys);
+    const double p_ms = ms_since(start);
+
+    start = Clock::now();
+    std::ostringstream wire;
+    const size_t response_bytes =
+        write_compressed_response_to_stream(response, wire);
+    const double response_serialize_ms = ms_since(start);
+
+    start = Clock::now();
+    const std::vector<std::vector<uint64_t>> path = decode_compressed_path(
+        response, ring.secret, t, tree.g, tree.rho);
+    const double d_ms = ms_since(start);
+    END_EXPERIMENT();
+
+    std::map<std::string, double> sample_stages;
+    if (measured) {
+      sample_stages["query_expand"] =
+          tree_profile_json::ns_to_ms(unpack_timing.query_expand);
+      sample_stages["selector_completion"] =
+          tree_profile_json::ns_to_ms(unpack_timing.selector_completion);
+      for (size_t i = 0; i < tree_profile_json::kScanTimerSections.size();
+           ++i) {
+        sample_stages[tree_profile_json::kScanStageLabels[i]] =
+            GET_LAST_TIME(tree_profile_json::kScanTimerSections[i]);
+      }
+      for (size_t i = 0; i < tree_profile_json::kPathTimerSections.size();
+           ++i) {
+        sample_stages[tree_profile_json::kPathStageLabels[i]] =
+            GET_LAST_TIME(tree_profile_json::kPathTimerSections[i]);
+      }
+    }
+
+    require_test(path.size() == tree.L + 1,
+                 "compressed benchmark path length");
+    for (size_t level = 0; level <= tree.L; ++level) {
+      const size_t node = leaf >> (tree.L - level);
+      for (size_t j = 0; j < tree.g; ++j) {
+        require_test(path[level][j] == source(level, node, j),
+                     "compressed benchmark path chunk mismatch");
+      }
+    }
+    if (measured) {
+      query_ms.push_back(q_ms);
+      unpack_ms.push_back(u_ms);
+      path_ms.push_back(p_ms);
+      decode_ms.push_back(d_ms);
+      actual_response_bytes = response_bytes;
+      tree_profile_json::Sample sample;
+      sample.trial = trial;
+      sample.leaf = leaf;
+      sample.client_query_ms = q_ms;
+      sample.server_total_ms =
+          tree_profile_json::query_unpack_ms(unpack_timing) + p_ms;
+      sample.stages_ms = std::move(sample_stages);
+      sample.diagnostics_ms["scan_combined"] = GET_LAST_TIME(TREE_SCAN_TIME);
+      sample.diagnostics_ms["response_ring_switch_key_switch"] =
+          GET_LAST_TIME(TREE_COMPRESS_KEY_SWITCH_TIME);
+      sample.diagnostics_ms["response_ring_switch_modswitch"] =
+          GET_LAST_TIME(TREE_COMPRESS_MOD_SWITCH_TIME);
+      sample.response_serialize_ms = response_serialize_ms;
+      sample.client_decode_ms = d_ms;
+      sample.correct = true;
+      json_samples.push_back(std::move(sample));
+    }
+  };
+
+  size_t trial = 0;
+  for (size_t leaf : plan.warmup_leaf_indices) run_trial(leaf, false, trial++);
+  trial = 0;
+  for (size_t leaf : plan.measured_leaf_indices) run_trial(leaf, true, trial++);
+
+  const auto avg = [](const std::vector<double> &v) {
+    return std::accumulate(v.begin(), v.end(), 0.0) / v.size();
+  };
+  BENCH_PRINT("tree compressed 32-byte-node benchmark: N=2^"
+              << tree.L << " leaves, g=" << tree.g << ", N0=" << tree.N0
+              << ", b=" << tree.b << ", rho=" << tree.rho
+              << ", h_q=" << tree.h_q << ", setup " << setup_ms << " ms");
+  BENCH_PRINT("trials: " << kTrials << " measured after " << kWarmups
+              << " warmup");
+  BENCH_PRINT("client query avg " << avg(query_ms) << " ms");
+  BENCH_PRINT("server unpack (expand+convert) avg " << avg(unpack_ms)
+              << " ms");
+  BENCH_PRINT("server compressed path avg " << avg(path_ms) << " ms");
+  BENCH_PRINT("server total avg " << avg(unpack_ms) + avg(path_ms)
+              << " ms");
+  BENCH_PRINT("client compressed decode avg " << avg(decode_ms) << " ms");
+  BENCH_PRINT("communication: compressed response "
+              << actual_response_bytes << " B (struct wire model)");
+
+  tree_profile_json::write_report(
+      tree_profile_json::output_path_from_env(), "legacy-tree-g32-compressed",
+      tree.N, 256, tree.N * 32, kWarmups, kTrials, trial_seed, false,
+      "compressed", json_samples,
+      {{"hardware_target", "CloudLab Xeon 6142 AVX-512 376GiB RAM"},
+       {"payload_note", "compressed path benchmark carries full 32-byte nodes"},
+       {"chunk_bits", std::to_string(chunk_bits)},
+       {"g", std::to_string(tree.g)},
+       {"response_bytes_model", std::to_string(actual_response_bytes)}});
+}
 
 // Milestone-7 gate: the d = 2 ring switch compresses the aligned path
 // response to one R_{n/2} ciphertext that still decodes the exact path.

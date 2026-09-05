@@ -7,6 +7,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <chrono>
 #include <span>
 #include <vector>
 
@@ -99,6 +100,11 @@ struct ExpandedTreeQuery {
   std::vector<GSWCt> gamma_selectors;
 };
 
+struct TreeQueryUnpackTiming {
+  std::chrono::nanoseconds query_expand{};
+  std::chrono::nanoseconds selector_completion{};
+};
+
 // Algorithm "QueryUnpack"（服务端，§9）：跑现成的系数展开树（ExpandBFV，
 // 带 useful-leaf 剪枝），α 区间原样保留为 BFV，selector 组经
 // PirServer::complete_selectors 补全成 RGSW——这与 flat 生产路径 make_query
@@ -109,4 +115,5 @@ struct ExpandedTreeQuery {
 ExpandedTreeQuery unpack_tree_query(PirServer &server,
                                     const PirParams &scheme,
                                     const TreePirParams &tree,
-                                    size_t client_id, RlweCt &query);
+                                    size_t client_id, RlweCt &query,
+                                    TreeQueryUnpackTiming *timing = nullptr);

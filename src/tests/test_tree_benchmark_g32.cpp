@@ -1,6 +1,7 @@
 #include "tests.h"
 #include "merkle_benchmark.h"
 #include "tree_index.h"
+#include "tree_profile_json.h"
 #include "tree_query.h"
 #include "tree_response.h"
 #include "tree_select.h"
@@ -86,21 +87,18 @@ void PirTest::test_tree_benchmark_g32() {
   // Server-path stage breakdown: answer_path_mvp and the select kernels
   // accumulate TimerLogger sections; each trial is closed with
   // END_EXPERIMENT() and its per-stage totals read back by key.
-  constexpr std::array<const char *, 7> kStages = {
-      TREE_PYRAMID_TIME, TREE_SCAN_TIME,    TREE_FOLD_TIME, TREE_ROTATE_TIME,
-      TREE_PROJECT_TIME, TREE_PACK_TIME,    TREE_SWITCH_TIME};
-  constexpr std::array<const char *, 7> kStageLabels = {
-      "pyramid", "scan", "fold", "rotate", "project", "pack", "switch"};
   std::array<double, 7> stage_sum{};
+  std::vector<tree_profile_json::Sample> json_samples;
   CLEAN_TIMER();
-  const auto run_trial = [&](size_t leaf, bool measured) {
+  const auto run_trial = [&](size_t leaf, bool measured, size_t trial) {
     auto start = Clock::now();
     RlweCt query = make_tree_query(client, scheme, tree, leaf);
     const double q_ms = ms_since(start);
 
+    TreeQueryUnpackTiming unpack_timing;
     start = Clock::now();
     ExpandedTreeQuery unpacked = unpack_tree_query(
-        server, scheme, tree, client.get_client_id(), query);
+        server, scheme, tree, client.get_client_id(), query, &unpack_timing);
     const double u_ms = ms_since(start);
 
     start = Clock::now();
@@ -113,10 +111,34 @@ void PirTest::test_tree_benchmark_g32() {
     const std::vector<std::vector<uint64_t>> path =
         extract_path_chunks_mvp(response, client, tree);
     const double e_ms = ms_since(start);
+
+    start = Clock::now();
+    std::stringstream wire;
+    actual_response_bytes =
+        server.save_resp_to_stream(response.chunks[0], wire);
+    const double response_serialize_ms = ms_since(start);
     END_EXPERIMENT();
+    std::map<std::string, double> sample_stages;
     if (measured) {
-      for (size_t i = 0; i < kStages.size(); ++i) {
-        stage_sum[i] += GET_LAST_TIME(kStages[i]);
+      sample_stages["query_expand"] =
+          tree_profile_json::ns_to_ms(unpack_timing.query_expand);
+      sample_stages["selector_completion"] =
+          tree_profile_json::ns_to_ms(unpack_timing.selector_completion);
+      for (size_t i = 0; i < tree_profile_json::kLegacyTimerSections.size();
+           ++i) {
+        const double stage_ms =
+            GET_LAST_TIME(tree_profile_json::kLegacyTimerSections[i]);
+        stage_sum[i] += stage_ms;
+      }
+      for (size_t i = 0; i < tree_profile_json::kScanTimerSections.size();
+           ++i) {
+        sample_stages[tree_profile_json::kScanStageLabels[i]] =
+            GET_LAST_TIME(tree_profile_json::kScanTimerSections[i]);
+      }
+      for (size_t i = 0; i < tree_profile_json::kPathTimerSections.size();
+           ++i) {
+        sample_stages[tree_profile_json::kPathStageLabels[i]] =
+            GET_LAST_TIME(tree_profile_json::kPathTimerSections[i]);
       }
     }
 
@@ -134,14 +156,25 @@ void PirTest::test_tree_benchmark_g32() {
       unpack_ms.push_back(u_ms);
       path_ms.push_back(p_ms);
       extract_ms.push_back(e_ms);
-      std::stringstream wire;
-      actual_response_bytes =
-          server.save_resp_to_stream(response.chunks[0], wire);
+      tree_profile_json::Sample sample;
+      sample.trial = trial;
+      sample.leaf = leaf;
+      sample.client_query_ms = q_ms;
+      sample.server_total_ms =
+          tree_profile_json::query_unpack_ms(unpack_timing) + p_ms;
+      sample.stages_ms = std::move(sample_stages);
+      sample.diagnostics_ms["scan_combined"] = GET_LAST_TIME(TREE_SCAN_TIME);
+      sample.response_serialize_ms = response_serialize_ms;
+      sample.client_decode_ms = e_ms;
+      sample.correct = true;
+      json_samples.push_back(std::move(sample));
     }
   };
 
-  for (size_t leaf : plan.warmup_leaf_indices) run_trial(leaf, false);
-  for (size_t leaf : plan.measured_leaf_indices) run_trial(leaf, true);
+  size_t trial = 0;
+  for (size_t leaf : plan.warmup_leaf_indices) run_trial(leaf, false, trial++);
+  trial = 0;
+  for (size_t leaf : plan.measured_leaf_indices) run_trial(leaf, true, trial++);
 
   const auto avg = [](const std::vector<double> &v) {
     return std::accumulate(v.begin(), v.end(), 0.0) / v.size();
@@ -175,10 +208,12 @@ void PirTest::test_tree_benchmark_g32() {
   {
     std::string breakdown = "server path breakdown avg (ms):";
     double stage_total = 0;
-    for (size_t i = 0; i < kStages.size(); ++i) {
+    for (size_t i = 0; i < tree_profile_json::kLegacyTimerSections.size();
+         ++i) {
       const double v = stage_sum[i] / path_ms.size();
       stage_total += v;
-      breakdown += std::string(" ") + kStageLabels[i] + " " +
+      breakdown += std::string(" ") +
+                   tree_profile_json::kLegacyStageLabels[i] + " " +
                    std::to_string(v);
     }
     BENCH_PRINT(breakdown);
@@ -193,4 +228,12 @@ void PirTest::test_tree_benchmark_g32() {
               << " B (modeled)");
   BENCH_PRINT("payload: " << (tree.L + 1) << " x 32-byte path nodes = "
               << (tree.L + 1) * 32 << " B useful");
+  tree_profile_json::write_report(
+      tree_profile_json::output_path_from_env(), "legacy-tree-g32", tree.N,
+      256, tree.N * 32, kWarmups, kTrials, trial_seed, false, "mvp",
+      json_samples,
+      {{"hardware_target", "CloudLab Xeon 6142 AVX-512 376GiB RAM"},
+       {"payload_note", "g=32 carries full 32-byte nodes in 12-bit chunks"},
+       {"chunk_bits", std::to_string(chunk_bits)},
+       {"g", std::to_string(tree.g)}});
 }

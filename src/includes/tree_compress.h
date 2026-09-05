@@ -3,6 +3,9 @@
 #include "pir.h"
 #include "rlwe.h"
 
+#define TREE_COMPRESS_KEY_SWITCH_TIME "Tree compressed response key-switch"
+#define TREE_COMPRESS_MOD_SWITCH_TIME "Tree compressed response mod-switch"
+
 #include <cstddef>
 #include <cstdint>
 #include <vector>

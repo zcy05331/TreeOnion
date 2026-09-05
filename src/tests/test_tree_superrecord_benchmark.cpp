@@ -101,6 +101,7 @@ struct Sample {
   std::array<double, 10> stages_ms{};
   double client_query_ms = 0;
   double client_decode_ms = 0;
+  double response_serialize_ms = 0;
   int min_budget_bits = 0;
   uint64_t max_noise = 0;
   size_t response_payload_bytes = 0;
@@ -131,6 +132,8 @@ struct RunResult {
   std::optional<Candidate> candidate;
   std::vector<Sample> samples;
   double setup_ms = 0;
+  double session_setup_ms = 0;
+  double noise_gate_ms = 0;
   double query_ms_avg = 0;
   double extract_ms_avg = 0;
   size_t db_bytes = 0;
@@ -717,6 +720,9 @@ void write_run_json(const std::string &path, size_t entry_bits, size_t L,
     if (r.reason.empty()) out << "null";
     else json_string(out, r.reason);
     out << ", \"setup_ms\": " << r.setup_ms
+        << ", \"preprocess_ms\": " << r.setup_ms
+        << ", \"session_setup_ms\": " << r.session_setup_ms
+        << ", \"noise_gate_ms\": " << r.noise_gate_ms
         << ", \"query_ms_avg\": " << r.query_ms_avg
         << ", \"client_decode_ms_avg\": " << r.extract_ms_avg
         << ", \"memory\": {\"database_bytes\": " << r.db_bytes
@@ -806,6 +812,7 @@ void write_run_json(const std::string &path, size_t entry_bits, size_t L,
           << ", \"server_total_ms\": " << sample.server_total_ms
           << ", \"client_query_ms\": " << sample.client_query_ms
           << ", \"client_decode_ms\": " << sample.client_decode_ms
+          << ", \"response_serialize_ms\": " << sample.response_serialize_ms
           << ", \"min_budget_bits\": " << sample.min_budget_bits
           << ", \"max_noise\": " << sample.max_noise
           << ", \"response_payload_bytes\": "
@@ -1116,6 +1123,7 @@ void PirTest::test_tree_superrecord_benchmark() {
         const size_t required = std::max(tree.h_q, tree.r);
         const size_t registered = policy.eval_key_registration == EvalKeyRegistrationPolicy::FixedMaximumHeight
             ? policy.fixed_session_key_height : required;
+        const auto session_start = Clock::now();
         const auto keys = client.create_session_keys(registered);
         require_bv_key_coverage(keys->bv_galois_keys, scheme.scheme_identity(), required, registered);
         const auto coverage = inspect_bv_key_coverage(keys->bv_galois_keys, scheme.scheme_identity(), registered);
@@ -1124,6 +1132,7 @@ void PirTest::test_tree_superrecord_benchmark() {
             coverage.malformed_row_shapes.size(), true};
         auto server = std::make_shared<PirServer>(tree_query_expansion_params(tree, scheme));
         server->set_client_session_keys(client.get_client_id(), keys);
+        r.session_setup_ms = ms_since(session_start);
         const auto setup_start = Clock::now();
         auto db = std::make_shared<::PreprocessedTree>(preprocess_tree_mvp(tree, chunk_source, scheme));
         r.setup_ms = ms_since(setup_start);
@@ -1140,8 +1149,10 @@ void PirTest::test_tree_superrecord_benchmark() {
           RlweCt query = make_tree_query(client, scheme, tree, leaf);
           sample.client_query_ms = ms_since(start);
           start = Clock::now();
-          auto expanded = unpack_tree_query(*server, scheme, tree, client.get_client_id(), query);
-          sample.stages_ms[0] = ms_since(start);
+          TreeQueryUnpackTiming unpack_timing{};
+          auto expanded = unpack_tree_query(*server, scheme, tree, client.get_client_id(), query, &unpack_timing);
+          sample.stages_ms[0] = stage_ms(unpack_timing.query_expand);
+          sample.stages_ms[1] = stage_ms(unpack_timing.selector_completion);
           auto response = answer_path_mvp(*db, expanded, *server, client.get_client_id(), tree, scheme);
           sample.server_total_ms = ms_since(start);
           END_EXPERIMENT();
@@ -1157,8 +1168,10 @@ void PirTest::test_tree_superrecord_benchmark() {
               TREE_ROTATE_TIME, TREE_PROJECT_TIME, TREE_PACK_TIME, TREE_SWITCH_TIME};
           const std::array<size_t, 7> slots = {2,3,5,6,7,8,9};
           for (size_t j=0; j<names.size(); ++j) sample.stages_ms[slots[j]] = GET_LAST_TIME(names[j]);
+          start = Clock::now();
           std::stringstream wire;
           sample.response_payload_bytes = server->save_resp_to_stream(response.chunks[0], wire);
+          sample.response_serialize_ms = ms_since(start);
           return sample;
         };
         r.eligible = true;
@@ -1166,11 +1179,13 @@ void PirTest::test_tree_superrecord_benchmark() {
       }
       const Candidate &cand = *r.candidate;
       const TreeParams params = freeze_candidate(cand);
+      const auto session_start = Clock::now();
       auto server_ptr = std::make_shared<PirServer>(query_expansion_params(params, scheme));
       PirServer &server = *server_ptr;
       const auto session = create_tagged_tree_session_keys(client, params, scheme);
       set_tree_client_session_keys(server, params, scheme, session);
       r.key_coverage = inspect_keys(params, session);
+      r.session_setup_ms = ms_since(session_start);
       if (!r.key_coverage.matches) { r.reason = "actual key coverage mismatch"; continue; }
         std::set<size_t> boundary_leaves{0, N - 1, plan.measured_leaf_indices.front()};
         for (size_t boundary : {params.shape.bundle_arity,
@@ -1199,11 +1214,13 @@ void PirTest::test_tree_superrecord_benchmark() {
           noise_cases.push_back({gate_leaves[index % gate_leaves.size()], fixture_source,
                                  "leaf-" + std::to_string(gate_leaves[index % gate_leaves.size()]) + "-pattern-" + std::to_string(pattern)});
         }
+        const auto noise_start = Clock::now();
         const CandidateNoiseResult noise_result = run_target_shape_noise_gate(
             client, server, session, params, scheme,
             std::span<const TargetNoiseCase>(noise_cases.data(),
                                              noise_cases.size()),
             static_cast<double>(policy.min_noise_margin));
+        r.noise_gate_ms = ms_since(noise_start);
         r.noise_result = noise_result;
         if (!noise_result_unlocks_candidate(noise_result, params,
                                             client.get_client_id())) {
@@ -1240,7 +1257,9 @@ void PirTest::test_tree_superrecord_benchmark() {
             timing.alpha_prepare,timing.alpha_scan,timing.first_dim_finalize,timing.beta_fold,
             timing.private_rotate,timing.projection,timing.path_pack,timing.modulus_switch};
         for (size_t j=0;j<stages.size();++j) sample.stages_ms[j] = stage_ms(stages[j]);
+        start = Clock::now();
         sample.response_payload_bytes = serialized_response_payload_bytes(response,*server_ptr,params).value_or(0);
+        sample.response_serialize_ms = ms_since(start);
         for (size_t level=0;level<params.shape.path_levels;++level)
           sample.real_non_target_neighbour_slots += real_bundle_slots(leaf,level,params)-1;
         return sample;

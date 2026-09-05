@@ -105,6 +105,23 @@ void write_double_array(std::ostringstream &out,
   out << ']';
 }
 
+void write_pipeline_profile_samples(
+    std::ostringstream &out,
+    const std::vector<PipelineProfileSample> &samples) {
+  out << '[';
+  for (size_t i = 0; i < samples.size(); ++i) {
+    if (i != 0) out << ", ";
+    out << "{\"leaf\": " << samples[i].leaf << ", \"stages\": {";
+    bool first_stage = true;
+    for (const auto &[stage, ms] : samples[i].stages) {
+      out << (first_stage ? "" : ", ") << '"' << stage << "\": " << ms;
+      first_stage = false;
+    }
+    out << "}}";
+  }
+  out << ']';
+}
+
 void write_optional_double(std::ostringstream &out,
                            const std::optional<double> &value) {
   if (value.has_value()) {
@@ -458,10 +475,19 @@ std::string benchmark_report_json(const BenchmarkReport &report) {
         << ",\n      \"setup_ms\": " << milliseconds(result.timing.setup)
         << ",\n      \"client_query_ms\": "
         << milliseconds(result.timing.client_query)
-      << ",\n      \"server_compute_ms\": "
-      << milliseconds(result.timing.server_compute)
-      << ",\n      \"server_compute_samples_ms\": ";
+        << ",\n      \"server_compute_ms\": "
+        << milliseconds(result.timing.server_compute)
+        << ",\n      \"sample_leaf_indices\": ";
+    write_integer_array(out, result.sample_leaf_indices);
+    out << ",\n      \"server_compute_samples_ms\": ";
     write_double_array(out, result.server_compute_samples_ms);
+    out << ",\n      \"client_query_samples_ms\": ";
+    write_double_array(out, result.client_query_samples_ms);
+    out << ",\n      \"response_serialize_samples_ms\": ";
+    write_double_array(out, result.response_serialize_samples_ms);
+    out << ",\n      \"response_load_decrypt_extract_samples_ms\": ";
+    write_double_array(out,
+                       result.response_load_decrypt_extract_samples_ms);
     out << ",\n      \"server_compute_ms_statistics\": ";
     write_metric_statistics(out, result.server_compute_ms_statistics);
     out << ",\n      \"server_phase_ms\": {";
@@ -478,6 +504,9 @@ std::string benchmark_report_json(const BenchmarkReport &report) {
       first_stage = false;
     }
     out << '}';
+    out << ",\n      \"pipeline_profile_samples_ms\": ";
+    write_pipeline_profile_samples(out,
+                                   result.pipeline_profile_samples_ms);
     out << ",\n      \"layer_layout_policy\": ";
     write_string(out, result.layer_layout_policy);
     out << ",\n      \"layers\": [";
@@ -772,6 +801,14 @@ std::map<std::string, double> pipeline_profile_average(
           {"mod_switch", ms(total.mod_switch)}};
 }
 
+PipelineProfileSample pipeline_profile_sample(size_t leaf,
+                                              const PirPipelineProfile &sample) {
+  PipelineProfileSample output;
+  output.leaf = leaf;
+  output.stages = pipeline_profile_average(sample, 1);
+  return output;
+}
+
 BenchmarkCaseExecution run_standard_case(
     const MerkleWorkload &workload, const PirParams &reference,
     const BenchmarkTrialPlan &trials) {
@@ -812,13 +849,24 @@ BenchmarkCaseExecution run_standard_case(
   std::vector<double> server_compute_samples_ms;
   server_compute_samples_ms.reserve(trials.measured_leaf_indices.size());
   PirPipelineProfile pipeline_total;
+  BenchmarkCaseExecution execution;
+  BenchmarkCaseResult &result = execution.result;
   for (size_t leaf : trials.measured_leaf_indices) {
     PirCallOutput output = run_trial(leaf);
     phases.end_trial(true);
     pipeline_total += output.pipeline;
     add_online_timing(timing_total, output.timing);
+    result.sample_leaf_indices.push_back(static_cast<uint64_t>(leaf));
     server_compute_samples_ms.push_back(
         milliseconds(output.timing.server_compute));
+    result.client_query_samples_ms.push_back(
+        milliseconds(output.timing.client_query));
+    result.response_serialize_samples_ms.push_back(
+        milliseconds(output.timing.response_serialize));
+    result.response_load_decrypt_extract_samples_ms.push_back(
+        milliseconds(output.timing.response_load_decrypt_extract));
+    result.pipeline_profile_samples_ms.push_back(
+        pipeline_profile_sample(leaf, output.pipeline));
     const std::vector<size_t> current_shape{output.response_bytes};
     if (response_shape.empty()) {
       response_shape = current_shape;
@@ -827,8 +875,6 @@ BenchmarkCaseExecution run_standard_case(
     }
   }
 
-  BenchmarkCaseExecution execution;
-  BenchmarkCaseResult &result = execution.result;
   result.name = "standard_onionpir";
   result.correctness_passed = true;
   populate_reference_database_metadata(result, workload, reference);
@@ -911,8 +957,18 @@ BenchmarkCaseExecution run_merkle_flat_case(
     phases.end_trial(true);
     pipeline_total += trial.pipeline;
     add_online_timing(timing_total, trial.timing);
+    execution.result.sample_leaf_indices.push_back(
+        static_cast<uint64_t>(leaf));
     execution.result.server_compute_samples_ms.push_back(
         milliseconds(trial.timing.server_compute));
+    execution.result.client_query_samples_ms.push_back(
+        milliseconds(trial.timing.client_query));
+    execution.result.response_serialize_samples_ms.push_back(
+        milliseconds(trial.timing.response_serialize));
+    execution.result.response_load_decrypt_extract_samples_ms.push_back(
+        milliseconds(trial.timing.response_load_decrypt_extract));
+    execution.result.pipeline_profile_samples_ms.push_back(
+        pipeline_profile_sample(leaf, trial.pipeline));
     if (response_shape.empty()) {
       response_shape = trial.response_bytes;
     } else {
@@ -1068,8 +1124,18 @@ BenchmarkCaseExecution run_merkle_layerwise_case(
     phases.end_trial(true);
     pipeline_total += trial.pipeline;
     add_online_timing(timing_total, trial.timing);
+    execution.result.sample_leaf_indices.push_back(
+        static_cast<uint64_t>(leaf));
     execution.result.server_compute_samples_ms.push_back(
         milliseconds(trial.timing.server_compute));
+    execution.result.client_query_samples_ms.push_back(
+        milliseconds(trial.timing.client_query));
+    execution.result.response_serialize_samples_ms.push_back(
+        milliseconds(trial.timing.response_serialize));
+    execution.result.response_load_decrypt_extract_samples_ms.push_back(
+        milliseconds(trial.timing.response_load_decrypt_extract));
+    execution.result.pipeline_profile_samples_ms.push_back(
+        pipeline_profile_sample(leaf, trial.pipeline));
     if (response_shape.empty()) {
       response_shape = trial.response_bytes;
     } else {
@@ -1308,6 +1374,7 @@ bool running_under_rosetta() {
 std::string paper_row_for(const MerkleWorkload &workload) {
   if (workload.leaf_count == (size_t{1} << 24)) return "1 GB";
   if (workload.leaf_count == (size_t{1} << 26)) return "4 GB";
+  if (workload.leaf_count == (size_t{1} << 27)) return "8 GB";
   return "custom";
 }
 
@@ -1429,13 +1496,28 @@ LayerPlannerConfig planner_for_workload(const MerkleBenchmarkOptions &options,
 
 BenchmarkReport run_merkle_benchmark_suite(
     const MerkleBenchmarkOptions &options) {
-  if (options.leaf_count > (size_t{1} << 24)) {
+  constexpr size_t kPrimaryMaxLeaves = size_t{1} << 27;
+  if (options.leaf_count > kPrimaryMaxLeaves) {
     throw std::invalid_argument(
-        "Primary Merkle benchmark is capped at 2^24 leaves; request the "
-        "resource-gated 2^26 workload with --run-optional-4gb");
+        "Primary Merkle benchmark is capped at 2^27 leaves");
   }
   const MerkleWorkload workload =
       make_benchmark_workload(options.leaf_count);
+  if (workload.leaf_count > (size_t{1} << 24)) {
+    const uint64_t estimated =
+        estimate_merkle_benchmark_peak_bytes(workload.leaf_count);
+    const uint64_t physical_memory = detected_physical_memory_bytes();
+    constexpr uint64_t safety_margin = uint64_t{2} << 30;
+    if (physical_memory == 0 ||
+        estimated > physical_memory ||
+        safety_margin > physical_memory - estimated) {
+      throw std::invalid_argument(
+          "Primary Merkle benchmark estimated peak " +
+          std::to_string(estimated) +
+          " bytes plus 2147483648-byte safety margin exceeds detected " +
+          std::to_string(physical_memory) + " bytes");
+    }
+  }
   const PirParams reference = make_benchmark_reference(workload);
   const BenchmarkTrialPlan trials = make_benchmark_trial_plan(
       workload.leaf_count, options.warmups, options.measured_trials,

@@ -109,6 +109,35 @@ std::vector<CuckooBucket> build_cuckoo_buckets(const CuckooBatchParams &params,
   return buckets;
 }
 
+CuckooStorageStats summarize_cuckoo_storage(
+    const std::vector<CuckooBucket> &buckets) {
+  CuckooStorageStats stats;
+  stats.bucket_count = buckets.size();
+  for (const CuckooBucket &bucket : buckets) {
+    stats.total_member_entries += bucket.members.size();
+    stats.total_target_plaintexts += bucket.target_num_pt;
+    stats.total_padded_plaintexts += bucket.params.get_num_pt();
+    stats.max_bucket_members =
+        std::max(stats.max_bucket_members, bucket.members.size());
+    stats.max_bucket_target_plaintexts =
+        std::max(stats.max_bucket_target_plaintexts, bucket.target_num_pt);
+    stats.max_bucket_plaintexts =
+        std::max(stats.max_bucket_plaintexts, bucket.params.get_num_pt());
+    stats.public_metadata_bytes +=
+        static_cast<uint64_t>(bucket.members.capacity()) * sizeof(uint32_t);
+    stats.estimated_preprocessed_bytes +=
+        static_cast<uint64_t>(bucket.params.get_coeff_val_cnt()) *
+        bucket.params.get_num_pt() * sizeof(db_coeff_t);
+  }
+  stats.logical_replicated_bytes =
+      static_cast<uint64_t>(stats.total_member_entries) * 32;
+  stats.logical_padded_bytes =
+      static_cast<uint64_t>(stats.total_padded_plaintexts) * 96 * 32;
+  stats.estimated_peak_resident_bytes =
+      stats.estimated_preprocessed_bytes + stats.public_metadata_bytes;
+  return stats;
+}
+
 size_t cuckoo_position(const CuckooBucket &bucket, uint32_t ordinal) {
   const auto it = std::lower_bound(bucket.members.begin(),
                                    bucket.members.end(), ordinal);

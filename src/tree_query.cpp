@@ -3,6 +3,7 @@
 #include "utils.h"
 
 #include <algorithm>
+#include <chrono>
 #include <limits>
 #include <stdexcept>
 #include <vector>
@@ -290,7 +291,9 @@ RlweCt make_tree_query(PirClient &client, const PirParams &scheme,
 ExpandedTreeQuery unpack_tree_query(PirServer &server,
                                     const PirParams &scheme,
                                     const TreePirParams &tree,
-                                    size_t client_id, RlweCt &query) {
+                                    size_t client_id, RlweCt &query,
+                                    TreeQueryUnpackTiming *timing) {
+  using Clock = std::chrono::steady_clock;
   // 前置守卫：与打包侧相同的方案绑定检查，两侧尺度一致才谈得上解包。
   require_scheme_binding(tree, scheme);
   // 形状守卫：server 必须构造自 tree_query_expansion_params(tree, scheme)
@@ -309,7 +312,12 @@ ExpandedTreeQuery unpack_tree_query(PirServer &server,
   // 阶段 9.1 展开：带 useful-leaf 剪枝的堆序 ExpandBFV。位反转写入 +
   // 堆序回收相互抵消，返回的 w 条密文正好是**逻辑序**——先 N0 条 α
   // one-hot，随后每个 selector 一组 ell 行。
+  auto timing_start = Clock::now();
   std::vector<RlweCt> expanded = server.expand_query(client_id, query);
+  if (timing != nullptr) {
+    timing->query_expand = std::chrono::duration_cast<std::chrono::nanoseconds>(
+        Clock::now() - timing_start);
+  }
   // 守卫：展开必须恰好回收 w 片有用叶，数目不符说明剪枝或形状出了问题。
   if (expanded.size() != tree.w) {
     throw std::runtime_error(
@@ -321,8 +329,14 @@ ExpandedTreeQuery unpack_tree_query(PirServer &server,
   // 密钥把每组 RLWE' 行补全成完整 RGSW。flat 生产路径 make_query 走的是
   // 同一份实现，行布局约定因此单源化，不可能在两条路径间漂移；树层在此
   // 只负责把结果按坐标拆回 β / γ。
+  timing_start = Clock::now();
   std::vector<GSWCt> selectors =
       server.complete_selectors(client_id, expanded);
+  if (timing != nullptr) {
+    timing->selector_completion =
+        std::chrono::duration_cast<std::chrono::nanoseconds>(
+            Clock::now() - timing_start);
+  }
   // 守卫：selector 数必须等于 b + r，否则切组与树参数不一致。
   if (selectors.size() != tree.b + tree.r) {
     throw std::runtime_error(

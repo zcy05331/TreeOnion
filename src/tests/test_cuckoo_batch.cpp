@@ -4,13 +4,18 @@
 #include "merkle_benchmark.h"
 
 #include <algorithm>
-#include <array>
 #include <bit>
 #include <chrono>
+#include <cstdlib>
+#include <fstream>
+#include <iomanip>
 #include <limits>
 #include <memory>
 #include <numeric>
 #include <optional>
+#include <sstream>
+#include <stdexcept>
+#include <string>
 #include <vector>
 
 namespace {
@@ -74,6 +79,145 @@ bool throws_invalid_argument(Fn &&fn) {
     return true;
   }
   return false;
+}
+
+double profile_ms(std::chrono::nanoseconds duration) {
+  return std::chrono::duration<double, std::milli>(duration).count();
+}
+
+struct CuckooTrialSample {
+  size_t trial = 0;
+  size_t leaf = 0;
+  double bucket_routing_ms = 0.0;
+  double client_query_ms = 0.0;
+  double server_total_ms = 0.0;
+  double response_serialize_ms = 0.0;
+  double client_decode_ms = 0.0;
+  PirPipelineProfile stages;
+  bool correct = false;
+};
+
+void write_json_string(std::ostream &out, const std::string &value) {
+  out << '"';
+  for (char ch : value) {
+    switch (ch) {
+      case '"':
+        out << "\\\"";
+        break;
+      case '\\':
+        out << "\\\\";
+        break;
+      case '\n':
+        out << "\\n";
+        break;
+      case '\r':
+        out << "\\r";
+        break;
+      case '\t':
+        out << "\\t";
+        break;
+      default:
+        out << ch;
+        break;
+    }
+  }
+  out << '"';
+}
+
+void write_stage_json(std::ostream &out, const PirPipelineProfile &profile) {
+  out << "{"
+      << "\"expand\":" << profile_ms(profile.expand)
+      << ",\"convert\":" << profile_ms(profile.convert)
+      << ",\"first_dim_query_ntt\":"
+      << profile_ms(profile.first_dim_query_ntt)
+      << ",\"first_dim_query_pack\":"
+      << profile_ms(profile.first_dim_query_pack)
+      << ",\"first_dim_core\":" << profile_ms(profile.first_dim_core)
+      << ",\"first_dim_finalize\":"
+      << profile_ms(profile.first_dim_finalize)
+      << ",\"other_dim\":" << profile_ms(profile.other_dim)
+      << ",\"mod_switch\":" << profile_ms(profile.mod_switch)
+      << "}";
+}
+
+void write_cuckoo_profile_json(const std::string &path, size_t leaf_count,
+                               size_t tree_height, size_t warmups,
+                               size_t measured_trials,
+                               const CuckooBatchParams &params,
+                               const CuckooStorageStats &storage,
+                               uint64_t trial_seed,
+                               uint64_t response_bytes,
+                               uint64_t modeled_query_bytes,
+                               uint64_t modeled_helper_key_bytes,
+                               double setup_ms,
+                               const std::vector<CuckooTrialSample> &samples) {
+  std::ofstream out(path);
+  if (!out) {
+    throw std::runtime_error("failed to open cuckoo benchmark JSON output");
+  }
+  out << std::fixed << std::setprecision(6);
+  out << "{\n  \"schema_version\": \"cuckoo_raw_profile.v1\"";
+  out << ",\n  \"scheme\": ";
+  write_json_string(out, "cuckoo_batch_pir");
+  out << ",\n  \"leaf_count\": " << leaf_count
+      << ",\n  \"tree_height\": " << tree_height
+      << ",\n  \"node_entry_bits\": 256"
+      << ",\n  \"actual_logical_bytes\": " << params.item_count * 32ULL
+      << ",\n  \"root_excluded_node_count\": " << params.item_count
+      << ",\n  \"warmups\": " << warmups
+      << ",\n  \"measured_trials\": " << measured_trials
+      << ",\n  \"trial_seed\": " << trial_seed
+      << ",\n  \"batch_size\": " << params.batch_size
+      << ",\n  \"num_buckets\": " << params.num_buckets
+      << ",\n  \"num_hashes\": " << params.num_hashes
+      << ",\n  \"offline_setup_ms\": " << setup_ms
+      << ",\n  \"setup_ms\": " << setup_ms
+      << ",\n  \"stage_map\": [\"expand\", \"convert\", "
+         "\"first_dim_query_ntt\", \"first_dim_query_pack\", "
+         "\"first_dim_core\", \"first_dim_finalize\", \"other_dim\", "
+         "\"mod_switch\"]"
+      << ",\n  \"communication\": {\"modeled_query_bytes\": "
+      << modeled_query_bytes << ", \"actual_response_bytes\": "
+      << response_bytes << ", \"modeled_helper_key_bytes\": "
+      << modeled_helper_key_bytes << "}";
+  out << ",\n  \"storage\": {\"bucket_count\": " << storage.bucket_count
+      << ", \"total_member_entries\": " << storage.total_member_entries
+      << ", \"total_target_plaintexts\": "
+      << storage.total_target_plaintexts
+      << ", \"total_padded_plaintexts\": "
+      << storage.total_padded_plaintexts
+      << ", \"max_bucket_members\": " << storage.max_bucket_members
+      << ", \"max_bucket_target_plaintexts\": "
+      << storage.max_bucket_target_plaintexts
+      << ", \"max_bucket_plaintexts\": " << storage.max_bucket_plaintexts
+      << ", \"logical_replicated_bytes\": "
+      << storage.logical_replicated_bytes
+      << ", \"logical_padded_bytes\": " << storage.logical_padded_bytes
+      << ", \"public_metadata_bytes\": " << storage.public_metadata_bytes
+      << ", \"estimated_preprocessed_bytes\": "
+      << storage.estimated_preprocessed_bytes
+      << ", \"estimated_peak_resident_bytes\": "
+      << storage.estimated_peak_resident_bytes << "}";
+  out << ",\n  \"samples\": [";
+  for (size_t i = 0; i < samples.size(); ++i) {
+    const CuckooTrialSample &sample = samples[i];
+    if (i) out << ',';
+    out << "\n    {\"trial\": " << sample.trial
+        << ", \"leaf\": " << sample.leaf
+        << ", \"bucket_routing_ms\": " << sample.bucket_routing_ms
+        << ", \"server_total_ms\": " << sample.server_total_ms
+        << ", \"client_query_ms\": " << sample.client_query_ms
+        << ", \"response_serialize_ms\": "
+        << sample.response_serialize_ms
+        << ", \"client_decode_ms\": " << sample.client_decode_ms
+        << ", \"stages_ms\": ";
+    write_stage_json(out, sample.stages);
+    out << ", \"correct\": " << (sample.correct ? "true" : "false") << "}";
+  }
+  out << "\n  ]\n}\n";
+  if (!out) {
+    throw std::runtime_error("failed to write cuckoo benchmark JSON output");
+  }
 }
 
 // Every ordinal placed exactly once, in one of its candidate buckets.
@@ -143,6 +287,7 @@ void PirTest::test_cuckoo_batch() {
     servers.push_back(std::move(server));
   }
 
+  bool profile_checked = false;
   for (size_t leaf : {size_t{0}, leaf_count / 2 + 3, leaf_count - 1}) {
     const std::vector<uint32_t> ordinals =
         sibling_ordinals(leaf, tree_height);
@@ -158,6 +303,21 @@ void PirTest::test_cuckoo_batch() {
               : 0;
       RlweCt query = client.fast_generate_query(buckets[b].params,
                                                 position / 96);
+      if (!profile_checked && assignment[b].has_value()) {
+        RlweCt profiled_query = query;
+        PirPipelineProfile profile;
+        RlweCt profiled_response = servers[b]->make_query_profiled(
+            client.get_client_id(), profiled_query, &profile);
+        const RlwePt profiled_pt = client.decrypt_mod_q(profiled_response);
+        const auto [level, local] = node_of_ordinal(*assignment[b]);
+        require_test(decode_merkle_node(profiled_pt, position % 96,
+                                        buckets[b].params) ==
+                         synthetic_merkle_node(level, local),
+                     "profiled cuckoo response must decode exactly");
+        require_test(profile.total() > std::chrono::nanoseconds::zero(),
+                     "profiled cuckoo response recorded server stages");
+        profile_checked = true;
+      }
       RlweCt response = servers[b]->make_query(client.get_client_id(), query);
       std::stringstream wire;
       (void)servers[b]->save_resp_to_stream(response, wire);
@@ -172,6 +332,7 @@ void PirTest::test_cuckoo_batch() {
       }
     }
   }
+  require_test(profile_checked, "profile transparency fixture executed");
 
   // Parameter and placement validation.
   require_test(throws_invalid_argument([&] {
@@ -281,8 +442,9 @@ void PirTest::test_cuckoo_batch() {
   }
 }
 
-// Timed batch retrieval at the comparison workload: L = 22, 32-byte nodes,
-// 16 measured trials after 3 warmups, one full 22-sibling batch per trial.
+// Timed batch retrieval at the comparison workload. Flags select the leaf
+// count, warmup count and measured trial count; one trial retrieves the full
+// root-excluded sibling batch for one leaf and records raw server stages.
 void PirTest::test_cuckoo_benchmark() {
   require_applicable(paper_config_active(),
                      paper_config_reason("the cuckoo batch baseline"));
@@ -309,17 +471,15 @@ void PirTest::test_cuckoo_benchmark() {
   SharedPirSessionKeys keys = client.create_session_keys();
   std::vector<std::unique_ptr<PirServer>> servers;
   servers.reserve(buckets.size());
-  size_t total_pt = 0, max_bucket = 0;
   for (const CuckooBucket &bucket : buckets) {
     auto server = std::make_unique<PirServer>(bucket.params);
     server->set_client_session_keys(client.get_client_id(), keys);
     server->load_data(bucket.target_num_pt,
                       bucket_source(bucket, bucket.params));
-    total_pt += bucket.target_num_pt;
-    max_bucket = std::max(max_bucket, bucket.members.size());
     servers.push_back(std::move(server));
   }
   const double setup_ms = ms_since(setup_start);
+  const CuckooStorageStats storage = summarize_cuckoo_storage(buckets);
 
   const size_t kWarmups = bench_warmups.value_or(3);
   const size_t kTrials = bench_measured_trials.value_or(16);
@@ -327,23 +487,21 @@ void PirTest::test_cuckoo_benchmark() {
   const BenchmarkTrialPlan plan =
       make_benchmark_trial_plan(leaf_count, kWarmups, kTrials, trial_seed);
 
-  std::vector<double> client_ms, server_ms, decode_ms;
+  std::vector<double> client_ms, server_ms, serialize_ms, decode_ms;
   size_t response_bytes_total = 0;
-  // Server phase breakdown from the TimerLogger sections make_query brackets,
-  // summed over every bucket query of one trial (one experiment per trial).
-  constexpr std::array<const char *, 5> kPhaseKeys = {
-      EXPAND_TIME, CONVERT_TIME, FST_DIM_TIME, OTHER_DIM_TIME, MOD_SWITCH};
-  constexpr std::array<const char *, 5> kPhaseLabels = {
-      "expand", "convert", "first_dim", "other_dim", "mod_switch"};
-  std::array<double, 5> phase_sum{};
-  CLEAN_TIMER();
-  const auto run_trial = [&](size_t leaf, bool measured) {
+  PirPipelineProfile stage_sum;
+  std::vector<CuckooTrialSample> samples;
+  samples.reserve(plan.measured_leaf_indices.size());
+  const auto run_trial = [&](size_t leaf, bool measured, size_t trial_index) {
+    const auto routing_start = Clock::now();
     const std::vector<uint32_t> ordinals =
         sibling_ordinals(leaf, tree_height);
     const auto assignment = cuckoo_place(ordinals, params);
-    double c_ms = 0, s_ms = 0, d_ms = 0;
+    const double routing_ms = ms_since(routing_start);
+    double c_ms = 0, s_ms = 0, r_ms = 0, d_ms = 0;
     size_t resp_bytes = 0;
     size_t recovered = 0;
+    PirPipelineProfile trial_profile;
     for (size_t b = 0; b < buckets.size(); ++b) {
       const size_t position =
           assignment[b].has_value()
@@ -355,11 +513,16 @@ void PirTest::test_cuckoo_benchmark() {
       c_ms += ms_since(start);
 
       start = Clock::now();
-      RlweCt response = servers[b]->make_query(client.get_client_id(), query);
+      PirPipelineProfile bucket_profile;
+      RlweCt response = servers[b]->make_query_profiled(
+          client.get_client_id(), query, &bucket_profile);
       s_ms += ms_since(start);
+      trial_profile += bucket_profile;
 
+      start = Clock::now();
       std::stringstream wire;
       resp_bytes += servers[b]->save_resp_to_stream(response, wire);
+      r_ms += ms_since(start);
       start = Clock::now();
       RlweCt loaded = client.load_resp_from_stream(wire);
       const RlwePt pt = client.decrypt_mod_q(loaded);
@@ -373,57 +536,101 @@ void PirTest::test_cuckoo_benchmark() {
         ++recovered;
       }
     }
-    END_EXPERIMENT();
-    if (measured) {
-      for (size_t i = 0; i < kPhaseKeys.size(); ++i) {
-        phase_sum[i] += GET_LAST_TIME(kPhaseKeys[i]);
-      }
-    }
     require_test(recovered == tree_height,
                  "every sibling recovered in the batch");
     if (measured) {
       client_ms.push_back(c_ms);
       server_ms.push_back(s_ms);
+      serialize_ms.push_back(r_ms);
       decode_ms.push_back(d_ms);
-      response_bytes_total = resp_bytes;
+      if (response_bytes_total == 0) {
+        response_bytes_total = resp_bytes;
+      } else {
+        require_test(response_bytes_total == resp_bytes,
+                     "cuckoo response shape changed between trials");
+      }
+      stage_sum += trial_profile;
+      samples.push_back({trial_index, leaf, routing_ms, c_ms, s_ms, r_ms,
+                         d_ms, trial_profile, true});
     }
   };
 
-  for (size_t leaf : plan.warmup_leaf_indices) run_trial(leaf, false);
-  for (size_t leaf : plan.measured_leaf_indices) run_trial(leaf, true);
+  for (size_t i = 0; i < plan.warmup_leaf_indices.size(); ++i) {
+    run_trial(plan.warmup_leaf_indices[i], false, i);
+  }
+  for (size_t i = 0; i < plan.measured_leaf_indices.size(); ++i) {
+    run_trial(plan.measured_leaf_indices[i], true, i);
+  }
 
   const auto avg = [](const std::vector<double> &v) {
     return std::accumulate(v.begin(), v.end(), 0.0) / v.size();
   };
-  const size_t query_bytes =
-      params.num_buckets * reference.get_BFV_size(true);
+  uint64_t query_bytes = 0;
+  for (const CuckooBucket &bucket : buckets) {
+    query_bytes += bucket.params.get_BFV_size(true);
+  }
 
   BENCH_PRINT("cuckoo batch PIR: L=" << tree_height << ", k=" << tree_height
               << ", buckets=" << params.num_buckets << " (3 hashes, 1.5x)");
-  BENCH_PRINT("database: " << total_pt << " packed plaintexts across buckets"
-              " (3x replication, " << (total_pt * 3072) / (1 << 20)
-              << " MiB logical), largest bucket " << max_bucket
+  BENCH_PRINT("database: " << storage.total_padded_plaintexts
+              << " padded PIR matrix plaintexts across buckets ("
+              << storage.total_target_plaintexts
+              << " target packed plaintexts, "
+              << storage.total_member_entries
+              << " actual replicated nodes, "
+              << storage.logical_replicated_bytes / (1 << 20)
+              << " MiB replicated, "
+              << storage.logical_padded_bytes / (1 << 20)
+              << " MiB padded), largest bucket "
+              << storage.max_bucket_members
               << " nodes, setup " << setup_ms << " ms");
+  BENCH_PRINT("estimated preprocessed bucket storage "
+              << storage.estimated_preprocessed_bytes / (1 << 20)
+              << " MiB; public metadata "
+              << storage.public_metadata_bytes / (1 << 20)
+              << " MiB; estimated resident peak "
+              << storage.estimated_peak_resident_bytes / (1 << 20)
+              << " MiB");
   BENCH_PRINT("trials: " << kTrials << " measured after " << kWarmups
               << " warmup");
   BENCH_PRINT("trial seed: " << trial_seed);
+  BENCH_PRINT("bucket routing avg " << [&] {
+    double total = 0.0;
+    for (const CuckooTrialSample &sample : samples) {
+      total += sample.bucket_routing_ms;
+    }
+    return total / samples.size();
+  }() << " ms");
   BENCH_PRINT("client query avg " << avg(client_ms) << " ms");
   BENCH_PRINT("server batch avg " << avg(server_ms)
               << " ms; samples:");
   for (double v : server_ms) BENCH_PRINT("  batch " << v << " ms");
   {
-    std::string breakdown = "server phase breakdown avg (ms, sum over buckets):";
-    double phase_total = 0;
-    for (size_t i = 0; i < kPhaseKeys.size(); ++i) {
-      const double v = phase_sum[i] / server_ms.size();
-      phase_total += v;
-      breakdown += std::string(" ") + kPhaseLabels[i] + " " +
-                   std::to_string(v);
-    }
+    const auto stage_avg = [&](std::chrono::nanoseconds duration) {
+      return profile_ms(duration) / server_ms.size();
+    };
+    const double phase_total = stage_avg(stage_sum.total());
+    std::string breakdown =
+        "server profile breakdown avg (ms, sum over bucket requests):";
+    breakdown += " expand " + std::to_string(stage_avg(stage_sum.expand));
+    breakdown += " convert " + std::to_string(stage_avg(stage_sum.convert));
+    breakdown += " first_dim_query_ntt " +
+                 std::to_string(stage_avg(stage_sum.first_dim_query_ntt));
+    breakdown += " first_dim_query_pack " +
+                 std::to_string(stage_avg(stage_sum.first_dim_query_pack));
+    breakdown += " first_dim_core " +
+                 std::to_string(stage_avg(stage_sum.first_dim_core));
+    breakdown += " first_dim_finalize " +
+                 std::to_string(stage_avg(stage_sum.first_dim_finalize));
+    breakdown += " other_dim " +
+                 std::to_string(stage_avg(stage_sum.other_dim));
+    breakdown += " mod_switch " +
+                 std::to_string(stage_avg(stage_sum.mod_switch));
     BENCH_PRINT(breakdown);
     BENCH_PRINT("  phases sum " << phase_total << " ms of server batch avg "
                 << avg(server_ms) << " ms");
   }
+  BENCH_PRINT("response serialize avg " << avg(serialize_ms) << " ms");
   BENCH_PRINT("client decode avg " << avg(decode_ms) << " ms");
   BENCH_PRINT("communication: queries " << query_bytes << " B (modeled, "
               << params.num_buckets << " ciphertexts), responses "
@@ -433,4 +640,12 @@ void PirTest::test_cuckoo_benchmark() {
               << modeled_helper_key_bytes(reference) << " B (modeled)");
   BENCH_PRINT("payload: " << tree_height << " x 32-byte siblings = "
               << tree_height * 32 << " B useful; position metadata public");
+  const char *json_path = std::getenv("BENCHMARK_OUTPUT_JSON");
+  if (json_path != nullptr && json_path[0] != '\0') {
+    write_cuckoo_profile_json(
+        json_path, leaf_count, tree_height, kWarmups, kTrials, params,
+        storage, trial_seed, response_bytes_total, query_bytes,
+        modeled_helper_key_bytes(reference), setup_ms, samples);
+    BENCH_PRINT("cuckoo raw profile JSON: " << json_path);
+  }
 }

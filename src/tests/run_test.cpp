@@ -1,4 +1,5 @@
 #include "tests.h"
+#include "tree_compress_bench.h"
 
 #include <vector>
 
@@ -70,6 +71,7 @@ void PirTest::run_test(const std::string &test_name) {
   else if (test_name == "tree_g32")          test_tree_g32();
   else if (test_name == "tree_bench_g32")    test_tree_benchmark_g32();
   else if (test_name == "tree_compress")     test_tree_compress();
+  else if (test_name == "tree_compress_bench") run_tree_compress_benchmark(*this);
   else if (test_name == "cuckoo_batch")      test_cuckoo_batch();
   else if (test_name == "cuckoo_bench")      test_cuckoo_benchmark();
   else if (test_name == "tree_superrecord_codec")   test_tree_superrecord_codec();
