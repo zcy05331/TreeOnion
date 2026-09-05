@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from summarize_cloudlab_profiles import collect_merkle, directory_files, scale_from_path
+from summarize_cloudlab_profiles import collect_merkle, collect_treepir, directory_files, scale_from_path
 
 
 class ProfilePolicySeparationTest(unittest.TestCase):
@@ -59,6 +59,35 @@ class ProfilePolicySeparationTest(unittest.TestCase):
             profile.parent.mkdir()
             profile.write_text("{}\n")
             self.assertEqual(scale_from_path(profile, root), "4gb")
+
+    def test_sealpir_crypto_and_setup_stages_reach_summary(self):
+        stages = {name: 1.0 for name in [
+            "server_expansion_ms", "server_query_ntt_ms", "server_database_ntt_ms",
+            "server_multiply_accumulate_ms", "server_inverse_ntt_ms",
+            "server_recursive_decomposition_modswitch_ms", "server_modswitch_ms"]}
+        rows = collect_treepir({
+            "offline_key_setup_ms": 4.0, "database_setup_ms": 5.0,
+            "results": [{"phase": "measured", "server_ms": 8.0, **stages}],
+        }, Path("treepir.json"), "4gb", None)
+        actual = {row["stage"]: row["value"] for row in rows}
+        for name,value in stages.items():
+            self.assertEqual(actual[name], value)
+        self.assertEqual(actual["offline_key_setup_ms"], 4.0)
+        self.assertEqual(actual["database_setup_ms"], 5.0)
+
+    def test_treepir_backend_label_is_preserved_as_variant(self):
+        rows = collect_treepir({
+            "backend_label": "sealpir_d1",
+            "results": [{
+                "phase": "measured",
+                "correct": True,
+                "query_ms": 1.0,
+                "server_ms": 2.0,
+                "decode_ms": 3.0,
+            }],
+        }, Path("treepir.json"), "4gb", None)
+        server = [row for row in rows if row["stage"] == "server_ms"]
+        self.assertEqual({row["variant"] for row in server}, {"sealpir_d1"})
 
 
 if __name__ == "__main__":

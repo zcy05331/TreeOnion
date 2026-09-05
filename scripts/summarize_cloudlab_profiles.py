@@ -431,6 +431,7 @@ def collect_generic(data: dict[str, Any], path: Path, scale: str, peak: int | No
 
 def collect_treepir(data: dict[str, Any], path: Path, scale: str, peak: int | None) -> list[Row]:
     rows: list[Row] = []
+    variant = str(data.get("backend_label") or "")
     for idx, result in enumerate(r for r in data["results"] if r.get("phase") == "measured"):
         for stage, key in {
             "index_ms": "index_ms",
@@ -440,33 +441,43 @@ def collect_treepir(data: dict[str, Any], path: Path, scale: str, peak: int | No
             "server_second_dimension_ms": "server_second_dimension_ms",
             "server_last_dimension_ms": "server_last_dimension_ms",
             "server_merge_ms": "server_merge_ms",
+            "server_expansion_ms": "server_expansion_ms",
+            "server_query_ntt_ms": "server_query_ntt_ms",
+            "server_database_ntt_ms": "server_database_ntt_ms",
+            "server_multiply_accumulate_ms": "server_multiply_accumulate_ms",
+            "server_inverse_ntt_ms": "server_inverse_ntt_ms",
+            "server_recursive_decomposition_modswitch_ms": "server_recursive_decomposition_modswitch_ms",
+            "server_modswitch_ms": "server_modswitch_ms",
             "response_serialize_ms": "response_serialize_ms",
             "query_serialize_ms": "query_serialize_ms",
             "decode_ms": "decode_ms",
         }.items():
             if result.get(key) is not None:
-                add_value(rows, path, scale, "treepir", "TreePIR", "", idx, stage, result[key], "primary", peak)
-        add_bytes(rows, path, scale, "treepir", "TreePIR", "", idx, "query_upload_bytes",
+                add_value(rows, path, scale, "treepir", "TreePIR", variant, idx, stage, result[key], "primary", peak)
+        add_bytes(rows, path, scale, "treepir", "TreePIR", variant, idx, "query_upload_bytes",
                   result.get("query_payload_bytes_bound_save_size_seeded_div2"), basis="modeled_bound", peak_rss_bytes=peak)
-        add_bytes(rows, path, scale, "treepir", "TreePIR", "", idx, "query_upload_bytes",
+        add_bytes(rows, path, scale, "treepir", "TreePIR", variant, idx, "query_upload_bytes",
                   result.get("actual_query_payload_bytes_unseeded"), basis="actual_unseeded", peak_rss_bytes=peak)
         response_key = "actual_response_payload_bytes" if result.get("actual_response_payload_bytes") is not None else "response_payload_bytes_bound_save_size"
         response_basis = "actual_uncompressed_save" if response_key == "actual_response_payload_bytes" else "save_size_bound"
-        add_bytes(rows, path, scale, "treepir", "TreePIR", "", idx, "response_download_bytes",
+        add_bytes(rows, path, scale, "treepir", "TreePIR", variant, idx, "response_download_bytes",
                   result.get(response_key), basis=response_basis, peak_rss_bytes=peak)
         if result.get("query_payload_bytes_bound_save_size_seeded_div2") is not None and result.get(response_key) is not None:
-            add_bytes(rows, path, scale, "treepir", "TreePIR", "", idx, "online_total_bytes_mixed",
+            add_bytes(rows, path, scale, "treepir", "TreePIR", variant, idx, "online_total_bytes_mixed",
                       float(result["query_payload_bytes_bound_save_size_seeded_div2"]) + float(result[response_key]),
                       basis=f"mixed:{response_basis}+modeled_bound", peak_rss_bytes=peak)
         if result.get("actual_query_payload_bytes_unseeded") is not None and response_key == "actual_response_payload_bytes":
-            add_bytes(rows, path, scale, "treepir", "TreePIR", "", idx, "online_total_bytes_actual_unseeded_query",
+            add_bytes(rows, path, scale, "treepir", "TreePIR", variant, idx, "online_total_bytes_actual_unseeded_query",
                       float(result["actual_query_payload_bytes_unseeded"]) + float(result[response_key]),
                       basis="actual_uncompressed_unseeded", peak_rss_bytes=peak)
     if data.get("index_prep_ms_excluded") is not None:
-        add_value(rows, path, scale, "treepir", "TreePIR", "", "setup", "index_prep_ms_excluded", data["index_prep_ms_excluded"], "offline", peak)
+        add_value(rows, path, scale, "treepir", "TreePIR", variant, "setup", "index_prep_ms_excluded", data["index_prep_ms_excluded"], "offline", peak)
     if data.get("offline_setup_ms") is not None:
-        add_value(rows, path, scale, "treepir", "TreePIR", "", "setup", "offline_setup_ms", data["offline_setup_ms"], "offline", peak)
-    add_bytes(rows, path, scale, "treepir", "TreePIR", "", "setup", "helper_key_bytes",
+        add_value(rows, path, scale, "treepir", "TreePIR", variant, "setup", "offline_setup_ms", data["offline_setup_ms"], "offline", peak)
+    for stage in ("offline_key_setup_ms", "database_setup_ms"):
+        if data.get(stage) is not None:
+            add_value(rows, path, scale, "treepir", "TreePIR", variant, "setup", stage, data[stage], "offline", peak)
+    add_bytes(rows, path, scale, "treepir", "TreePIR", variant, "setup", "helper_key_bytes",
               data.get("actual_helper_key_bytes_uncompressed"), kind="communication_setup", basis="actual_uncompressed", peak_rss_bytes=peak)
     return rows
 
