@@ -28,22 +28,22 @@ The figure reports query and actual response bytes per complete path. Query byte
 
 ## Helper / Eval Keys
 
-| scheme | once-only bytes | basis | human |
-| --- | --- | --- | --- |
-| Generic best h3 | 1607040 | modeled | 1.53 MiB |
-| Generic fastest h1 | 1607040 | modeled | 1.53 MiB |
-| Layerwise tuned | 1488000 | modeled | 1.42 MiB |
-| Tree compressed | 1607040 | modeled | 1.53 MiB |
-| Tree g=32 | 1607040 | modeled | 1.53 MiB |
-| Layerwise legacy | 1488000 | modeled | 1.42 MiB |
-| Cuckoo tuned | 1488000 | modeled | 1.42 MiB |
-| Cuckoo legacy | 1130880 | modeled | 1.08 MiB |
-| TreePIR | 39395731 | actual uncompressed | 37.57 MiB |
-| Flat | 1488000 | modeled | 1.42 MiB |
-| Standard OnionPIR | 1488000 | modeled | 1.42 MiB |
-| Tree g=1 12-bit diagnostic | 1607040 | modeled | 1.53 MiB |
+| scheme | helper/eval key bytes | extra compression key bytes | total setup bytes | helper/eval basis | human total |
+| --- | --- | --- | --- | --- | --- |
+| Generic best h3 | 1607040 | — | 1607040 | modeled | 1.53 MiB |
+| Generic fastest h1 | 1607040 | — | 1607040 | modeled | 1.53 MiB |
+| Layerwise tuned | 1488000 | — | 1488000 | modeled | 1.42 MiB |
+| Tree compressed | 1607040 | 65560 modeled | 1672600 | modeled | 1.60 MiB |
+| Tree g=32 | 1607040 | 0 modeled | 1607040 | modeled | 1.53 MiB |
+| Layerwise legacy | 1488000 | — | 1488000 | modeled | 1.42 MiB |
+| Cuckoo tuned | 1488000 | — | 1488000 | modeled | 1.42 MiB |
+| Cuckoo legacy | 1130880 | — | 1130880 | modeled | 1.08 MiB |
+| TreePIR | 39395731 | — | 39395731 | actual uncompressed | 37.57 MiB |
+| Flat | 1488000 | — | 1488000 | modeled | 1.42 MiB |
+| Standard OnionPIR | 1488000 | — | 1488000 | modeled | 1.42 MiB |
+| Tree g=1 12-bit diagnostic | 1607040 | 0 modeled | 1607040 | modeled | 1.53 MiB |
 
-Cuckoo legacy and tuned have the same online query/response bytes in this run, but setup keys differ: legacy is 1,130,880 B and tuned is 1,488,000 B, an increase of 357,120 B from the reference-parameter alignment.
+The compressed-tree prototype also has a 65,560 B once-only modeled compression key, so its total modeled setup is 1,672,600 B. Cuckoo legacy and tuned have the same online query/response bytes in this run, but setup keys differ: legacy is 1,130,880 B and tuned is 1,488,000 B, an increase of 357,120 B from the reference-parameter alignment.
 
 ## Storage
 

@@ -32,6 +32,12 @@
       "correct": true,
       "mean_server_ms": 1404.7891019699998,
       "payload_note": "12-bit scalar per node; diagnostic, not comparable to 32-byte node payload"
+    },
+    {
+      "case": "tree_compressed",
+      "measured_trials": 100,
+      "correct": true,
+      "mean_server_ms": 18996.020780849998
     }
   ],
   "tier_complete": false

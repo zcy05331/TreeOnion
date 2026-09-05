@@ -109,6 +109,8 @@ def merkle_row(name: str, case_name: str, label: str, rank_scope: str) -> dict[s
         "response_kind": "actual",
         "helper_bytes": int(case["helper_key_bytes_modeled"]),
         "helper_kind": "modeled",
+        "extra_compression_key_bytes": None,
+        "extra_compression_key_kind": "",
         "storage_bytes": int(case.get("physical_preprocessed_storage_bytes") or 0),
         "scope_note": case.get("layer_layout_policy") or "",
     }
@@ -151,7 +153,9 @@ def sampled_row(name: str, label: str, rank_scope: str) -> dict[str, Any]:
         "response_bytes": int(r),
         "response_kind": "actual",
         "helper_bytes": int(comm.get("modeled_helper_key_bytes", 0)),
-        "helper_kind": "modeled",
+        "helper_kind": comm.get("helper_key_bytes_kind", "modeled"),
+        "extra_compression_key_bytes": int(comm["modeled_compression_key_bytes"]) if "modeled_compression_key_bytes" in comm else None,
+        "extra_compression_key_kind": comm.get("compression_key_bytes_kind", "modeled") if "modeled_compression_key_bytes" in comm else "",
         "storage_bytes": int((data.get("storage") or {}).get("estimated_preprocessed_bytes") or 0),
         "scope_note": scope_note,
     }
@@ -178,6 +182,8 @@ def treepir_row() -> dict[str, Any]:
         "response_kind": "actual",
         "helper_bytes": int(data.get("actual_helper_key_bytes_uncompressed", 0)),
         "helper_kind": "actual uncompressed",
+        "extra_compression_key_bytes": None,
+        "extra_compression_key_kind": "",
         "storage_bytes": 0,
         "scope_note": "SEAL BFV N=8192, coeff bits 42/58/58/60, plain bits 28",
     }
@@ -212,6 +218,8 @@ def generic_rows() -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
             "response_kind": "actual",
             "helper_bytes": int(source["candidate_metrics"]["modeled_per_client_eval_key_bytes"]),
             "helper_kind": "modeled",
+            "extra_compression_key_bytes": None,
+            "extra_compression_key_kind": "",
             "storage_bytes": int(source["memory"]["database_bytes"]),
             "steady_state_bytes": int(analyzed["steady_state_bytes"]),
             "scope_note": f"h={shape['bundle_arity']} G={shape['record_coeffs']} P={shape['plane_count']} N0={shape['N0']} b={shape['beta_bits']}",
@@ -281,11 +289,15 @@ def render_markdown(ranked: list[dict[str, Any]], references: list[dict[str, Any
 
     helper_rows = []
     for row in ranked_sorted + references:
+        extra = row.get("extra_compression_key_bytes")
+        total = row["helper_bytes"] + (extra if extra is not None else 0)
         helper_rows.append([
             row["label"],
             str(row["helper_bytes"]),
+            f"{extra} {row['extra_compression_key_kind']}" if extra is not None else "—",
+            str(total),
             row["helper_kind"],
-            hbytes(row["helper_bytes"]),
+            hbytes(total),
         ])
 
     storage_rows = []
@@ -318,9 +330,9 @@ def render_markdown(ranked: list[dict[str, Any]], references: list[dict[str, Any
         "",
         "## Helper / Eval Keys",
         "",
-        md_table(["scheme", "once-only bytes", "basis", "human"], helper_rows),
+        md_table(["scheme", "helper/eval key bytes", "extra compression key bytes", "total setup bytes", "helper/eval basis", "human total"], helper_rows),
         "",
-        "Cuckoo legacy and tuned have the same online query/response bytes in this run, but setup keys differ: legacy is 1,130,880 B and tuned is 1,488,000 B, an increase of 357,120 B from the reference-parameter alignment.",
+        "The compressed-tree prototype also has a 65,560 B once-only modeled compression key, so its total modeled setup is 1,672,600 B. Cuckoo legacy and tuned have the same online query/response bytes in this run, but setup keys differ: legacy is 1,130,880 B and tuned is 1,488,000 B, an increase of 357,120 B from the reference-parameter alignment.",
         "",
         "## Storage",
         "",
