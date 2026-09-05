@@ -45,6 +45,7 @@ STATUS_FILE="$RUN_ROOT/outputs/profiling/status.tsv"
 printf '%s\n' "$$" > "$RUN_ROOT/metadata/matrix-controller.pid"
 echo running > "$RUN_ROOT/metadata/matrix.status"
 FAILURES=0
+PENDING=0
 run_case() {
   local scale="$1" name="$2"; shift 2
   local folder="$RUN_ROOT/outputs/profiling/$scale${CASE_SUBDIR:+/$CASE_SUBDIR}" code
@@ -186,8 +187,8 @@ PY
     SUPERRECORD_OUTPUT_JSON="$FOLDER/generic.json" SUPERRECORD_MAX_FRONTIER=2 \
     run_case "$SCALE" generic "$BIN" --test tree_superrecord_bench "${COMMON[@]}"
   if [[ "$TREEPIR_SKIP" == 1 ]]; then
-    printf '%s\t%s\tdeferred\t\t%s\n' "$SCALE" "treepir" "$(date -u +%FT%TZ)" >> "$STATUS_FILE"
-    FAILURES=$((FAILURES+1))
+    printf '%s\t%s\tpending\t\t%s\n' "$SCALE" "treepir" "$(date -u +%FT%TZ)" >> "$STATUS_FILE"
+    PENDING=$((PENDING+1))
   else
     CASE_TRIALS="$TREEPIR_TRIALS" TREEPIR_DATA_DIR="$RUN_ROOT/deps/TreePIR/VBPIR_TreePIR" \
       run_case "$SCALE" treepir "$TREEPIR" --height "$HEIGHT" --leaf-file "$FOLDER/leaves.txt" --warmup "$WARMUPS" --trials "$TREEPIR_TRIALS" --output "$FOLDER/treepir.json"
@@ -199,5 +200,12 @@ done
 # 100/16 sample files using the counts recorded in their own headers.
 python3 "$SOURCE/scripts/summarize_cloudlab_profiles.py" --directory "$RUN_ROOT/outputs/profiling" || FAILURES=$((FAILURES+1))
 printf '%s\n' "$FAILURES" > "$RUN_ROOT/metadata/matrix-failures.txt"
-if [[ "$FAILURES" == 0 ]]; then echo complete > "$RUN_ROOT/metadata/matrix.status"; else echo failed > "$RUN_ROOT/metadata/matrix.status"; fi
-exit "$FAILURES"
+printf '%s\n' "$PENDING" > "$RUN_ROOT/metadata/matrix-pending.txt"
+if [[ "$FAILURES" != 0 ]]; then
+  echo failed > "$RUN_ROOT/metadata/matrix.status"
+elif [[ "$PENDING" != 0 ]]; then
+  echo pending > "$RUN_ROOT/metadata/matrix.status"
+else
+  echo complete > "$RUN_ROOT/metadata/matrix.status"
+fi
+exit $((FAILURES + PENDING))

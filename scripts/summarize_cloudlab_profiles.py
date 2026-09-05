@@ -15,6 +15,7 @@ from typing import Any
 
 
 Row = dict[str, Any]
+SUPPORTED_SCALES = ("1gb", "4gb", "8gb")
 
 
 class ProfileError(Exception):
@@ -82,12 +83,12 @@ def scale_from_path(path: Path, root: Path | None = None) -> str:
     if root is not None:
         try:
             rel = path.relative_to(root)
-            if rel.parts and rel.parts[0] in {"1gb", "8gb"}:
+            if rel.parts and rel.parts[0] in SUPPORTED_SCALES:
                 return rel.parts[0]
         except ValueError:
             pass
     for part in path.parts:
-        if part in {"1gb", "8gb"}:
+        if part in SUPPORTED_SCALES:
             return part
     return ""
 
@@ -577,7 +578,7 @@ def write_outputs(root: Path, rows: list[Row]) -> None:
 
 def directory_files(root: Path) -> list[Path]:
     files: list[Path] = []
-    for scale in ("1gb", "8gb"):
+    for scale in SUPPORTED_SCALES:
         scale_dir = root / scale
         if scale_dir.exists():
             files.extend(sorted(scale_dir.glob("*.json")))

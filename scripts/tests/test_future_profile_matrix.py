@@ -319,18 +319,18 @@ class FutureProfileMatrixTests(unittest.TestCase):
         self.assertIn("unsupported RUN_SCALES entry: 8gb", result.stderr)
         self.assertFalse((self.run_root / "metadata" / "process-invocations.jsonl").exists())
 
-    def test_treepir_skip_records_deferred_status_without_blocking_other_scales(self) -> None:
+    def test_treepir_skip_records_pending_status_without_blocking_other_scales(self) -> None:
         result = self.run_matrix(RUN_SCALES="1gb 4gb", TREEPIR_SKIP="1")
 
         self.assertNotEqual(result.returncode, 0)
-        self.assertEqual((self.run_root / "metadata" / "matrix.status").read_text().strip(), "failed")
+        self.assertEqual((self.run_root / "metadata" / "matrix.status").read_text().strip(), "pending")
         for scale in ["1gb", "4gb"]:
             formal = self.formal_invocations(scale)
             self.assertEqual(
                 sorted(formal),
                 ["cuckoo_tuned", "flat", "generic", "layerwise_tuned", "tree_g32"],
             )
-            self.assertIn(f"{scale}\ttreepir\tdeferred\t\t", (self.run_root / "outputs" / "profiling" / "status.tsv").read_text())
+            self.assertIn(f"{scale}\ttreepir\tpending\t\t", (self.run_root / "outputs" / "profiling" / "status.tsv").read_text())
             self.assertTrue((self.run_root / "outputs" / "profiling" / scale / "flat-process.json").exists())
 
 
