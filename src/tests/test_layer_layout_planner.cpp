@@ -163,15 +163,34 @@ void PirTest::test_layer_layout_planner() {
   require_test(zero_budget.selected_total_padded_plaintexts ==
                    zero_budget.legacy_total_padded_plaintexts,
                "zero budget keeps the legacy total");
-  // Within 2% the deterministic order (smaller scan bytes first) wins.
+  // Measured latency is primary even when the gain is smaller than 2%.
   profile.measurements[1].median_server_ms = 99.0;
   profile.measurements[1].server_samples_ms = {99.0};
+  const LayerLayoutSelection faster =
+      select_layer_layouts(profile, 24, 96, reference, 1.01);
+  require_test(faster.expansion_heights[23] == 10,
+               "latency priority keeps the faster layout despite extra padding");
+  profile.measurements[1].median_server_ms = 100.0;
+  profile.measurements[1].server_samples_ms = {100.0};
   const LayerLayoutSelection tied =
       select_layer_layouts(profile, 24, 96, reference, 1.01);
   require_test(tied.expansion_heights[23] == 9,
-               "2% tie rule prefers the smaller layout");
+               "only equal latency prefers the smaller layout");
   profile.measurements[1].median_server_ms = 90.0;
   profile.measurements[1].server_samples_ms = {90.0};
+
+  // Aggregate throughput follows the mean, even when the medians disagree.
+  LayerLayoutProfile throughput_profile = profile;
+  throughput_profile.measured_trials = 3;
+  throughput_profile.measurements[0].server_samples_ms = {1.0, 1.0, 40.0};
+  throughput_profile.measurements[0].median_server_ms = 1.0;
+  throughput_profile.measurements[1].server_samples_ms = {10.0, 10.0, 10.0};
+  throughput_profile.measurements[1].median_server_ms = 10.0;
+  const LayerLayoutSelection throughput_choice =
+      select_layer_layouts(throughput_profile, 24, 96, reference, 1.01);
+  require_test(throughput_choice.expansion_heights[23] == 10 &&
+                   throughput_choice.predicted_selected_ms == 10.0,
+               "maximum throughput chooses the lower mean, not the lower median");
 
   // JSON round trip and profile validation.
   const std::string path =

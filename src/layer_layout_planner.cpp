@@ -11,6 +11,7 @@
 #include <fstream>
 #include <iomanip>
 #include <limits>
+#include <numeric>
 #include <sstream>
 #include <stdexcept>
 #include <tuple>
@@ -758,13 +759,13 @@ LayerLayoutSelection select_layer_layouts(const LayerLayoutProfile &profile,
   struct Option {
     size_t height = 0;
     size_t extra_plaintexts = 0;  // relative to the legacy layout of the level
-    double median_ms = 0.0;
+    double mean_ms = 0.0;
     LayerLayoutFeatures features;
   };
   struct LevelPlan {
     size_t legacy_height = 0;
     size_t legacy_num_pt = 0;
-    double legacy_median_ms = 0.0;  // 0 when unmeasured
+    double legacy_mean_ms = 0.0;  // 0 when unmeasured
     std::vector<Option> options;    // measured candidates only
   };
 
@@ -797,10 +798,15 @@ LayerLayoutSelection select_layer_layouts(const LayerLayoutProfile &profile,
       option.height = m.features.expansion_height;
       option.extra_plaintexts =
           m.features.padded_plaintexts - plan.legacy_num_pt;
-      option.median_ms = m.median_server_ms;
+      if (m.server_samples_ms.empty()) {
+        throw std::invalid_argument("layer layout profile: no server samples");
+      }
+      option.mean_ms = std::accumulate(m.server_samples_ms.begin(),
+                                       m.server_samples_ms.end(), 0.0) /
+                       m.server_samples_ms.size();
       option.features = it->features;
       if (option.height == plan.legacy_height) {
-        plan.legacy_median_ms = option.median_ms;
+        plan.legacy_mean_ms = option.mean_ms;
       }
       plan.options.push_back(option);
     }
@@ -830,7 +836,7 @@ LayerLayoutSelection select_layer_layouts(const LayerLayoutProfile &profile,
       for (size_t o = 0; o < plan.options.size(); ++o) {
         const size_t ne = e + plan.options[o].extra_plaintexts;
         if (ne > cap_extra) continue;
-        const double t = dp[e] + plan.options[o].median_ms;
+        const double t = dp[e] + plan.options[o].mean_ms;
         if (t < next[ne]) {
           next[ne] = t;
           choice[level - 1][ne] = static_cast<int>(o);
@@ -866,9 +872,7 @@ LayerLayoutSelection select_layer_layouts(const LayerLayoutProfile &profile,
     if (level == 1) break;
   }
 
-  // Tie refinement: a candidate within 2% of the chosen median that is
-  // preferred by the deterministic order and does not add padding replaces
-  // the choice.
+  // Storage breaks exact latency ties; it must not replace a faster layout.
   const auto tie_key = [](const Option &o) {
     return std::make_tuple(o.features.physical_scan_bytes,
                            o.features.expansion_substitutions,
@@ -879,24 +883,24 @@ LayerLayoutSelection select_layer_layouts(const LayerLayoutProfile &profile,
     LevelPlan &plan = plans[level - 1];
     size_t height = plan.legacy_height;
     size_t num_pt = plan.legacy_num_pt;
-    double median = plan.legacy_median_ms;
+    double mean = plan.legacy_mean_ms;
     if (chosen[level - 1] >= 0) {
       Option pick = plan.options[static_cast<size_t>(chosen[level - 1])];
       for (const Option &alt : plan.options) {
         if (alt.extra_plaintexts <= pick.extra_plaintexts &&
-            alt.median_ms <= pick.median_ms * 1.02 &&
+            alt.mean_ms == pick.mean_ms &&
             tie_key(alt) < tie_key(pick)) {
           pick = alt;
         }
       }
       height = pick.height;
       num_pt = plan.legacy_num_pt + pick.extra_plaintexts;
-      median = pick.median_ms;
+      mean = pick.mean_ms;
     }
     selection.expansion_heights[level - 1] = height;
     selected_total += num_pt;
-    selection.predicted_selected_ms += median;
-    selection.predicted_legacy_ms += plan.legacy_median_ms;
+    selection.predicted_selected_ms += mean;
+    selection.predicted_legacy_ms += plan.legacy_mean_ms;
   }
   selection.selected_total_padded_plaintexts = selected_total;
   return selection;

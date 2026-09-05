@@ -85,6 +85,60 @@ struct CuckooTrialSample {
   bool correct = false;
 };
 
+struct CuckooLayoutPolicy {
+  std::string name = "legacy_padding";
+  std::optional<size_t> requested_expansion_height;
+};
+
+std::optional<size_t> parse_cuckoo_layout_height_env(
+    const PirParams &reference) {
+  const char *value = std::getenv("CUCKOO_LAYOUT_HEIGHT");
+  if (value == nullptr || value[0] == '\0') {
+    return std::nullopt;
+  }
+  std::string text(value);
+  if (text.front() == '-') {
+    throw std::invalid_argument(
+        "CUCKOO_LAYOUT_HEIGHT must be in [0, reference.h]");
+  }
+  size_t parsed_characters = 0;
+  unsigned long long parsed = 0;
+  try {
+    parsed = std::stoull(text, &parsed_characters, 10);
+  } catch (const std::exception &) {
+    throw std::invalid_argument(
+        "CUCKOO_LAYOUT_HEIGHT must be in [0, reference.h]");
+  }
+  if (parsed_characters != text.size() ||
+      parsed > reference.get_expan_height()) {
+    throw std::invalid_argument(
+        "CUCKOO_LAYOUT_HEIGHT must be in [0, reference.h]");
+  }
+  return static_cast<size_t>(parsed);
+}
+
+void apply_cuckoo_layout_policy(std::vector<CuckooBucket> &buckets,
+                                const PirParams &reference,
+                                CuckooLayoutPolicy &policy) {
+  policy.requested_expansion_height =
+      parse_cuckoo_layout_height_env(reference);
+  if (!policy.requested_expansion_height.has_value()) {
+    policy.name = "legacy_padding";
+    return;
+  }
+  policy.name = "forced_expansion_height";
+  for (CuckooBucket &bucket : buckets) {
+    PirParams forced = reference.with_layout(
+        {bucket.target_num_pt, *policy.requested_expansion_height,
+         reference.get_fst_dim_pow2()});
+    if (forced.get_num_other_dims() > reference.get_num_other_dims()) {
+      throw std::runtime_error(
+          "CUCKOO_LAYOUT_HEIGHT exceeds the reference remaining-dimension cap");
+    }
+    bucket.params = std::move(forced);
+  }
+}
+
 void write_json_string(std::ostream &out, const std::string &value) {
   out << '"';
   for (char ch : value) {
@@ -156,6 +210,7 @@ void write_cuckoo_profile_json(const std::string &path, size_t leaf_count,
                                size_t measured_trials,
                                const CuckooBatchParams &params,
                                const PirParams &reference,
+                               const CuckooLayoutPolicy &layout_policy,
                                const std::vector<CuckooBucket> &buckets,
                                const CuckooStorageStats &storage,
                                uint64_t trial_seed,
@@ -191,6 +246,15 @@ void write_cuckoo_profile_json(const std::string &path, size_t leaf_count,
       << ",\n  \"batch_size\": " << params.batch_size
       << ",\n  \"num_buckets\": " << params.num_buckets
       << ",\n  \"num_hashes\": " << params.num_hashes
+      << ",\n  \"layout_policy\": ";
+  write_json_string(out, layout_policy.name);
+  out << ",\n  \"requested_expansion_height\": ";
+  if (layout_policy.requested_expansion_height.has_value()) {
+    out << *layout_policy.requested_expansion_height;
+  } else {
+    out << "null";
+  }
+  out
       << ",\n  \"offline_setup_ms\": " << setup_ms
       << ",\n  \"setup_ms\": " << setup_ms
       << ",\n  \"reference_layout\": ";
@@ -252,6 +316,29 @@ void write_cuckoo_profile_json(const std::string &path, size_t leaf_count,
   out << "\n  ]\n}\n";
   if (!out) {
     throw std::runtime_error("failed to write cuckoo benchmark JSON output");
+  }
+}
+
+void require_bucket_plaintext_decodes(const CuckooBucket &bucket,
+                                      const PirParams &params,
+                                      PirClient &client,
+                                      const SharedPirSessionKeys &keys,
+                                      size_t plaintext_index,
+                                      const char *label) {
+  PirServer server(params);
+  server.set_client_session_keys(client.get_client_id(), keys);
+  server.load_data(bucket.target_num_pt, bucket_source(bucket, params));
+  RlweCt query = client.fast_generate_query(params, plaintext_index);
+  RlweCt response = server.make_query(client.get_client_id(), query);
+  const RlwePt pt = client.decrypt_mod_q(response);
+
+  const size_t first = plaintext_index * 96;
+  const size_t count = std::min(size_t{96}, bucket.members.size() - first);
+  for (size_t offset : {size_t{0}, count - 1}) {
+    const auto [level, local] = node_of_ordinal(bucket.members[first + offset]);
+    require_test(decode_merkle_node(pt, offset, params) ==
+                     synthetic_merkle_node(level, local),
+                 label);
   }
 }
 
@@ -507,6 +594,40 @@ void PirTest::test_cuckoo_batch() {
                      h27_reference.get_num_other_dims() == 13,
                  "8 GB benchmark reference shape");
   }
+  {
+    const PirParams wide_reference =
+        make_benchmark_reference(make_benchmark_workload(size_t{1} << 24));
+    CuckooBucket representative;
+    representative.target_num_pt = 300;
+    representative.members.reserve(representative.target_num_pt * 96);
+    for (size_t ordinal = 0; ordinal < representative.target_num_pt * 96;
+         ++ordinal) {
+      representative.members.push_back(static_cast<uint32_t>(ordinal));
+    }
+    const PirParams baseline =
+        select_target_plaintext_layout(representative.target_num_pt,
+                                       wide_reference)
+            .params;
+    const PirParams forced_h8 = wide_reference.with_layout(
+        {representative.target_num_pt, 8, wide_reference.get_fst_dim_pow2()});
+    require_test(forced_h8.get_expan_height() == 8 &&
+                     forced_h8.get_fst_dim_sz() == 128 &&
+                     forced_h8.get_num_other_dims() <=
+                         wide_reference.get_num_other_dims(),
+                 "forced h8 representative bucket shape");
+
+    PirClient wide_client(wide_reference);
+    SharedPirSessionKeys wide_keys = wide_client.create_session_keys();
+    for (const PirParams &shape : {baseline, forced_h8}) {
+      require_bucket_plaintext_decodes(representative, shape, wide_client,
+                                       wide_keys, 0,
+                                       "representative first plaintext");
+      require_bucket_plaintext_decodes(
+          representative, shape, wide_client, wide_keys,
+          representative.target_num_pt - 1,
+          "representative last plaintext");
+    }
+  }
 
   {
     const size_t schedule_height = 24;
@@ -573,6 +694,8 @@ void PirTest::test_cuckoo_benchmark() {
   const auto setup_start = Clock::now();
   std::vector<CuckooBucket> buckets =
       build_cuckoo_buckets(params, reference);
+  CuckooLayoutPolicy layout_policy;
+  apply_cuckoo_layout_policy(buckets, reference, layout_policy);
   PirClient client(reference);
   SharedPirSessionKeys keys = client.create_session_keys();
   std::vector<std::unique_ptr<PirServer>> servers;
@@ -756,8 +879,9 @@ void PirTest::test_cuckoo_benchmark() {
   if (json_path != nullptr && json_path[0] != '\0') {
     write_cuckoo_profile_json(
         json_path, leaf_count, tree_height, kWarmups, kTrials, params,
-        reference, buckets, storage, trial_seed, response_bytes_total,
-        query_bytes, modeled_helper_key_bytes(reference), setup_ms, samples);
+        reference, layout_policy, buckets, storage, trial_seed,
+        response_bytes_total, query_bytes, modeled_helper_key_bytes(reference),
+        setup_ms, samples);
     BENCH_PRINT("cuckoo raw profile JSON: " << json_path);
   }
 }

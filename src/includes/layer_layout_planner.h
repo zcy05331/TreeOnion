@@ -143,16 +143,15 @@ struct LayerLayoutSelection {
   std::vector<size_t> expansion_heights;  // index = level - 1
   uint64_t legacy_total_padded_plaintexts = 0;
   uint64_t selected_total_padded_plaintexts = 0;
-  double predicted_legacy_ms = 0.0;    // sum of measured legacy medians
-  double predicted_selected_ms = 0.0;  // sum of selected medians
+  double predicted_legacy_ms = 0.0;    // sum of measured legacy means
+  double predicted_selected_ms = 0.0;  // sum of selected means
 };
 
-// Minimises the sum of per-level median server times subject to
+// Minimises the sum of per-level mean server times subject to
 // total padded plaintexts <= legacy total * padding_budget, by dynamic
-// programming over levels and excess padded plaintexts. Candidates whose
-// medians are within 2% are ordered by (physical_scan_bytes,
-// expansion_substitutions, inverse_ntts, expansion_height) so noise cannot buy
-// negligible speed with extra storage. Levels without measurements (or whose
+// programming over levels and excess padded plaintexts. Only equal measured
+// means are ordered by (physical_scan_bytes, expansion_substitutions,
+// inverse_ntts, expansion_height). Levels without measurements (or whose
 // whole level fits one plaintext) keep the legacy layout.
 LayerLayoutSelection select_layer_layouts(const LayerLayoutProfile &profile,
                                           size_t tree_height,

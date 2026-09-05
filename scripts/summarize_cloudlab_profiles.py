@@ -318,6 +318,9 @@ def collect_merkle(data: dict[str, Any], path: Path, scale: str, peak: int | Non
     rows: list[Row] = []
     for case in data["cases"]:
         variant = str(case.get("name", case_name_from_path(path)))
+        policy = case.get("layer_layout_policy")
+        if policy and policy != "legacy":
+            variant += "_" + str(policy)
         for idx, sample in enumerate(case["pipeline_profile_samples_ms"]):
             for stage, value in sample["stages"].items():
                 add_value(rows, path, scale, variant, "merkle", variant, idx, stage, value, "primary", peak)
