@@ -25,6 +25,13 @@
       "measured_trials": 100,
       "correct": true,
       "mean_server_ms": 18992.701306670002
+    },
+    {
+      "case": "tree_g1",
+      "measured_trials": 100,
+      "correct": true,
+      "mean_server_ms": 1404.7891019699998,
+      "payload_note": "12-bit scalar per node; diagnostic, not comparable to 32-byte node payload"
     }
   ],
   "tier_complete": false

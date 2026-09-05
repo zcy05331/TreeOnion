@@ -21,7 +21,7 @@ All rows below have 100 correct measured paths after 3 warmups. Selection used 1
 | 23 | 128 | 256 | 683 | 342 | 87424 | 87552 |
 | 24 | 256 | 512 | 683 | 342 | 174848 | 175104 |
 
-Online communication remains unchanged by this tuning: Layerwise uses 267840 modeled query bytes and 206784 actual response bytes; Cuckoo uses 550560 modeled query bytes and 416768 actual response bytes per path. One-time key estimates are retained separately in the raw files.
+Online communication remains unchanged by this tuning: Layerwise uses 267840 modeled query bytes and 206784 actual response bytes; Cuckoo uses 550560 modeled query bytes and 416768 actual response bytes per path. Cuckoo's one-time helper-key estimate increases from 1130880 to 1488000 bytes under the aligned reference; the extra 357120 bytes are setup material. Layerwise's one-time estimate remains 1488000 bytes.
 
 ## Timing scope
 
