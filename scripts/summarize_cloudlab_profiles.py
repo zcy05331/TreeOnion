@@ -420,7 +420,7 @@ def collect_generic(data: dict[str, Any], path: Path, scale: str, peak: int | No
                 add_bytes(rows, path, scale, "generic", "generic-superrecord", variant, "communication",
                           "online_total_bytes_mixed", float(modeled_query) + float(actual_response), basis="mixed", peak_rss_bytes=peak)
         add_bytes(rows, path, scale, "generic", "generic-superrecord", variant, "setup", "helper_key_bytes",
-                  candidate.get("candidate_metrics", {}).get("modeled_per_client_eval_key_bytes"),
+                  (candidate.get("candidate_metrics") or {}).get("modeled_per_client_eval_key_bytes"),
                   kind="communication_setup", basis="modeled", peak_rss_bytes=peak)
     return rows
 
@@ -469,6 +469,8 @@ def collect_treepir(data: dict[str, Any], path: Path, scale: str, peak: int | No
 
 def collect_rows(path: Path, root: Path | None = None, trials: int | None = None) -> list[Row]:
     data = load_json(path)
+    if data.get("validate_index_only") is True:
+        return []
     family = infer_family(data)
     if family is None:
         return []
@@ -590,6 +592,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--trials100", action="store_const", const=100, dest="trials",
                         help="expect 100 measured trials")
     parser.add_argument("--leaf-count", type=int, help="expected leaf count")
+    parser.add_argument("--flat-trials", type=int, help="measured-trial count override for flat.json in a directory")
     args = parser.parse_args()
     if bool(args.validate) == bool(args.directory):
         parser.error("provide exactly one of --validate or --directory")
@@ -610,7 +613,8 @@ def main() -> int:
         skipped: list[Path] = []
         for path in directory_files(root):
             try:
-                rows.extend(collect_rows(path, root, args.trials))
+                trials = args.flat_trials if path.stem == "flat" and args.flat_trials is not None else args.trials
+                rows.extend(collect_rows(path, root, trials))
             except ProfileError:
                 if infer_family(load_json(path)) is None:
                     skipped.append(path)

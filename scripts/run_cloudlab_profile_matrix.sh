@@ -6,6 +6,7 @@ SOURCE="$RUN_ROOT/source"
 BIN="$SOURCE/build-native/Onion-PIR"
 TREEPIR="$RUN_ROOT/deps/TreePIR/VBPIR_TreePIR/build/bin/vbpir_treepir"
 TRIALS="${TRIALS:-100}"
+FLAT_TRIALS="${FLAT_TRIALS:-16}"
 WARMUPS="${WARMUPS:-3}"
 TRIAL_SEED="${TRIAL_SEED:-7}"
 mkdir -p "$RUN_ROOT/outputs/profiling" "$RUN_ROOT/metadata"
@@ -21,13 +22,28 @@ export ONIONPIR_BENCH_HEXL_PATH="$RUN_ROOT/deps/hexl-install/lib64/cmake/hexl-1.
 export ONIONPIR_BENCH_PROCESS_ARCH=x86_64
 export SUPERRECORD_COMMIT="$ONIONPIR_BENCH_COMMIT"
 STATUS_FILE="$RUN_ROOT/outputs/profiling/status.tsv"
-printf 'scale\tcase\tstatus\texit_code\tutc\n' > "$STATUS_FILE"
+[[ -f "$STATUS_FILE" ]] || printf 'scale\tcase\tstatus\texit_code\tutc\n' > "$STATUS_FILE"
 printf '%s\n' "$$" > "$RUN_ROOT/metadata/matrix-controller.pid"
 FAILURES=0
 run_case() {
   local scale="$1" name="$2"; shift 2
   local folder="$RUN_ROOT/outputs/profiling/$scale" code
+  local expected_trials="${CASE_TRIALS:-$TRIALS}"
   mkdir -p "$folder"
+  # Resume a completed process only after its requested sample count validates.
+  if [[ -f "$folder/$name.json" && -f "$folder/$name-process.json" ]]; then
+    if python3 - "$folder/$name-process.json" <<'PY'
+import json,sys
+from pathlib import Path
+sys.exit(0 if json.loads(Path(sys.argv[1]).read_text())['exit_code'] == 0 else 1)
+PY
+    then
+      if python3 "$SOURCE/scripts/summarize_cloudlab_profiles.py" --validate "$folder/$name.json" --trials "$expected_trials" --leaf-count "$LEAVES"; then
+        printf '%s\t%s\tcomplete\t0\t%s\n' "$scale" "$name" "$(date -u +%FT%TZ)" >> "$STATUS_FILE"
+        return 0
+      fi
+    fi
+  fi
   printf '%s %s\n' "$scale" "$name" > "$RUN_ROOT/metadata/current-job.txt"
   printf '%s\t%s\trunning\t\t%s\n' "$scale" "$name" "$(date -u +%FT%TZ)" >> "$STATUS_FILE"
   python3 "$SOURCE/scripts/read_process_peak_memory.py" \
@@ -35,7 +51,7 @@ run_case() {
     -- numactl --physcpubind=0 --interleave=all "$@"
   code=$?
   if [[ "$code" == 0 ]]; then
-    python3 "$SOURCE/scripts/summarize_cloudlab_profiles.py" --validate "$folder/$name.json" --trials "$TRIALS" --leaf-count "$LEAVES"
+    python3 "$SOURCE/scripts/summarize_cloudlab_profiles.py" --validate "$folder/$name.json" --trials "$expected_trials" --leaf-count "$LEAVES"
     code=$?
   fi
   if [[ "$code" == 0 ]]; then
@@ -73,9 +89,10 @@ PY
     run_case "$SCALE" generic "$BIN" --test tree_superrecord_bench "${COMMON[@]}"
   TREEPIR_DATA_DIR="$RUN_ROOT/deps/TreePIR/VBPIR_TreePIR" \
     run_case "$SCALE" treepir "$TREEPIR" --height "$HEIGHT" --leaf-file "$FOLDER/leaves.txt" --warmup "$WARMUPS" --trials "$TRIALS" --output "$FOLDER/treepir.json"
-  run_case "$SCALE" flat "$BIN" --test merkle_benchmarks --benchmark-case merkle_paths "${COMMON[@]}" --benchmark-json "$FOLDER/flat.json"
+  CASE_TRIALS="$FLAT_TRIALS" run_case "$SCALE" flat "$BIN" --test merkle_benchmarks --benchmark-case merkle_paths \
+    --leaf-count "$LEAVES" --experiments "$FLAT_TRIALS" --warmup "$WARMUPS" --trial-seed "$TRIAL_SEED" --benchmark-json "$FOLDER/flat.json"
 done
-python3 "$SOURCE/scripts/summarize_cloudlab_profiles.py" --directory "$RUN_ROOT/outputs/profiling" --trials "$TRIALS" || FAILURES=$((FAILURES+1))
+python3 "$SOURCE/scripts/summarize_cloudlab_profiles.py" --directory "$RUN_ROOT/outputs/profiling" --trials "$TRIALS" --flat-trials "$FLAT_TRIALS" || FAILURES=$((FAILURES+1))
 printf '%s\n' "$FAILURES" > "$RUN_ROOT/metadata/matrix-failures.txt"
 if [[ "$FAILURES" == 0 ]]; then echo complete > "$RUN_ROOT/metadata/matrix.status"; else echo failed > "$RUN_ROOT/metadata/matrix.status"; fi
 exit "$FAILURES"
