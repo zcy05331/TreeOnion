@@ -6,6 +6,7 @@ import json
 import os
 import pathlib
 import platform
+import re
 import shlex
 import subprocess
 import sys
@@ -32,7 +33,14 @@ def environment_metadata(binary):
                 key, value = line.split('=', 1)
                 fields[key.split(':', 1)[0]] = value
     compiler_command = fields.get('CMAKE_CXX_COMPILER', '/usr/bin/clang++').split(';')
-    compiler_command += shlex.split(fields.get('CMAKE_CXX_COMPILER_ARG1', ''))
+    compiler_args = fields.get('CMAKE_CXX_COMPILER_ARG1', '')
+    if not compiler_args:
+        for config in (binary.parent / 'CMakeFiles').glob('*/CMakeCXXCompiler.cmake'):
+            match = re.search(r'set\(CMAKE_CXX_COMPILER_ARG1 \"([^\"]*)\"\)', config.read_text())
+            if match:
+                compiler_args = match.group(1)
+                break
+    compiler_command += shlex.split(compiler_args)
     flags = binary.parent / 'CMakeFiles/Onion-PIR.dir/flags.make'
     return {
         'repository_commit': command_text(['git', 'rev-parse', 'HEAD']),
