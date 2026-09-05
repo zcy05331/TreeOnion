@@ -94,5 +94,6 @@
       "process_file": "flat-process.json"
     }
   ],
-  "remaining_scope": "8gb tier still running"
+  "remaining_scope": "8gb tier still running",
+  "final_logs_complete": true
 }
