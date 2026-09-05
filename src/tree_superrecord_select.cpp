@@ -190,6 +190,30 @@ std::pair<size_t, size_t> plan_pyramid_row_and_cols(const LevelPlan &plan) {
   fail("unknown level plan case");
 }
 
+static std::vector<uint64_t> ntt_reference_selectors(
+    const std::vector<RlweCt> &selector, size_t cols, bool second,
+    const PirParams &runtime_scheme) {
+  const size_t degree = runtime_scheme.get_poly_degree();
+  const auto &qs = runtime_scheme.get_rns_mods();
+  const size_t K = qs.size();
+  std::vector<uint64_t> out(checked_mul(checked_mul(cols, K, "selector limbs"),
+                                        degree, "selector coefficients"));
+  for (size_t col = 0; col < cols; ++col) {
+    const RlweCt &ct = selector[col];
+    require(!ct.ntt_form && ct.c0.size() == K * degree &&
+                ct.c1.size() == K * degree,
+            "selector ciphertext has the wrong shape");
+    const std::vector<uint64_t> &src = second ? ct.c1 : ct.c0;
+    for (size_t k = 0; k < K; ++k) {
+      uint64_t *dst = out.data() + (col * K + k) * degree;
+      std::copy(src.begin() + k * degree, src.begin() + (k + 1) * degree,
+                dst);
+      utils::ntt_fwd(dst, degree, qs[k]);
+    }
+  }
+  return out;
+}
+
 RlweCt fold_candidates(std::vector<RlweCt> candidates, const LevelPlan &plan,
                        std::span<GSWCt> sigma_selectors, PirServer &mux,
                        const CiphertextDiagnostic *fold_checkpoint) {
@@ -234,17 +258,59 @@ RlweCt select_level_reference(const LevelPlaneDatabase &db,
           "pyramid row does not match the plan");
   const std::vector<RlweCt> &selector = pyramid[row_index];
   StageClock clock(timing);
+  // All products and sums stay modulo the original full-q limbs. Linearity
+  // permits one inverse transform per row, preserving coefficient-exact
+  // outputs for every diagnostic callback without the m32 noise-gate cycle.
+  const size_t degree = runtime_scheme.get_poly_degree();
+  const auto &qs = runtime_scheme.get_rns_mods();
+  const size_t K = qs.size();
+  const std::vector<uint64_t> selector_c0_ntt =
+      ntt_reference_selectors(selector, cols, false, runtime_scheme);
+  const std::vector<uint64_t> selector_c1_ntt =
+      ntt_reference_selectors(selector, cols, true, runtime_scheme);
+  std::vector<uint64_t> cached_plaintext;
+  std::vector<uint64_t> pt_ntt(K * degree);
+  std::vector<uint64_t> product(degree);
   std::vector<RlweCt> candidates;
   candidates.reserve(plan.matrix_rows);
   for (size_t row = 0; row < plan.matrix_rows; ++row) {
-    RlweCt acc = tree_pt_ct_mul(
-        db.plaintexts[matrix_plaintext_index(row, 0, plan)], selector[0],
-        runtime_scheme);
-    for (size_t col = 1; col < cols; ++col) {
-      const RlweCt term = tree_pt_ct_mul(
-          db.plaintexts[matrix_plaintext_index(row, col, plan)], selector[col],
-          runtime_scheme);
-      tree_ct_add_inplace(acc, term, runtime_scheme);
+    RlweCt acc;
+    acc.c0.assign(K * degree, 0);
+    acc.c1.assign(K * degree, 0);
+    acc.ntt_form = false;
+    for (size_t col = 0; col < cols; ++col) {
+      const std::vector<uint64_t> &pt =
+          db.plaintexts[matrix_plaintext_index(row, col, plan)];
+      require(pt.size() == degree, "canonical plaintext has the wrong degree");
+      if (cached_plaintext != pt) {
+        cached_plaintext = pt;
+        for (size_t k = 0; k < K; ++k) {
+          uint64_t *dst = pt_ntt.data() + k * degree;
+          std::copy(pt.begin(), pt.end(), dst);
+          utils::ntt_fwd(dst, degree, qs[k]);
+        }
+      }
+      for (size_t k = 0; k < K; ++k) {
+        const uint64_t q = qs[k];
+        const uint64_t *pt_limb = pt_ntt.data() + k * degree;
+        uint64_t *c0_limb = acc.c0.data() + k * degree;
+        uint64_t *c1_limb = acc.c1.data() + k * degree;
+        const size_t selector_at = (col * K + k) * degree;
+        intel::hexl::EltwiseMultMod(
+            product.data(), pt_limb, selector_c0_ntt.data() + selector_at,
+            degree, q, 1);
+        intel::hexl::EltwiseAddMod(c0_limb, c0_limb, product.data(), degree,
+                                   q);
+        intel::hexl::EltwiseMultMod(
+            product.data(), pt_limb, selector_c1_ntt.data() + selector_at,
+            degree, q, 1);
+        intel::hexl::EltwiseAddMod(c1_limb, c1_limb, product.data(), degree,
+                                   q);
+      }
+    }
+    for (size_t k = 0; k < K; ++k) {
+      utils::ntt_inv(acc.c0.data() + k * degree, degree, qs[k]);
+      utils::ntt_inv(acc.c1.data() + k * degree, degree, qs[k]);
     }
     if (first_dim_checkpoint) (*first_dim_checkpoint)(row, acc);
     candidates.push_back(std::move(acc));
