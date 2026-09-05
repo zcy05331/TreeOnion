@@ -234,6 +234,40 @@ RlwePt make_layer_merkle_plaintext(size_t level, size_t plaintext_index,
   return encode_merkle_nodes(nodes, params);
 }
 
+TargetPlaintextLayout select_target_plaintext_layout(
+    size_t target_num_pt, const PirParams &reference) {
+  bool found = false;
+  std::tuple<size_t, size_t, size_t, size_t> best_score;
+  PirParams best_params = reference;
+  const size_t max_other_dims = reference.get_num_other_dims();
+  for (size_t height = 0; height <= reference.get_expan_height(); ++height) {
+    try {
+      PirParams candidate = reference.with_layout(
+          {target_num_pt, height, reference.get_fst_dim_pow2()});
+      const size_t other_dims = candidate.get_num_other_dims();
+      if (other_dims > max_other_dims) {
+        continue;
+      }
+      const size_t useful_expand =
+          candidate.get_fst_dim_sz() + reference.get_l() * other_dims;
+      const auto score = std::make_tuple(candidate.get_num_pt(), useful_expand,
+                                         other_dims, height);
+      if (!found || score < best_score) {
+        found = true;
+        best_score = score;
+        best_params = std::move(candidate);
+      }
+    } catch (const std::runtime_error &) {
+      // This expansion height cannot represent the requested target.
+    }
+  }
+  if (!found) {
+    throw std::runtime_error(
+        "No scheme-compatible PIR layout for target plaintext count");
+  }
+  return {target_num_pt, best_params};
+}
+
 std::vector<LayerLayout> plan_layer_layouts(
     size_t tree_height, size_t nodes_per_pt, const PirParams &reference) {
   validate_shift(tree_height, "tree height");
@@ -246,42 +280,12 @@ std::vector<LayerLayout> plan_layer_layouts(
 
   std::vector<LayerLayout> layouts;
   layouts.reserve(tree_height);
-  const size_t max_other_dims = reference.get_num_other_dims();
   for (size_t level = 1; level <= tree_height; ++level) {
     const size_t node_count = size_t{1} << level;
     const size_t target_num_pt = utils::roundup_div(node_count, nodes_per_pt);
-
-    // Keep each layer no deeper than the frozen flat reference shape. Tuple
-    // order minimizes padded plaintexts first, then expansion work, remaining
-    // dimensions, and finally expansion height.
-    bool found = false;
-    std::tuple<size_t, size_t, size_t, size_t> best_score;
-    PirParams best_params = reference;
-    for (size_t height = 0; height <= reference.get_expan_height(); ++height) {
-      try {
-        PirParams candidate = reference.with_layout(
-            {target_num_pt, height, reference.get_fst_dim_pow2()});
-        const size_t other_dims = candidate.get_num_other_dims();
-        if (other_dims > max_other_dims) {
-          continue;
-        }
-        const size_t useful_expand =
-            candidate.get_fst_dim_sz() + reference.get_l() * other_dims;
-        const auto score = std::make_tuple(candidate.get_num_pt(), useful_expand,
-                                           other_dims, height);
-        if (!found || score < best_score) {
-          found = true;
-          best_score = score;
-          best_params = std::move(candidate);
-        }
-      } catch (const std::runtime_error &) {
-        // This expansion height cannot represent the requested layer.
-      }
-    }
-    if (!found) {
-      throw std::runtime_error("No scheme-compatible PIR layout for Merkle layer");
-    }
-    layouts.push_back({level, node_count, target_num_pt, best_params});
+    TargetPlaintextLayout selected =
+        select_target_plaintext_layout(target_num_pt, reference);
+    layouts.push_back({level, node_count, target_num_pt, selected.params});
     layouts.back().direct_return = node_count <= nodes_per_pt;
   }
   return layouts;

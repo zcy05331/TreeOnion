@@ -6,7 +6,6 @@
 #include <limits>
 #include <stdexcept>
 #include <string>
-#include <tuple>
 
 namespace {
 
@@ -21,40 +20,6 @@ uint64_t splitmix64_once(uint64_t value) {
   value = (value ^ (value >> 30)) * 0xbf58476d1ce4e5b9ULL;
   value = (value ^ (value >> 27)) * 0x94d049bb133111ebULL;
   return value ^ (value >> 31);
-}
-
-// Minimal scheme-compatible layout for one bucket, scored exactly like the
-// layerwise planner: padded plaintexts first, then expansion work, remaining
-// dimensions, and height.
-PirParams bucket_layout(size_t target_num_pt, const PirParams &reference) {
-  bool found = false;
-  std::tuple<size_t, size_t, size_t, size_t> best_score;
-  PirParams best = reference;
-  const size_t max_other_dims = reference.get_num_other_dims();
-  for (size_t height = 0; height <= reference.get_expan_height(); ++height) {
-    try {
-      PirParams candidate = reference.with_layout(
-          {target_num_pt, height, reference.get_fst_dim_pow2()});
-      const size_t other_dims = candidate.get_num_other_dims();
-      if (other_dims > max_other_dims) continue;
-      const size_t useful_expand =
-          candidate.get_fst_dim_sz() + reference.get_l() * other_dims;
-      const auto score = std::make_tuple(candidate.get_num_pt(),
-                                         useful_expand, other_dims, height);
-      if (!found || score < best_score) {
-        found = true;
-        best_score = score;
-        best = std::move(candidate);
-      }
-    } catch (const std::runtime_error &) {
-      // This height cannot represent the bucket; try the next one.
-    }
-  }
-  if (!found) {
-    throw std::runtime_error(
-        "cuckoo_batch: no scheme-compatible layout for a bucket");
-  }
-  return best;
 }
 
 }  // namespace
@@ -104,7 +69,8 @@ std::vector<CuckooBucket> build_cuckoo_buckets(const CuckooBatchParams &params,
             "every bucket must hold at least one item at this scale");
     bucket.target_num_pt =
         utils::roundup_div(bucket.members.size(), size_t{96});
-    bucket.params = bucket_layout(bucket.target_num_pt, reference);
+    bucket.params =
+        select_target_plaintext_layout(bucket.target_num_pt, reference).params;
   }
   return buckets;
 }

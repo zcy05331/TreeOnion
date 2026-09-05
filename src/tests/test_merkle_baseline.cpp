@@ -119,6 +119,20 @@ void PirTest::test_merkle_baseline() {
                "level 24 rounded");
   require_test(sum_padded_bytes(plan) == 1074843648ULL,
                "layer padded total");
+  for (const LayerLayout &layout : plan) {
+    const TargetPlaintextLayout shared =
+        select_target_plaintext_layout(layout.target_num_pt, reference);
+    require_test(layout.params.get_num_pt() == shared.params.get_num_pt() &&
+                     layout.params.get_expan_height() ==
+                         shared.params.get_expan_height() &&
+                     layout.params.get_fst_dim_sz() ==
+                         shared.params.get_fst_dim_sz() &&
+                     layout.params.get_other_dim_sz() ==
+                         shared.params.get_other_dim_sz() &&
+                     layout.params.get_num_other_dims() ==
+                         shared.params.get_num_other_dims(),
+                 "layer planner uses the shared target-plaintext selector");
+  }
   // Direct-return flags: levels whose node count fits one 96-node plaintext
   // (levels 1..6) are handed over in the clear at any tree height.
   for (size_t level = 1; level <= 24; ++level) {

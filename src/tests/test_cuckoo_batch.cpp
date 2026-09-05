@@ -27,18 +27,6 @@ std::pair<size_t, size_t> node_of_ordinal(size_t ordinal) {
   return {level, heap - (size_t{1} << level)};
 }
 
-// First feasible flat reference layout, as in the baseline suite.
-PirParams flat_reference(size_t target_num_pt) {
-  PirParams scheme;
-  for (size_t height = 0; height <= 10; ++height) {
-    try {
-      return scheme.with_layout({target_num_pt, height, true});
-    } catch (const std::runtime_error &) {
-    }
-  }
-  throw std::runtime_error("no flat reference layout for this workload");
-}
-
 // The k sibling ordinals of one leaf (levels H..1), the same work unit the
 // flat and layerwise baselines retrieve.
 std::vector<uint32_t> sibling_ordinals(size_t leaf, size_t tree_height) {
@@ -140,10 +128,35 @@ void write_stage_json(std::ostream &out, const PirPipelineProfile &profile) {
       << "}";
 }
 
+void write_layout_json(std::ostream &out, const PirParams &params,
+                       size_t target_num_pt,
+                       std::optional<size_t> remaining_dim_limit) {
+  out << "{\"target_num_pt\": " << target_num_pt
+      << ", \"target_plaintexts\": " << target_num_pt
+      << ", \"expansion_height\": " << params.get_expan_height()
+      << ", \"h\": " << params.get_expan_height()
+      << ", \"fst_dim_sz\": " << params.get_fst_dim_sz()
+      << ", \"N0\": " << params.get_fst_dim_sz()
+      << ", \"other_dim_sz\": " << params.get_other_dim_sz()
+      << ", \"Nrest\": " << params.get_other_dim_sz()
+      << ", \"num_other_dims\": " << params.get_num_other_dims()
+      << ", \"remaining_dims\": " << params.get_num_other_dims()
+      << ", \"num_pt\": " << params.get_num_pt()
+      << ", \"padded_plaintexts\": " << params.get_num_pt()
+      << ", \"padding_plaintexts\": "
+      << (params.get_num_pt() - target_num_pt);
+  if (remaining_dim_limit.has_value()) {
+    out << ", \"remaining_dim_limit\": " << *remaining_dim_limit;
+  }
+  out << "}";
+}
+
 void write_cuckoo_profile_json(const std::string &path, size_t leaf_count,
                                size_t tree_height, size_t warmups,
                                size_t measured_trials,
                                const CuckooBatchParams &params,
+                               const PirParams &reference,
+                               const std::vector<CuckooBucket> &buckets,
                                const CuckooStorageStats &storage,
                                uint64_t trial_seed,
                                uint64_t response_bytes,
@@ -180,6 +193,20 @@ void write_cuckoo_profile_json(const std::string &path, size_t leaf_count,
       << ",\n  \"num_hashes\": " << params.num_hashes
       << ",\n  \"offline_setup_ms\": " << setup_ms
       << ",\n  \"setup_ms\": " << setup_ms
+      << ",\n  \"reference_layout\": ";
+  write_layout_json(out, reference, reference.get_target_num_pt(),
+                    reference.get_num_other_dims());
+  out << ",\n  \"bucket_layouts\": [";
+  for (size_t i = 0; i < buckets.size(); ++i) {
+    if (i) out << ',';
+    out << "\n    {\"bucket\": " << i
+        << ", \"member_count\": " << buckets[i].members.size()
+        << ", \"layout\": ";
+    write_layout_json(out, buckets[i].params, buckets[i].target_num_pt,
+                      reference.get_num_other_dims());
+    out << "}";
+  }
+  out << "\n  ]"
       << ",\n  \"stage_map\": [\"expand\", \"convert\", "
          "\"first_dim_query_ntt\", \"first_dim_query_pack\", "
          "\"first_dim_core\", \"first_dim_finalize\", \"other_dim\", "
@@ -266,9 +293,23 @@ void PirTest::test_cuckoo_batch() {
                "1.5x bucket sizing");
 
   const PirParams reference =
-      flat_reference(utils::roundup_div(item_count, size_t{96}));
+      make_benchmark_reference(make_benchmark_workload(leaf_count));
   std::vector<CuckooBucket> buckets =
       build_cuckoo_buckets(params, reference);
+  for (const CuckooBucket &bucket : buckets) {
+    const TargetPlaintextLayout shared =
+        select_target_plaintext_layout(bucket.target_num_pt, reference);
+    require_test(bucket.params.get_num_pt() == shared.params.get_num_pt() &&
+                     bucket.params.get_expan_height() ==
+                         shared.params.get_expan_height() &&
+                     bucket.params.get_fst_dim_sz() ==
+                         shared.params.get_fst_dim_sz() &&
+                     bucket.params.get_other_dim_sz() ==
+                         shared.params.get_other_dim_sz() &&
+                     bucket.params.get_num_other_dims() ==
+                         shared.params.get_num_other_dims(),
+                 "cuckoo buckets use the shared target-plaintext selector");
+  }
 
   // Membership: every sampled ordinal is present in each hashed bucket, and
   // positions are consistent with the sorted member lists.
@@ -448,6 +489,24 @@ void PirTest::test_cuckoo_batch() {
     }
     require_test(recovered == 20, "every item of the k = 20 batch recovered");
   }
+  {
+    const PirParams h24_reference =
+        make_benchmark_reference(make_benchmark_workload(size_t{1} << 24));
+    const PirParams h27_reference =
+        make_benchmark_reference(make_benchmark_workload(size_t{1} << 27));
+    require_test(h24_reference.get_expan_height() == 10,
+                 "1 GB benchmark reference uses h = 10");
+    require_test(h27_reference.get_expan_height() == 10,
+                 "8 GB benchmark reference uses h = 10");
+    require_test(h24_reference.get_target_num_pt() == 349526 &&
+                     h24_reference.get_fst_dim_sz() == 512 &&
+                     h24_reference.get_num_other_dims() == 10,
+                 "1 GB benchmark reference shape");
+    require_test(h27_reference.get_target_num_pt() == 2796203 &&
+                     h27_reference.get_fst_dim_sz() == 512 &&
+                     h27_reference.get_num_other_dims() == 13,
+                 "8 GB benchmark reference shape");
+  }
 
   {
     const size_t schedule_height = 24;
@@ -509,7 +568,7 @@ void PirTest::test_cuckoo_benchmark() {
   // then measure one extra bucket with unchanged hash seed and leaf schedule.
   ++params.num_buckets;
   const PirParams reference =
-      flat_reference(utils::roundup_div(item_count, size_t{96}));
+      make_benchmark_reference(make_benchmark_workload(leaf_count));
 
   const auto setup_start = Clock::now();
   std::vector<CuckooBucket> buckets =
@@ -620,6 +679,11 @@ void PirTest::test_cuckoo_benchmark() {
   BENCH_PRINT("cuckoo batch PIR: L=" << tree_height << ", k=" << tree_height
               << ", buckets=" << params.num_buckets
               << " (3 hashes, 1.5x+slack)");
+  BENCH_PRINT("reference layout: h=" << reference.get_expan_height()
+              << ", N0=" << reference.get_fst_dim_sz()
+              << ", Nrest=" << reference.get_other_dim_sz()
+              << ", remaining dims limit="
+              << reference.get_num_other_dims());
   BENCH_PRINT("database: " << storage.total_padded_plaintexts
               << " padded PIR matrix plaintexts across buckets ("
               << storage.total_target_plaintexts
@@ -692,8 +756,8 @@ void PirTest::test_cuckoo_benchmark() {
   if (json_path != nullptr && json_path[0] != '\0') {
     write_cuckoo_profile_json(
         json_path, leaf_count, tree_height, kWarmups, kTrials, params,
-        storage, trial_seed, response_bytes_total, query_bytes,
-        modeled_helper_key_bytes(reference), setup_ms, samples);
+        reference, buckets, storage, trial_seed, response_bytes_total,
+        query_bytes, modeled_helper_key_bytes(reference), setup_ms, samples);
     BENCH_PRINT("cuckoo raw profile JSON: " << json_path);
   }
 }
