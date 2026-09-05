@@ -38,6 +38,13 @@
       "measured_trials": 100,
       "correct": true,
       "mean_server_ms": 18996.020780849998
+    },
+    {
+      "case": "cuckoo",
+      "measured_trials": 100,
+      "correct": true,
+      "mean_server_ms": 159672.14150855,
+      "layout_policy": "legacy_padding"
     }
   ],
   "tier_complete": false
