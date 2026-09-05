@@ -13,6 +13,8 @@ import unittest
 REPO = pathlib.Path(__file__).resolve().parents[2]
 SCRIPT = REPO / "scripts" / "run_cloudlab_profile_matrix.sh"
 LEAF_COUNT_1GIB = 1 << 24
+LEAF_COUNT_4GIB = 1 << 26
+SUPERRECORD_MEMORY_110GIB = 110 * 1024**3
 
 
 def write_executable(path: pathlib.Path, body: str) -> None:
@@ -56,7 +58,15 @@ class FutureProfileMatrixTests(unittest.TestCase):
             command = args[args.index("--") + 1:]
             root = pathlib.Path(os.environ["FAKE_RUN_ROOT"])
             with (root / "metadata" / "process-invocations.jsonl").open("a") as f:
-                f.write(json.dumps({"output": str(output), "command": command}) + "\n")
+                f.write(json.dumps({
+                    "output": str(output),
+                    "command": command,
+                    "env": {
+                        key: os.environ[key]
+                        for key in ["SUPERRECORD_MEMORY_BYTES", "SUPERRECORD_OUTPUT_JSON", "BENCHMARK_OUTPUT_JSON"]
+                        if key in os.environ
+                    },
+                }) + "\n")
             result = subprocess.run(command, env=os.environ.copy())
             output.parent.mkdir(parents=True, exist_ok=True)
             output.write_text(json.dumps({"exit_code": result.returncode}) + "\n")
@@ -202,10 +212,11 @@ class FutureProfileMatrixTests(unittest.TestCase):
             """,
         )
 
-    def run_matrix(self) -> subprocess.CompletedProcess[str]:
+    def run_matrix(self, **overrides: str) -> subprocess.CompletedProcess[str]:
         env = os.environ.copy()
         env["FAKE_RUN_ROOT"] = str(self.run_root)
         env["PATH"] = f"{self.fake_bin}{os.pathsep}{env['PATH']}"
+        env.update(overrides)
         return subprocess.run(
             ["bash", str(SCRIPT), str(self.run_root)],
             cwd=REPO,
@@ -219,12 +230,12 @@ class FutureProfileMatrixTests(unittest.TestCase):
         path = self.run_root / "metadata" / "process-invocations.jsonl"
         return [json.loads(line) for line in path.read_text().splitlines()]
 
-    def formal_invocations(self) -> dict[str, list[str]]:
+    def formal_invocations(self, scale: str = "1gb") -> dict[str, dict[str, object]]:
         formal = {}
         for invocation in self.invocations():
             output = pathlib.Path(invocation["output"])
-            if output.parent.name == "1gb" and output.name.endswith("-process.json"):
-                formal[output.name.removesuffix("-process.json")] = invocation["command"]
+            if output.parent.name == scale and output.name.endswith("-process.json"):
+                formal[output.name.removesuffix("-process.json")] = invocation
         return formal
 
     def test_launches_only_future_1gib_formal_cases_with_case_specific_trial_counts(self) -> None:
@@ -238,16 +249,19 @@ class FutureProfileMatrixTests(unittest.TestCase):
             ["cuckoo_tuned", "flat", "generic", "layerwise_tuned", "tree_g32", "treepir"],
         )
         for name in ["generic", "layerwise_tuned", "tree_g32"]:
-            self.assertEqual(arg_after(formal[name], "--leaf-count"), str(LEAF_COUNT_1GIB))
-            self.assertEqual(arg_after(formal[name], "--experiments"), "100")
-            self.assertEqual(arg_after(formal[name], "--warmup"), "3")
+            command = formal[name]["command"]
+            self.assertEqual(arg_after(command, "--leaf-count"), str(LEAF_COUNT_1GIB))
+            self.assertEqual(arg_after(command, "--experiments"), "100")
+            self.assertEqual(arg_after(command, "--warmup"), "3")
         for name in ["cuckoo_tuned", "flat"]:
-            self.assertEqual(arg_after(formal[name], "--leaf-count"), str(LEAF_COUNT_1GIB))
-            self.assertEqual(arg_after(formal[name], "--experiments"), "16")
-            self.assertEqual(arg_after(formal[name], "--warmup"), "3")
-        self.assertEqual(arg_after(formal["treepir"], "--height"), "24")
-        self.assertEqual(arg_after(formal["treepir"], "--trials"), "16")
-        self.assertEqual(arg_after(formal["treepir"], "--warmup"), "3")
+            command = formal[name]["command"]
+            self.assertEqual(arg_after(command, "--leaf-count"), str(LEAF_COUNT_1GIB))
+            self.assertEqual(arg_after(command, "--experiments"), "16")
+            self.assertEqual(arg_after(command, "--warmup"), "3")
+        treepir_command = formal["treepir"]["command"]
+        self.assertEqual(arg_after(treepir_command, "--height"), "24")
+        self.assertEqual(arg_after(treepir_command, "--trials"), "16")
+        self.assertEqual(arg_after(treepir_command, "--warmup"), "3")
 
         leaves = (self.run_root / "outputs" / "profiling" / "1gb" / "leaves.txt").read_text().splitlines()
         self.assertEqual(len(leaves), 19)
@@ -271,6 +285,53 @@ class FutureProfileMatrixTests(unittest.TestCase):
         formal = self.formal_invocations()
         self.assertNotIn("flat", formal)
         self.assertEqual(json.loads((folder / "flat.json").read_text())["measured_trials"], 100)
+
+    def test_explicit_run_scales_launches_1gib_and_4gib_with_validated_leaf_mapping(self) -> None:
+        result = self.run_matrix(RUN_SCALES="1gb 4gb", SUPERRECORD_MEMORY_BYTES=str(SUPERRECORD_MEMORY_110GIB))
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        expected = {"1gb": (LEAF_COUNT_1GIB, "24"), "4gb": (LEAF_COUNT_4GIB, "26")}
+        for scale, (leaf_count, height) in expected.items():
+            formal = self.formal_invocations(scale)
+            self.assertEqual(
+                sorted(formal),
+                ["cuckoo_tuned", "flat", "generic", "layerwise_tuned", "tree_g32", "treepir"],
+            )
+            for name in ["generic", "layerwise_tuned", "tree_g32"]:
+                command = formal[name]["command"]
+                self.assertEqual(arg_after(command, "--leaf-count"), str(leaf_count))
+                self.assertEqual(arg_after(command, "--experiments"), "100")
+            for name in ["cuckoo_tuned", "flat"]:
+                command = formal[name]["command"]
+                self.assertEqual(arg_after(command, "--leaf-count"), str(leaf_count))
+                self.assertEqual(arg_after(command, "--experiments"), "16")
+            self.assertEqual(arg_after(formal["treepir"]["command"], "--height"), height)
+            self.assertEqual(arg_after(formal["treepir"]["command"], "--trials"), "16")
+            self.assertEqual(
+                formal["generic"]["env"]["SUPERRECORD_MEMORY_BYTES"],
+                str(SUPERRECORD_MEMORY_110GIB),
+            )
+
+    def test_invalid_run_scale_rejects_before_launching_process_jobs(self) -> None:
+        result = self.run_matrix(RUN_SCALES="1gb 8gb")
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("unsupported RUN_SCALES entry: 8gb", result.stderr)
+        self.assertFalse((self.run_root / "metadata" / "process-invocations.jsonl").exists())
+
+    def test_treepir_skip_records_deferred_status_without_blocking_other_scales(self) -> None:
+        result = self.run_matrix(RUN_SCALES="1gb 4gb", TREEPIR_SKIP="1")
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual((self.run_root / "metadata" / "matrix.status").read_text().strip(), "failed")
+        for scale in ["1gb", "4gb"]:
+            formal = self.formal_invocations(scale)
+            self.assertEqual(
+                sorted(formal),
+                ["cuckoo_tuned", "flat", "generic", "layerwise_tuned", "tree_g32"],
+            )
+            self.assertIn(f"{scale}\ttreepir\tdeferred\t\t", (self.run_root / "outputs" / "profiling" / "status.tsv").read_text())
+            self.assertTrue((self.run_root / "outputs" / "profiling" / scale / "flat-process.json").exists())
 
 
 if __name__ == "__main__":

@@ -12,6 +12,22 @@ FLAT_TRIALS="${FLAT_TRIALS:-16}"
 TUNING_TRIALS="${TUNING_TRIALS:-16}"
 WARMUPS="${WARMUPS:-3}"
 TRIAL_SEED="${TRIAL_SEED:-7}"
+RUN_SCALES="${RUN_SCALES:-1gb}"
+TREEPIR_SKIP="${TREEPIR_SKIP:-0}"
+SUPERRECORD_MEMORY_BYTES="${SUPERRECORD_MEMORY_BYTES:-343597383680}"
+if [[ -z "${RUN_SCALES//[[:space:]]/}" ]]; then
+  echo "RUN_SCALES must include at least one supported scale: 1gb or 4gb" >&2
+  exit 2
+fi
+for SCALE in $RUN_SCALES; do
+  case "$SCALE" in
+    1gb|4gb) ;;
+    *)
+      echo "unsupported RUN_SCALES entry: $SCALE" >&2
+      exit 2
+      ;;
+  esac
+done
 mkdir -p "$RUN_ROOT/outputs/profiling" "$RUN_ROOT/metadata"
 cd "$SOURCE"
 export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1
@@ -112,24 +128,29 @@ PY
   fi
   return "$code"
 }
-for SCALE in 1gb; do
-  HEIGHT=24
+for SCALE in $RUN_SCALES; do
+  case "$SCALE" in
+    1gb) HEIGHT=24 ;;
+    4gb) HEIGHT=26 ;;
+  esac
   LEAVES=$((1 << HEIGHT))
   FOLDER="$RUN_ROOT/outputs/profiling/$SCALE"
   mkdir -p "$FOLDER"
-  # TreePIR must use its own exact trial count: the 16-trial schedule is not
-  # a prefix of the 100-trial schedule generated with the same seed.
-  SUPERRECORD_PLAN_ONLY=1 SUPERRECORD_SKIP_LEGACY=1 SUPERRECORD_BUNDLE_ARITIES=1,3 \
-    SUPERRECORD_MAX_ARITY=3 \
-    SUPERRECORD_MEMORY_BYTES=343597383680 SUPERRECORD_OUTPUT_JSON="$FOLDER/schedule.json" \
-    "$BIN" --test tree_superrecord_bench --leaf-count "$LEAVES" --experiments "$TREEPIR_TRIALS" --warmup "$WARMUPS" --trial-seed "$TRIAL_SEED" > "$FOLDER/schedule.log" 2>&1
-  if [[ "$?" != 0 ]]; then FAILURES=$((FAILURES+1)); continue; fi
-  python3 - "$FOLDER/schedule.json" "$FOLDER/leaves.txt" <<'PY'
+  if [[ "$TREEPIR_SKIP" != 1 ]]; then
+    # TreePIR must use its own exact trial count: the 16-trial schedule is not
+    # a prefix of the 100-trial schedule generated with the same seed.
+    SUPERRECORD_PLAN_ONLY=1 SUPERRECORD_SKIP_LEGACY=1 SUPERRECORD_BUNDLE_ARITIES=1,3 \
+      SUPERRECORD_MAX_ARITY=3 \
+      SUPERRECORD_MEMORY_BYTES="$SUPERRECORD_MEMORY_BYTES" SUPERRECORD_OUTPUT_JSON="$FOLDER/schedule.json" \
+      "$BIN" --test tree_superrecord_bench --leaf-count "$LEAVES" --experiments "$TREEPIR_TRIALS" --warmup "$WARMUPS" --trial-seed "$TRIAL_SEED" > "$FOLDER/schedule.log" 2>&1
+    if [[ "$?" != 0 ]]; then FAILURES=$((FAILURES+1)); continue; fi
+    python3 - "$FOLDER/schedule.json" "$FOLDER/leaves.txt" <<'PY'
 import json,sys
 from pathlib import Path
 schedule=json.loads(Path(sys.argv[1]).read_text())['leaf_schedule']
 Path(sys.argv[2]).write_text(''.join(str(x)+'\n' for x in schedule['warmup']+schedule['measured']))
 PY
+  fi
   COMMON=(--leaf-count "$LEAVES" --experiments "$TRIALS" --warmup "$WARMUPS" --trial-seed "$TRIAL_SEED")
   PILOT_COMMON=(--leaf-count "$LEAVES" --experiments "$TUNING_TRIALS" --warmup "$WARMUPS" --trial-seed "$TRIAL_SEED")
   LAYERWISE_PROFILE="$FOLDER/tuning/layerwise/profile.json"
@@ -161,11 +182,16 @@ PY
     printf '%s\t%s\tfailed\t%s\t%s\n' "$SCALE" "tuning/cuckoo/selection" "1" "$(date -u +%FT%TZ)" >> "$STATUS_FILE"
     FAILURES=$((FAILURES+1))
   fi
-  SUPERRECORD_SKIP_LEGACY=1 SUPERRECORD_BUNDLE_ARITIES=1,3 SUPERRECORD_MAX_ARITY=3 SUPERRECORD_MEMORY_BYTES=343597383680 \
+  SUPERRECORD_SKIP_LEGACY=1 SUPERRECORD_BUNDLE_ARITIES=1,3 SUPERRECORD_MAX_ARITY=3 SUPERRECORD_MEMORY_BYTES="$SUPERRECORD_MEMORY_BYTES" \
     SUPERRECORD_OUTPUT_JSON="$FOLDER/generic.json" SUPERRECORD_MAX_FRONTIER=2 \
     run_case "$SCALE" generic "$BIN" --test tree_superrecord_bench "${COMMON[@]}"
-  CASE_TRIALS="$TREEPIR_TRIALS" TREEPIR_DATA_DIR="$RUN_ROOT/deps/TreePIR/VBPIR_TreePIR" \
-    run_case "$SCALE" treepir "$TREEPIR" --height "$HEIGHT" --leaf-file "$FOLDER/leaves.txt" --warmup "$WARMUPS" --trials "$TREEPIR_TRIALS" --output "$FOLDER/treepir.json"
+  if [[ "$TREEPIR_SKIP" == 1 ]]; then
+    printf '%s\t%s\tdeferred\t\t%s\n' "$SCALE" "treepir" "$(date -u +%FT%TZ)" >> "$STATUS_FILE"
+    FAILURES=$((FAILURES+1))
+  else
+    CASE_TRIALS="$TREEPIR_TRIALS" TREEPIR_DATA_DIR="$RUN_ROOT/deps/TreePIR/VBPIR_TreePIR" \
+      run_case "$SCALE" treepir "$TREEPIR" --height "$HEIGHT" --leaf-file "$FOLDER/leaves.txt" --warmup "$WARMUPS" --trials "$TREEPIR_TRIALS" --output "$FOLDER/treepir.json"
+  fi
   CASE_TRIALS="$FLAT_TRIALS" run_case "$SCALE" flat "$BIN" --test merkle_benchmarks --benchmark-case merkle_paths \
     --leaf-count "$LEAVES" --experiments "$FLAT_TRIALS" --warmup "$WARMUPS" --trial-seed "$TRIAL_SEED" --benchmark-json "$FOLDER/flat.json"
 done
