@@ -47,6 +47,7 @@ struct Sample {
   std::map<std::string, double> stages_ms;
   std::map<std::string, double> diagnostics_ms;
   double response_serialize_ms = 0.0;
+  size_t actual_response_bytes = 0;
   double client_decode_ms = 0.0;
   bool correct = false;
 };
@@ -95,6 +96,10 @@ inline void write_report(const std::string &path, const std::string &scheme,
                          size_t leaf_count, size_t node_entry_bits,
                          size_t actual_logical_bytes, size_t warmups,
                          size_t measured_trials, uint64_t trial_seed,
+                         double offline_setup_ms,
+                         size_t modeled_query_bytes,
+                         size_t modeled_helper_key_bytes,
+                         size_t modeled_compression_key_bytes,
                          bool non_comparable_32b_payload,
                          const std::string &mode,
                          const std::vector<Sample> &samples,
@@ -114,13 +119,31 @@ inline void write_report(const std::string &path, const std::string &scheme,
   out << ",\n  \"leaf_count\": " << leaf_count
       << ",\n  \"node_entry_bits\": " << node_entry_bits
       << ",\n  \"actual_logical_bytes\": " << actual_logical_bytes
+      << ",\n  \"actual_logical_bytes_scope\": \"full_tree_all_nodes\""
       << ",\n  \"warmups\": " << warmups
       << ",\n  \"measured_trials\": " << measured_trials
       << ",\n  \"trial_seed\": " << trial_seed
+      << ",\n  \"offline_setup_ms\": " << offline_setup_ms
       << ",\n  \"diagnostic_non_comparable_32B_payload\": "
       << (non_comparable_32b_payload ? "true" : "false")
       << ",\n  \"mode\": ";
   json_string(out, mode);
+  const size_t actual_response_bytes =
+      samples.empty() ? 0 : samples.back().actual_response_bytes;
+  out << ",\n  \"communication\": {"
+      << "\n    \"modeled_query_bytes_per_trial\": "
+      << modeled_query_bytes
+      << ",\n    \"actual_response_bytes_per_trial\": "
+      << actual_response_bytes
+      << ",\n    \"modeled_helper_key_bytes\": "
+      << modeled_helper_key_bytes
+      << ",\n    \"modeled_compression_key_bytes\": "
+      << modeled_compression_key_bytes
+      << ",\n    \"query_bytes_kind\": \"modeled\","
+      << "\n    \"response_bytes_kind\": \"actual\","
+      << "\n    \"helper_key_bytes_kind\": \"modeled\","
+      << "\n    \"compression_key_bytes_kind\": \"modeled\""
+      << "\n  }";
   out << ",\n  \"stage_definitions\": {"
       << "\n    \"query_expand\": \"ExpandBFV over the packed tree query\","
       << "\n    \"selector_completion\": \"RLWE-star selector rows completed to RGSW\","
@@ -172,6 +195,7 @@ inline void write_report(const std::string &path, const std::string &scheme,
       out << ": " << value;
     }
     out << "}, \"response_serialize_ms\": " << sample.response_serialize_ms
+        << ", \"actual_response_bytes\": " << sample.actual_response_bytes
         << ", \"client_decode_ms\": " << sample.client_decode_ms
         << ", \"correct\": " << (sample.correct ? "true" : "false") << '}';
   }

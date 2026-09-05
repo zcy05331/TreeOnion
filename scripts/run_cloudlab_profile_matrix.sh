@@ -75,7 +75,7 @@ PY
     run_case "$SCALE" treepir "$TREEPIR" --height "$HEIGHT" --leaf-file "$FOLDER/leaves.txt" --warmup "$WARMUPS" --trials "$TRIALS" --output "$FOLDER/treepir.json"
   run_case "$SCALE" flat "$BIN" --test merkle_benchmarks --benchmark-case merkle_paths "${COMMON[@]}" --benchmark-json "$FOLDER/flat.json"
 done
-python3 "$SOURCE/scripts/summarize_cloudlab_profiles.py" --directory "$RUN_ROOT/outputs/profiling" --trials "$TRIALS"
+python3 "$SOURCE/scripts/summarize_cloudlab_profiles.py" --directory "$RUN_ROOT/outputs/profiling" --trials "$TRIALS" || FAILURES=$((FAILURES+1))
 printf '%s\n' "$FAILURES" > "$RUN_ROOT/metadata/matrix-failures.txt"
 if [[ "$FAILURES" == 0 ]]; then echo complete > "$RUN_ROOT/metadata/matrix.status"; else echo failed > "$RUN_ROOT/metadata/matrix.status"; fi
 exit "$FAILURES"

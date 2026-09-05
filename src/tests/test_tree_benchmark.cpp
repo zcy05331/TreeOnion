@@ -145,6 +145,7 @@ void PirTest::test_tree_benchmark() {
       sample.stages_ms = std::move(sample_stages);
       sample.diagnostics_ms["scan_combined"] = GET_LAST_TIME(TREE_SCAN_TIME);
       sample.response_serialize_ms = response_serialize_ms;
+      sample.actual_response_bytes = actual_response_bytes;
       sample.client_decode_ms = e_ms;
       sample.correct = true;
       json_samples.push_back(std::move(sample));
@@ -211,8 +212,8 @@ void PirTest::test_tree_benchmark() {
               << (std::bit_width(N) - 1) << " BV + GSW)");
   tree_profile_json::write_report(
       tree_profile_json::output_path_from_env(), "legacy-tree-g1", tree.N,
-      12, (tree.N * 12 + 7) / 8, kWarmups, kTrials, trial_seed,
-      true, "mvp",
+      12, (((2 * tree.N - 1) * 12) + 7) / 8, kWarmups, kTrials,
+      trial_seed, setup_ms, query_bytes, helper_bytes, 0, true, "mvp",
       json_samples,
       {{"hardware_target", "CloudLab Xeon 6142 AVX-512 376GiB RAM"},
        {"payload_note", "g=1 carries one 12-bit Z_t scalar per node, not a 32-byte node"},

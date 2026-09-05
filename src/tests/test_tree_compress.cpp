@@ -73,6 +73,16 @@ size_t write_compressed_response_to_stream(
   return bytes;
 }
 
+size_t modeled_ring_switch_key_bytes(const TreeRingSwitchKeys &keys) {
+  size_t bytes = sizeof(keys.n2) + sizeof(keys.base_log2) + sizeof(keys.l2);
+  for (const auto &component : keys.rows) {
+    for (const auto &row : component) {
+      bytes += (row.first.size() + row.second.size()) * sizeof(uint64_t);
+    }
+  }
+  return bytes;
+}
+
 }  // namespace
 
 void run_tree_compress_benchmark(PirTest &test) {
@@ -208,6 +218,7 @@ void run_tree_compress_benchmark(PirTest &test) {
       sample.diagnostics_ms["response_ring_switch_modswitch"] =
           GET_LAST_TIME(TREE_COMPRESS_MOD_SWITCH_TIME);
       sample.response_serialize_ms = response_serialize_ms;
+      sample.actual_response_bytes = response_bytes;
       sample.client_decode_ms = d_ms;
       sample.correct = true;
       json_samples.push_back(std::move(sample));
@@ -237,10 +248,18 @@ void run_tree_compress_benchmark(PirTest &test) {
   BENCH_PRINT("client compressed decode avg " << avg(decode_ms) << " ms");
   BENCH_PRINT("communication: compressed response "
               << actual_response_bytes << " B (struct wire model)");
+  const size_t query_bytes = scheme.get_BFV_size(true);
+  const size_t helper_bytes =
+      scheme.with_query_shape({1, 0, std::bit_width(N) - 1})
+          .get_bv_galois_key_size(true) +
+      scheme.get_gsw_key_size(true);
+  const size_t compression_key_bytes =
+      modeled_ring_switch_key_bytes(ring.keys);
 
   tree_profile_json::write_report(
       tree_profile_json::output_path_from_env(), "legacy-tree-g32-compressed",
-      tree.N, 256, tree.N * 32, kWarmups, kTrials, trial_seed, false,
+      tree.N, 256, (2 * tree.N - 1) * 32, kWarmups, kTrials, trial_seed,
+      setup_ms, query_bytes, helper_bytes, compression_key_bytes, false,
       "compressed", json_samples,
       {{"hardware_target", "CloudLab Xeon 6142 AVX-512 376GiB RAM"},
        {"payload_note", "compressed path benchmark carries full 32-byte nodes"},

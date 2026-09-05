@@ -45,7 +45,8 @@ done
   --experiments 2 --warmup 1 --trial-seed 7 --benchmark-json "$OUT/merkle.json" > "$OUT/merkle.log" 2>&1
 SUPERRECORD_OUTPUT_JSON="$OUT/generic.json" "$BIN" --test tree_superrecord_bench \
   --leaf-count 1024 --experiments 2 --warmup 1 --trial-seed 7 > "$OUT/generic.log" 2>&1
+printf '0\n1\n1023\n' > "$OUT/treepir-leaves.txt"
 TREEPIR_DATA_DIR="$RUN_ROOT/deps/TreePIR/VBPIR_TreePIR" \
   "$RUN_ROOT/deps/TreePIR/VBPIR_TreePIR/build/bin/vbpir_treepir" --height 10 \
-  --warmup 1 --trials 2 --output "$OUT/treepir.json" > "$OUT/treepir.log" 2>&1
+  --leaf-file "$OUT/treepir-leaves.txt" --warmup 1 --trials 2 --output "$OUT/treepir.json" > "$OUT/treepir.log" 2>&1
 echo complete > "$META/native-build.status"

@@ -165,6 +165,7 @@ void PirTest::test_tree_benchmark_g32() {
       sample.stages_ms = std::move(sample_stages);
       sample.diagnostics_ms["scan_combined"] = GET_LAST_TIME(TREE_SCAN_TIME);
       sample.response_serialize_ms = response_serialize_ms;
+      sample.actual_response_bytes = actual_response_bytes;
       sample.client_decode_ms = e_ms;
       sample.correct = true;
       json_samples.push_back(std::move(sample));
@@ -230,7 +231,8 @@ void PirTest::test_tree_benchmark_g32() {
               << (tree.L + 1) * 32 << " B useful");
   tree_profile_json::write_report(
       tree_profile_json::output_path_from_env(), "legacy-tree-g32", tree.N,
-      256, tree.N * 32, kWarmups, kTrials, trial_seed, false, "mvp",
+      256, (2 * tree.N - 1) * 32, kWarmups, kTrials, trial_seed,
+      setup_ms, query_bytes, helper_bytes, 0, false, "mvp",
       json_samples,
       {{"hardware_target", "CloudLab Xeon 6142 AVX-512 376GiB RAM"},
        {"payload_note", "g=32 carries full 32-byte nodes in 12-bit chunks"},
