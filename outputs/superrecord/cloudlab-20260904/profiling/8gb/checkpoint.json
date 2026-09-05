@@ -13,6 +13,12 @@
       "measured_trials": 100,
       "correct": true,
       "mean_server_ms": 20702.12324
+    },
+    {
+      "case": "layerwise_tuned",
+      "measured_trials": 100,
+      "correct": true,
+      "mean_server_ms": 12331.32378691
     }
   ],
   "tier_complete": false
