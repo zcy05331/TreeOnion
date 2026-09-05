@@ -6,6 +6,7 @@ import json
 import os
 import pathlib
 import platform
+import shlex
 import subprocess
 import sys
 
@@ -30,6 +31,8 @@ def environment_metadata(binary):
             if '=' in line and not line.startswith(('#', '//')):
                 key, value = line.split('=', 1)
                 fields[key.split(':', 1)[0]] = value
+    compiler_command = fields.get('CMAKE_CXX_COMPILER', '/usr/bin/clang++').split(';')
+    compiler_command += shlex.split(fields.get('CMAKE_CXX_COMPILER_ARG1', ''))
     flags = binary.parent / 'CMakeFiles/Onion-PIR.dir/flags.make'
     return {
         'repository_commit': command_text(['git', 'rev-parse', 'HEAD']),
@@ -44,8 +47,8 @@ def environment_metadata(binary):
         'cpu_frequency_hz': None,
         'cpu_governor': None,
         'numa_binding': None,
-        'compiler': fields.get('CMAKE_CXX_COMPILER'),
-        'compiler_version': command_text(fields.get('CMAKE_CXX_COMPILER', '/usr/bin/clang++').split(';') + ['--version']),
+        'compiler': compiler_command,
+        'compiler_version': command_text(compiler_command + ['--version']),
         'compiler_flags': flags.read_text() if flags.exists() else None,
         'active_config': fields.get('ACTIVE_CONFIG'),
         'build_type': fields.get('CMAKE_BUILD_TYPE'),
@@ -67,7 +70,7 @@ def main():
     parser.add_argument('--leaf-count', type=int, default=4194304)
     parser.add_argument('--entry-bits', type=int, default=256)
     parser.add_argument('--profiles', action='store_true',
-                        help='also run the required entry-size profiles at 256 leaves (large entry: 16)')
+                        help='also run the required entry-size profiles at 256 leaves (large entry: 32)')
     parser.add_argument('--profiles-only', action='store_true')
     parser.add_argument('--trials', type=int)
     parser.add_argument('--warmup', type=int)
@@ -95,7 +98,7 @@ def main():
     tasks = [] if args.profiles_only else [(args.entry_bits, args.leaf_count, args.max_responses)]
     if args.profiles or args.profiles_only:
         tasks += [(e, 256, 2) for e in [13, 128, 160, 192, 256, 384, 512, 768]]
-        tasks.append((30000, 16, 16))
+        tasks.append((30000, 32, 16))
     metadata = environment_metadata(binary)
     (output / 'environment.json').write_text(json.dumps(metadata, indent=2) + '\n')
     manifest = {'environment': metadata, 'runs': [], 'state': 'running'}
