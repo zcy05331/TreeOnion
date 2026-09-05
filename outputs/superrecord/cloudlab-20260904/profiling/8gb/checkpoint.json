@@ -19,6 +19,12 @@
       "measured_trials": 100,
       "correct": true,
       "mean_server_ms": 12331.32378691
+    },
+    {
+      "case": "tree_g32",
+      "measured_trials": 100,
+      "correct": true,
+      "mean_server_ms": 18992.701306670002
     }
   ],
   "tier_complete": false
