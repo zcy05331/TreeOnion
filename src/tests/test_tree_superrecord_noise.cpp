@@ -2,12 +2,38 @@
 
 #include "tree_superrecord_noise.h"
 #include "tree_superrecord_response.h"
+#include "tree_superrecord_benchmark_data.h"
 
 using namespace tree_superrecord;
 using namespace tree_superrecord_test;
 
 void PirTest::test_tree_superrecord_noise() {
   print_func_name(__FUNCTION__);
+  for (const size_t bits : {size_t{1}, size_t{7}, size_t{13}, size_t{256}, size_t{30000}}) {
+    for (const size_t c : {size_t{1}, size_t{7}, size_t{12}, size_t{31}, size_t{63}}) {
+      for (const size_t h : {size_t{1}, size_t{3}, size_t{7}}) {
+        for (const size_t G : {size_t{1}, size_t{8}, size_t{64}, size_t{2048}}) {
+          const CodecSpec spec{bits, c, h, G, minimal_plane_count(bits, c, h, G), uint64_t{1} << c};
+          const size_t plane_bits = c * G;
+          for (const size_t node : {size_t{0}, h - 1, h, h + 1, size_t{4180873}}) {
+            for (const size_t pattern : {size_t{0}, size_t{2}, size_t{3}, size_t{4}}) {
+              EntryBits oracle = zero_entry(bits);
+              for (size_t bit = 0; bit < bits; ++bit) {
+                const size_t bundle_bit = (node % h) * bits + bit;
+                if (pattern == 2 || (pattern == 3 && (bit + node) % 2 == 0) ||
+                    (pattern == 4 && (bundle_bit % plane_bits == 0 ||
+                                     bundle_bit % plane_bits + 1 == plane_bits))) {
+                  set_bit(oracle, bit, 1);
+                }
+              }
+              require_test(tree_superrecord_benchmark_data::patterned_entry(spec, node, pattern) == oracle,
+                           "structured fixtures must match the original per-bit generator");
+            }
+          }
+        }
+      }
+    }
+  }
   PirParams scheme;
   PirClient client(scheme);
   const TreeParams params =

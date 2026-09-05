@@ -1,4 +1,5 @@
 #include "tree_superrecord_test_util.h"
+#include "tree_superrecord_benchmark_data.h"
 
 #include "merkle_benchmark.h"
 #include "tree_index.h"
@@ -1195,21 +1196,14 @@ void PirTest::test_tree_superrecord_benchmark() {
         }
         const std::vector<size_t> gate_leaves(boundary_leaves.begin(), boundary_leaves.end());
         std::vector<TargetNoiseCase> noise_cases;
+        const CodecSpec fixture_codec = codec_spec_for(params);
         // Cover every boundary class and every data pattern without their Cartesian product.
         for (size_t index = 0; index < std::max<size_t>(5, gate_leaves.size()); ++index) {
           const size_t pattern = index % 5;
           const NoiseEntrySource fixture_source = [=](size_t level, size_t node) {
             if (pattern == 1) return benchmark_entry(entry_bits, level, node);
-            EntryBits entry = zero_entry(entry_bits);
-            if (pattern == 0) return entry;
-            const size_t plane_bits = c * params.shape.record_coeffs;
-            for (size_t bit = 0; bit < entry_bits; ++bit) {
-              const size_t bundle_bit = (node % params.shape.bundle_arity) * entry_bits + bit;
-              if (pattern == 2 || (pattern == 3 && (bit + node) % 2 == 0) ||
-                  (pattern == 4 && (bundle_bit % plane_bits == 0 || bundle_bit % plane_bits + 1 == plane_bits)))
-                set_bit(entry, bit, 1);
-            }
-            return entry;
+            return tree_superrecord_benchmark_data::patterned_entry(
+                fixture_codec, node, pattern);
           };
           noise_cases.push_back({gate_leaves[index % gate_leaves.size()], fixture_source,
                                  "leaf-" + std::to_string(gate_leaves[index % gate_leaves.size()]) + "-pattern-" + std::to_string(pattern)});

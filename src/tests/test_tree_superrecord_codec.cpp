@@ -2,6 +2,7 @@
 
 #include "tree_superrecord_common.h"
 
+#include <chrono>
 #include <limits>
 #include <random>
 
@@ -26,6 +27,48 @@ EntryBits random_entry(size_t bits, std::mt19937_64 &rng) {
     if (rng() & 1U) set_bit(entry, bit, 1);
   }
   return entry;
+}
+
+EncodedSuperRecord old_encode_super_record_oracle(
+    std::span<const EntryBits> entries, const CodecSpec &spec) {
+  validate_codec_spec(spec);
+  require_test(entries.size() <= spec.bundle_arity,
+               "oracle fixture entry count");
+  for (const EntryBits &entry : entries) {
+    validate_entry(entry);
+    require_test(entry.bit_length == spec.entry_bits,
+                 "oracle fixture entry width");
+  }
+  const size_t c = spec.payload_bits_per_coeff;
+  const size_t plane_bits = c * spec.record_coeffs;
+  EncodedSuperRecord planes(spec.plane_count,
+                            PlaneDigits(spec.record_coeffs, 0));
+  for (size_t lane = 0; lane < entries.size(); ++lane) {
+    const EntryBits &entry = entries[lane];
+    const size_t base = lane * spec.entry_bits;
+    for (size_t bit = 0; bit < spec.entry_bits; ++bit) {
+      if (get_bit(entry, bit) == 0) continue;
+      const size_t pos = base + bit;
+      const size_t plane = pos / plane_bits;
+      const size_t within = pos % plane_bits;
+      planes[plane][within / c] |= uint64_t{1} << (within % c);
+    }
+  }
+  return planes;
+}
+
+EntryBits entry_with_positions(size_t bits,
+                               std::span<const size_t> positions) {
+  EntryBits entry = zero_entry(bits);
+  for (size_t bit : positions) set_bit(entry, bit, 1);
+  return entry;
+}
+
+using Clock = std::chrono::steady_clock;
+
+long long elapsed_us(Clock::time_point start, Clock::time_point stop) {
+  return std::chrono::duration_cast<std::chrono::microseconds>(stop - start)
+      .count();
 }
 
 }  // namespace
@@ -100,6 +143,10 @@ void PirTest::test_tree_superrecord_codec() {
     set_bit(e, 5, 0);
     require_test(get_bit(e, 5) == 0 && e == zero_entry(13),
                  "set_bit(...,0) clears");
+    const std::vector<uint8_t> source = {0xA5, 0xE3};
+    const EntryBits copied = entry_from_bytes(source, 13);
+    require_test(copied.bytes[0] == 0xA5 && copied.bytes[1] == 0x03,
+                 "entry_from_bytes masks high bits in the final partial byte");
   }
 
   // ---- codec spec ----
@@ -138,6 +185,8 @@ void PirTest::test_tree_superrecord_codec() {
         entries.push_back(random_entry(E, rng));
       }
       const EncodedSuperRecord encoded = encode_super_record(entries, spec);
+      require_test(encoded == old_encode_super_record_oracle(entries, spec),
+                   "encoder must match the independent per-bit oracle");
       require_test(encoded.size() == spec.plane_count,
                    "encoder must emit exactly P planes");
       for (const PlaneDigits &plane : encoded) {
@@ -163,6 +212,80 @@ void PirTest::test_tree_superrecord_codec() {
     }
   }
   BENCH_PRINT("codec round trips: " << round_trips << " (E x (h, G) shapes)");
+
+  // ---- byte-fragment encoder equivalence ----
+  const std::vector<size_t> payload_widths = {1, 7, 12, 31, 63};
+  const std::vector<size_t> boundary_entries = {13, 256, 30000};
+  size_t oracle_cases = 0;
+  for (size_t payload_bits : payload_widths) {
+    const uint64_t modulus = uint64_t{1} << payload_bits;
+    for (size_t E : boundary_entries) {
+      const size_t h = E == 30000 ? 2 : 3;
+      const size_t G = payload_bits == 1 ? 63 : 7;
+      CodecSpec spec{E, payload_bits, h, G,
+                     minimal_plane_count(E, payload_bits, h, G), modulus};
+      std::vector<EntryBits> entries;
+      for (size_t lane = 0; lane < h; ++lane) {
+        const size_t last = E - 1;
+        const size_t near_byte = E > 9 ? 9 : last;
+        const size_t near_digit = std::min(payload_bits + lane, last);
+        const size_t near_plane =
+            std::min(payload_bits * G + lane * E / h, last);
+        const size_t positions[] = {size_t{0}, near_byte, near_digit,
+                                    near_plane, last};
+        entries.push_back(entry_with_positions(E, positions));
+      }
+      const EncodedSuperRecord oracle =
+          old_encode_super_record_oracle(entries, spec);
+      const EncodedSuperRecord encoded = encode_super_record(entries, spec);
+      require_test(encoded == oracle,
+                   "byte-fragment encoder matches per-bit oracle");
+      require_test(decode_super_record(encoded, spec) == entries,
+                   "byte-fragment encoded planes decode exactly");
+      if (h > 1) {
+        std::vector<EntryBits> partial(entries.begin(), entries.end() - 1);
+        const EncodedSuperRecord partial_oracle =
+            old_encode_super_record_oracle(partial, spec);
+        require_test(encode_super_record(partial, spec) == partial_oracle,
+                     "partial bundle matches per-bit oracle");
+        std::vector<EntryBits> decoded =
+            decode_super_record(partial_oracle, spec);
+        require_test(decoded.back() == zero_entry(E),
+                     "partial bundle keeps empty tail lanes zero");
+      }
+      ++oracle_cases;
+    }
+  }
+  BENCH_PRINT("codec oracle boundary cases: " << oracle_cases);
+
+  {
+    CodecSpec perf_spec{256, c, 3, 64, minimal_plane_count(256, c, 3, 64), t};
+    std::vector<EntryBits> perf_entries;
+    for (size_t lane = 0; lane < perf_spec.bundle_arity; ++lane) {
+      perf_entries.push_back(random_entry(perf_spec.entry_bits, rng));
+    }
+    constexpr size_t repeats = 4096;
+    EncodedSuperRecord old_encoded;
+    EncodedSuperRecord new_encoded;
+    const auto old_start = Clock::now();
+    for (size_t i = 0; i < repeats; ++i) {
+      old_encoded = old_encode_super_record_oracle(perf_entries, perf_spec);
+    }
+    const auto old_stop = Clock::now();
+    const auto new_start = Clock::now();
+    for (size_t i = 0; i < repeats; ++i) {
+      new_encoded = encode_super_record(perf_entries, perf_spec);
+    }
+    const auto new_stop = Clock::now();
+    require_test(new_encoded == old_encoded,
+                 "repeated public encoder matches per-bit oracle");
+    const long long old_us = elapsed_us(old_start, old_stop);
+    const long long new_us = elapsed_us(new_start, new_stop);
+    BENCH_PRINT("codec repeated encode old_us=" << old_us
+                                                << " public_us=" << new_us
+                                                << " repeats=" << repeats);
+  }
+
   require_test(throws_invalid([&] {
                  CodecSpec spec{13, c, 2, 4, minimal_plane_count(13, c, 2, 4), t};
                  std::vector<EntryBits> three(3, zero_entry(13));

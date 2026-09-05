@@ -2,6 +2,8 @@
 
 #include "tree_superrecord_common.h"
 
+#include <algorithm>
+
 namespace tree_superrecord {
 
 void validate_entry(const EntryBits &entry) {
@@ -43,8 +45,13 @@ EntryBits entry_from_bytes(std::span<const uint8_t> bytes, size_t bit_length) {
   EntryBits entry = zero_entry(bit_length);
   require(bytes.size() >= entry.bytes.size(),
           "byte source is shorter than the entry");
-  for (size_t bit = 0; bit < bit_length; ++bit) {
-    if ((bytes[bit / 8] >> (bit % 8)) & 1U) set_bit(entry, bit, 1);
+  std::copy(bytes.begin(), bytes.begin() + entry.bytes.size(),
+            entry.bytes.begin());
+  const size_t used_in_last = bit_length % 8;
+  if (used_in_last != 0) {
+    const uint8_t mask =
+        static_cast<uint8_t>((uint16_t{1} << used_in_last) - 1);
+    entry.bytes.back() &= mask;
   }
   return entry;
 }
@@ -88,21 +95,38 @@ EncodedSuperRecord encode_super_record(std::span<const EntryBits> entries,
             "entry bit length does not match the codec");
   }
   const size_t c = spec.payload_bits_per_coeff;
-  const size_t plane_bits = c * spec.record_coeffs;
   EncodedSuperRecord planes(spec.plane_count,
                             PlaneDigits(spec.record_coeffs, 0));
-  // Bit `pos` of the concatenated bundle lands in plane pos / (cG), digit
-  // (pos mod cG) / c, bit pos mod c. Zero bits (tail lanes and padding) are
-  // already zero in the freshly assigned planes.
+  // Consecutive byte fragments from the concatenated bundle are streamed into
+  // c-bit digits. Missing tail lanes and plane padding remain zero.
+  size_t plane = 0;
+  size_t digit = 0;
+  size_t digit_offset = 0;
   for (size_t lane = 0; lane < entries.size(); ++lane) {
     const EntryBits &entry = entries[lane];
-    const size_t base = lane * spec.entry_bits;
-    for (size_t bit = 0; bit < spec.entry_bits; ++bit) {
-      if (get_bit(entry, bit) == 0) continue;
-      const size_t pos = base + bit;
-      const size_t plane = pos / plane_bits;
-      const size_t within = pos % plane_bits;
-      planes[plane][within / c] |= uint64_t{1} << (within % c);
+    size_t remaining_entry_bits = spec.entry_bits;
+    for (uint8_t byte : entry.bytes) {
+      size_t fragment_bits = std::min<size_t>(8, remaining_entry_bits);
+      size_t consumed = 0;
+      while (fragment_bits > 0) {
+        const size_t take =
+            std::min(fragment_bits, c - digit_offset);
+        const uint64_t mask = (uint64_t{1} << take) - 1;
+        planes[plane][digit] |=
+            static_cast<uint64_t>((byte >> consumed) & mask) << digit_offset;
+        fragment_bits -= take;
+        consumed += take;
+        digit_offset += take;
+        if (digit_offset == c) {
+          digit_offset = 0;
+          ++digit;
+          if (digit == spec.record_coeffs) {
+            digit = 0;
+            ++plane;
+          }
+        }
+      }
+      remaining_entry_bits -= std::min<size_t>(8, remaining_entry_bits);
     }
   }
   return planes;
