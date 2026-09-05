@@ -28,6 +28,8 @@ struct AlphaPyramidM32;
 
 namespace tree_superrecord {
 
+struct CandidateNoiseResult;
+
 // pyramid[row][j]; row 0 is the expanded one-hot, the top row is Enc(1).
 using AlphaPyramid = std::vector<std::vector<RlweCt>>;
 
@@ -86,8 +88,10 @@ PyramidCounters ragged_pyramid_counters(size_t N0);
 std::pair<size_t, size_t> plan_pyramid_row_and_cols(const LevelPlan &plan);
 
 // MSB-first CMux fold over [fold_bit_begin, fold_bit_begin + count).
+using CiphertextDiagnostic = std::function<void(size_t, const RlweCt &)>;
 RlweCt fold_candidates(std::vector<RlweCt> candidates, const LevelPlan &plan,
-                       std::span<GSWCt> sigma_selectors, PirServer &mux);
+                       std::span<GSWCt> sigma_selectors, PirServer &mux,
+                       const CiphertextDiagnostic *fold_checkpoint = nullptr);
 
 // Reference SelectLevel: plaintext-ciphertext products in the exact matrix
 // orientation, then the fold. Returns Enc(D[p_l]) in coefficient form.
@@ -97,7 +101,11 @@ RlweCt select_level_reference(const LevelPlaneDatabase &db,
                               std::span<GSWCt> sigma_selectors, PirServer &mux,
                               const TreeParams &params,
                               const PirParams &runtime_scheme,
-                              TreeServerTiming *timing = nullptr);
+                              TreeServerTiming *timing = nullptr,
+                              const CiphertextDiagnostic *first_dim_checkpoint =
+                                  nullptr,
+                              const CiphertextDiagnostic *fold_checkpoint =
+                                  nullptr);
 
 // ---- composite m32 view ----
 struct LevelPlaneM32 {
@@ -124,11 +132,13 @@ LevelPlaneM32 build_level_plane_m32(const LevelPlaneDatabase &db,
 // canonical planes are alive at a time.
 PreprocessedTree preprocess_m32(const TreeParams &params,
                                 const PirParams &runtime_scheme,
+                                const CandidateNoiseResult &noise_result,
                                 const EntrySource &source,
                                 bool retain_canonical = true);
 PreprocessedTree m32_from_reference(ReferencePreprocessedTree reference,
                                     const TreeParams &params,
                                     const PirParams &runtime_scheme,
+                                    const CandidateNoiseResult &noise_result,
                                     bool retain_canonical = true);
 void release_canonical(PreprocessedTree &db);
 size_t m32_database_bytes(const PreprocessedTree &db);

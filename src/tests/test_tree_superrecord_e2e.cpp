@@ -49,7 +49,12 @@ void PirTest::test_tree_superrecord_e2e() {
     ReferencePreprocessedTree reference =
         preprocess_reference(params, scheme, source);
     PreprocessedTree m32;
-    if (composite) m32 = m32_from_reference(reference, params, scheme, true);
+    CandidateNoiseResult noise_result;
+    if (composite) {
+      noise_result = passing_target_noise_result(client, params, scheme, server,
+                                                 session, source, shape.N - 1);
+      m32 = m32_from_reference(reference, params, scheme, noise_result, true);
+    }
 
     std::set<size_t> leaf_set = {0, shape.N - 1, 0x2BADBEEFULL % shape.N};
     for (size_t k = 1; k <= 2; ++k) {
@@ -103,7 +108,8 @@ void PirTest::test_tree_superrecord_e2e() {
       }
       if (composite) {
         const PathResponse fast = serve_request_m32(query, m32, server, session,
-                                                    params, scheme, nullptr);
+                                                    params, scheme,
+                                                    noise_result, nullptr);
         require_test(fast.chunks.size() == response.chunks.size(),
                      "m32 chunk count");
         for (size_t i = 0; i < fast.chunks.size(); ++i) {
@@ -119,6 +125,20 @@ void PirTest::test_tree_superrecord_e2e() {
         const size_t per_chunk = server.save_resp_to_stream(response.chunks[0], one);
         require_test(bytes.has_value() && *bytes == per_chunk * response.chunks.size(),
                      "payload bytes sum one serializer call per chunk");
+        PathResponse truncated = response;
+        truncated.chunks.pop_back();
+        require_test(throws_invalid([&] {
+                       (void)serialized_response_payload_bytes(truncated,
+                                                               server, params);
+                     }),
+                     "response serialization rejects a truncated chunk list");
+        PathResponse out_of_range = response;
+        out_of_range.chunks[0].c0[0] = scheme.get_small_q();
+        require_test(throws_invalid([&] {
+                       (void)serialized_response_payload_bytes(out_of_range,
+                                                               server, params);
+                     }),
+                     "response serialization rejects non-small-q coefficients");
       }
     }
     // Fresh randomness and profiler transparency.
@@ -160,7 +180,8 @@ void PirTest::test_tree_superrecord_e2e() {
       if (composite) {
         rewrite_preprocessed_superrecord(m32, L, 0, params, scheme, updated);
         const PathResponse fast = serve_request_m32(query, m32, server, session,
-                                                    params, scheme, nullptr);
+                                                    params, scheme,
+                                                    noise_result, nullptr);
         for (size_t i = 0; i < fast.chunks.size(); ++i) {
           require_test(fast.chunks[i].c0 == response.chunks[i].c0,
                        "updated m32 view matches the updated reference");

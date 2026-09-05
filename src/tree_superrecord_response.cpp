@@ -3,6 +3,7 @@
 #include "tree_project.h"
 #include "tree_rotate.h"
 #include "tree_select.h"
+#include "tree_superrecord_noise.h"
 
 #include <chrono>
 #include <functional>
@@ -113,8 +114,10 @@ PathResponse answer_path_m32(const PreprocessedTree &db, ExpandedQuery &query,
                              const TaggedTreeSessionKeys &session,
                              const TreeParams &params,
                              const PirParams &runtime_scheme,
+                             const CandidateNoiseResult &noise_result,
                              TreeServerTiming *timing) {
   require_expanded_query(query, session, params);
+  require_target_noise_gate(noise_result, params, session.client_id);
   require(db.tag == params.tag, "m32 database PlanTag mismatch");
   require(db.m32.size() == params.shape.path_levels,
           "m32 database is missing levels");
@@ -187,13 +190,16 @@ PathResponse serve_request_m32(PackedQuery packed_query,
                                const TaggedTreeSessionKeys &session,
                                const TreeParams &params,
                                const PirParams &runtime_scheme,
+                               const CandidateNoiseResult &noise_result,
                                TreeServerTiming *timing) {
+  require_target_noise_gate(noise_result, params, session.client_id);
   return serve_request(std::move(packed_query), query_eval_server, session,
                        params, runtime_scheme, timing,
                        [&](ExpandedQuery &expanded) {
                          return answer_path_m32(db, expanded,
                                                 query_eval_server, session,
                                                 params, runtime_scheme,
+                                                noise_result,
                                                 timing);
                        });
 }
@@ -303,13 +309,22 @@ std::optional<size_t> serialized_response_payload_bytes(
     const TreeParams &params) {
   require(response.tag == params.tag, "response PlanTag mismatch");
   require_scheme_binding(params, response_codec_server.get_params());
+  require(response.chunks.size() == params.shape.response_ciphertexts,
+          "response chunk count does not match the plan");
   if (!response.small_q) return std::nullopt;
   const size_t degree = params.shape.ring_degree;
+  const uint64_t small_q = response_codec_server.get_params().get_small_q();
   size_t total = 0;
   for (const RlweCt &chunk : response.chunks) {
     require(!chunk.ntt_form, "small-q chunk must be in coefficient form");
     require(chunk.c0.size() == degree && chunk.c1.size() == degree,
             "small-q chunk must be a single limb");
+    for (uint64_t coeff : chunk.c0) {
+      require(coeff < small_q, "small-q c0 coefficient is out of range");
+    }
+    for (uint64_t coeff : chunk.c1) {
+      require(coeff < small_q, "small-q c1 coefficient is out of range");
+    }
     std::stringstream stream;
     total = checked_add(total,
                         response_codec_server.save_resp_to_stream(chunk, stream),

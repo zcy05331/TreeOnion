@@ -3,6 +3,7 @@
 #include "matrix.h"
 #include "tree_rotate.h"
 #include "tree_select.h"
+#include "tree_superrecord_noise.h"
 #include "utils.h"
 
 #include "hexl/hexl.hpp"
@@ -24,6 +25,27 @@ void write_support(std::vector<uint64_t> &plaintext, const PlaneDigits &digits,
   for (size_t d = 0; d < digits.size(); ++d) {
     plaintext[record_position + d * rho] = digits[d];
   }
+}
+
+PreprocessedTree build_m32_from_reference(ReferencePreprocessedTree reference,
+                                          const TreeParams &params,
+                                          const PirParams &runtime_scheme,
+                                          bool retain_canonical) {
+  require_scheme_binding(params, runtime_scheme);
+  require(reference.tag == params.tag, "reference database PlanTag mismatch");
+  PreprocessedTree tree;
+  tree.tag = params.tag;
+  tree.m32.reserve(reference.canonical.size());
+  for (size_t level = 0; level < reference.canonical.size(); ++level) {
+    std::vector<LevelPlaneM32> views;
+    for (const LevelPlaneDatabase &db : reference.canonical[level]) {
+      views.push_back(build_level_plane_m32(db, params.level_plans[level],
+                                            runtime_scheme));
+    }
+    tree.m32.push_back(std::move(views));
+  }
+  if (retain_canonical) tree.canonical = std::move(reference.canonical);
+  return tree;
 }
 
 }  // namespace
@@ -169,7 +191,8 @@ std::pair<size_t, size_t> plan_pyramid_row_and_cols(const LevelPlan &plan) {
 }
 
 RlweCt fold_candidates(std::vector<RlweCt> candidates, const LevelPlan &plan,
-                       std::span<GSWCt> sigma_selectors, PirServer &mux) {
+                       std::span<GSWCt> sigma_selectors, PirServer &mux,
+                       const CiphertextDiagnostic *fold_checkpoint) {
   require(candidates.size() ==
               checked_pow2(plan.fold_bit_count, "fold candidates"),
           "candidate count must be 2^fold_bit_count");
@@ -185,6 +208,7 @@ RlweCt fold_candidates(std::vector<RlweCt> candidates, const LevelPlan &plan,
     for (size_t j = 0; j < half; ++j) {
       mux.ext_prod_mux(candidates[j], candidates[j + half],
                        sigma_selectors[v], candidates[j]);
+      if (fold_checkpoint) (*fold_checkpoint)(step, candidates[j]);
     }
     candidates.resize(half);
   }
@@ -198,7 +222,9 @@ RlweCt select_level_reference(const LevelPlaneDatabase &db,
                               std::span<GSWCt> sigma_selectors, PirServer &mux,
                               const TreeParams &params,
                               const PirParams &runtime_scheme,
-                              TreeServerTiming *timing) {
+                              TreeServerTiming *timing,
+                              const CiphertextDiagnostic *first_dim_checkpoint,
+                              const CiphertextDiagnostic *fold_checkpoint) {
   require(db.level == plan.level && db.matrix_rows == plan.matrix_rows &&
               db.matrix_cols == plan.matrix_cols &&
               db.plaintexts.size() == plan.padded_plaintexts_per_plane,
@@ -220,6 +246,7 @@ RlweCt select_level_reference(const LevelPlaneDatabase &db,
           runtime_scheme);
       tree_ct_add_inplace(acc, term, runtime_scheme);
     }
+    if (first_dim_checkpoint) (*first_dim_checkpoint)(row, acc);
     candidates.push_back(std::move(acc));
   }
   clock.lap(&TreeServerTiming::alpha_scan);
@@ -227,7 +254,8 @@ RlweCt select_level_reference(const LevelPlaneDatabase &db,
     return std::move(candidates.front());
   }
   RlweCt folded =
-      fold_candidates(std::move(candidates), plan, sigma_selectors, mux);
+      fold_candidates(std::move(candidates), plan, sigma_selectors, mux,
+                      fold_checkpoint);
   clock.lap(&TreeServerTiming::beta_fold);
   return folded;
 }
@@ -283,10 +311,12 @@ LevelPlaneM32 build_level_plane_m32(const LevelPlaneDatabase &db,
 
 PreprocessedTree preprocess_m32(const TreeParams &params,
                                 const PirParams &runtime_scheme,
+                                const CandidateNoiseResult &noise_result,
                                 const EntrySource &source,
                                 bool retain_canonical) {
   require_scheme_binding(params, runtime_scheme);
   require_m32_scheme(runtime_scheme);
+  require_trusted_target_noise_result(noise_result, params);
   PreprocessedTree tree;
   tree.tag = params.tag;
   tree.m32.reserve(params.shape.path_levels);
@@ -309,21 +339,11 @@ PreprocessedTree preprocess_m32(const TreeParams &params,
 PreprocessedTree m32_from_reference(ReferencePreprocessedTree reference,
                                     const TreeParams &params,
                                     const PirParams &runtime_scheme,
+                                    const CandidateNoiseResult &noise_result,
                                     bool retain_canonical) {
-  require_scheme_binding(params, runtime_scheme);
-  require(reference.tag == params.tag, "reference database PlanTag mismatch");
-  PreprocessedTree tree;
-  tree.tag = params.tag;
-  tree.m32.reserve(reference.canonical.size());
-  for (size_t level = 0; level < reference.canonical.size(); ++level) {
-    std::vector<LevelPlaneM32> views;
-    for (const LevelPlaneDatabase &db : reference.canonical[level]) {
-      views.push_back(build_level_plane_m32(db, params.level_plans[level],
-                                            runtime_scheme));
-    }
-    tree.m32.push_back(std::move(views));
-  }
-  if (retain_canonical) tree.canonical = std::move(reference.canonical);
+  require_trusted_target_noise_result(noise_result, params);
+  PreprocessedTree tree = build_m32_from_reference(
+      std::move(reference), params, runtime_scheme, retain_canonical);
   return tree;
 }
 

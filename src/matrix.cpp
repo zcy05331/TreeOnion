@@ -2,17 +2,61 @@
 #include "utils.h"
 #include <algorithm>
 #include <cstring>
+#include <limits>
 #include <type_traits>
+#include <vector>
 
 typedef unsigned __int128 uint128_t;
 
 // Forward declaration for the AVX-512 production fast path used by level_mat_mat.
-#if defined(__AVX512F__)
+#if defined(__AVX512F__) && defined(__AVX512DQ__)
 static void level_mat_mat_avx512_safe(const uint32_t *A_data,
                                       const uint32_t *B_data,
                                       uint64_t *out_data, size_t m, size_t n,
                                       size_t levels, const uint64_t *level_qs);
 #endif
+
+static void level_mat_mat_32_scalar_u128(const uint32_t *A_data,
+                                         const uint32_t *B_data,
+                                         uint64_t *out_data, size_t m,
+                                         size_t n, size_t levels,
+                                         uint64_t q);
+
+Avx512KernelAvailability detected_matmul32_availability() {
+  Avx512KernelAvailability availability;
+#if defined(__AVX512F__) && defined(__AVX512DQ__)
+  availability.compiled_with_required_avx512_kernel = true;
+#endif
+#if (defined(__x86_64__) || defined(__i386__)) && \
+    (defined(__GNUC__) || defined(__clang__))
+  availability.runtime_cpu_supports_required_avx512_features =
+      __builtin_cpu_supports("avx512f") &&
+      __builtin_cpu_supports("avx512dq");
+#else
+  availability.runtime_cpu_supports_required_avx512_features = false;
+#endif
+  return availability;
+}
+
+bool avx512_lazy_accumulation_safe(size_t cols, uint64_t modulus) {
+  if (modulus <= 1) return false;
+  const size_t simd_groups = cols / 16;
+  const uint128_t q_minus_one = static_cast<uint128_t>(modulus - 1);
+  const uint128_t worst_lane =
+      static_cast<uint128_t>(2) * simd_groups * q_minus_one * q_minus_one;
+  return worst_lane <=
+         static_cast<uint128_t>(std::numeric_limits<uint64_t>::max());
+}
+
+MatMul32Dispatch select_matmul32_dispatch(
+    size_t cols,
+    uint64_t modulus,
+    Avx512KernelAvailability availability) {
+  if (availability.available() && avx512_lazy_accumulation_safe(cols, modulus)) {
+    return MatMul32Dispatch::Avx512Lazy;
+  }
+  return MatMul32Dispatch::ScalarU128;
+}
 
 // delayed reduction 的核心不改变标准矩阵乘法，只改变何时做 mod q：每个
 // output cell 先在 accumulator 可承受的 chunk 内累加若干 A[i,k]*B[k,j]，
@@ -109,7 +153,7 @@ void level_mat_mat(db_matrix_t *A, db_matrix_t *B, inter_matrix_t *out,
   const size_t n = A->cols;
   const size_t levels = A->levels;
 
-#if defined(__AVX512F__)
+#if defined(__AVX512F__) && defined(__AVX512DQ__)
   // 每个 level 是 Algorithm 4 首维的一张小矩阵：
   //   A[level] = DB[Nrest x N0],
   //   B[level] = query selection vector[N0 x 2] (BFV c0/c1),
@@ -117,18 +161,16 @@ void level_mat_mat(db_matrix_t *A, db_matrix_t *B, inter_matrix_t *out,
   // level-major 把 NTT coefficients 视作互不相干的小矩阵；outer loop 只是在
   // limb/coefficient 维度上重复同一个 standard matrix multiplication。
   //
-  // AVX-512 32->64 fast path. Triggers when db_coeff_t = uint32_t and
-  // inter_coeff_t = uint64_t (max_ct_mod_width() ≤ 32, the K=2 28-29-bit cell).
-  // Inputs are NTT outputs already reduced mod q. Per-lane bound:
-  //   ⌈n/16⌉ · 2^(2·max_ct_mod_width()) ≤ 2⁶⁴
-  // i.e. n ≤ 16 · 2^(64 - 2·width). For width=29 → n ≤ 1024 (matches our
-  // shapes); for width=28 → n ≤ 4096. Falls back to scalar mat_mat if n
-  // exceeds the bound (defensive — shouldn't trigger for current configs).
+  // AVX-512 32->64 fast path. Triggers only when this binary contains the
+  // exact F+DQ kernel, the host supports those instructions, and every level's
+  // exact modulus satisfies the lazy-lane bound.
   if constexpr (std::is_same_v<db_coeff_t, uint32_t> &&
                 std::is_same_v<inter_coeff_t, uint64_t>) {
-    constexpr size_t W = DBConsts::max_ct_mod_width();
-    constexpr size_t avx_n_bound = (W * 2 < 64) ? (size_t(16) << (64 - 2 * W)) : 0;
-    if (n <= avx_n_bound) {
+    bool avx_safe = detected_matmul32_availability().available();
+    for (size_t level = 0; avx_safe && level < levels; ++level) {
+      avx_safe = avx512_lazy_accumulation_safe(n, level_qs[level]);
+    }
+    if (avx_safe) {
       level_mat_mat_avx512_safe(reinterpret_cast<const uint32_t*>(A->data),
                                 reinterpret_cast<const uint32_t*>(B->data),
                                 reinterpret_cast<uint64_t*>(out->data),
@@ -221,7 +263,7 @@ void level_mat_mat_nochunk_u64(const uint32_t *A_data, const uint32_t *B_data,
   }
 }
 
-#if defined(__AVX512F__)
+#if defined(__AVX512F__) && defined(__AVX512DQ__)
 #include <immintrin.h>
 
 // AVX-512 32->64 mat-mat。它与 scalar mat_mat 计算同一个 C[level][row][0/1]，
@@ -291,7 +333,7 @@ static void level_mat_mat_avx512_safe(const uint32_t *A_data,
     mat_mat_avx512_safe(A_ptr, B0.data(), B1.data(), C_ptr, m, n, b128);
   }
 }
-#endif // __AVX512F__
+#endif // __AVX512F__ && __AVX512DQ__
 
 // Pure A-stream baseline: same access pattern as the matmul (read each
 // A[level][i][k]) but no multiplies and no B/output writes. Measures the
@@ -315,16 +357,41 @@ uint32_t level_mat_mat_stream_only(const uint32_t *A_data, size_t m,
 void level_mat_mat_32(const uint32_t *A_data, const uint32_t *B_data,
                       uint64_t *out_data, size_t m, size_t n, size_t levels,
                       uint64_t q) {
-#if defined(__AVX512F__)
-  // Composite first-dim 的每个 limb 复用同一 32x32->64 kernel，uniform q 是
-  // q1 或 q2。Safety condition: ⌈n/16⌉ · q² < 2^64; current composite
-  // params satisfy it. With q ~ 2^29 and n=512, that's
-  // 32 · 2^58 = 2^63 < 2^64.
-  std::vector<uint64_t> level_qs(levels, q);
-  level_mat_mat_avx512_safe(A_data, B_data, out_data, m, n, levels,
-                            level_qs.data());
-  return;
-#else
+  level_mat_mat_32_dispatch(A_data, B_data, out_data, m, n, levels, q,
+                            detected_matmul32_availability());
+}
+
+void level_mat_mat_32_dispatch(const uint32_t *A_data,
+                               const uint32_t *B_data,
+                               uint64_t *out_data,
+                               size_t m,
+                               size_t n,
+                               size_t levels,
+                               uint64_t q,
+                               Avx512KernelAvailability availability) {
+  const Avx512KernelAvailability detected = detected_matmul32_availability();
+  const Avx512KernelAvailability effective{
+      availability.compiled_with_required_avx512_kernel &&
+          detected.compiled_with_required_avx512_kernel,
+      availability.runtime_cpu_supports_required_avx512_features &&
+          detected.runtime_cpu_supports_required_avx512_features,
+  };
+  if (select_matmul32_dispatch(n, q, effective) == MatMul32Dispatch::Avx512Lazy) {
+#if defined(__AVX512F__) && defined(__AVX512DQ__)
+    std::vector<uint64_t> level_qs(levels, q);
+    level_mat_mat_avx512_safe(A_data, B_data, out_data, m, n, levels,
+                              level_qs.data());
+    return;
+#endif
+  }
+  level_mat_mat_32_scalar_u128(A_data, B_data, out_data, m, n, levels, q);
+}
+
+static void level_mat_mat_32_scalar_u128(const uint32_t *A_data,
+                                         const uint32_t *B_data,
+                                         uint64_t *out_data, size_t m,
+                                         size_t n, size_t levels,
+                                         uint64_t q) {
   // Scalar fallback。数学输出与 AVX-512 path 相同，但这里没有 SIMD lane
   // 拆分：一个 scalar accumulator 会吃完整的 inner dimension。Composite
   // first-dimension kernel (n=512, q≈2^29) 的 n*q^2 超过 64 bits，因此
@@ -346,5 +413,4 @@ void level_mat_mat_32(const uint32_t *A_data, const uint32_t *B_data,
       C_ptr[2 * i + 1] = static_cast<uint64_t>(t1 % q128);
     }
   }
-#endif
 }

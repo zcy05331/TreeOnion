@@ -2,6 +2,10 @@
 
 #include <algorithm>
 #include <bit>
+#include <chrono>
+#include <cmath>
+#include <limits>
+#include <map>
 
 using namespace tree_superrecord;
 using tree_superrecord_test::make_input;
@@ -108,8 +112,10 @@ void PirTest::test_tree_superrecord_planner() {
     policy.expansion_heights = {9, 10};
     policy.alpha_alignments = {1, 16};
     policy.max_bundle_arity = 8;
+    const PlannerInput input =
+        make_input(scheme, 256, size_t{1} << 24, policy);
     const std::vector<Candidate> all =
-        enumerate_candidates(make_input(scheme, 256, size_t{1} << 24, policy));
+        enumerate_candidates(input);
     require_test(!all.empty(), "the 256-bit profile must have candidates");
     const auto n0_of = [&](size_t b, size_t align) {
       const std::optional<Candidate> found = pick_candidate(all, 3, 64, b, align);
@@ -206,24 +212,240 @@ void PirTest::test_tree_superrecord_planner() {
                  "tag drift must be rejected");
     // Pareto: the golden point is retained by the frontier, dominance ignores
     // predictions, and different contexts are incomparable.
+    ParetoContext context;
+    context.avx512 = {true, true};
     std::vector<Candidate> ranked = all;
-    rank_by_prediction(ranked, CostCalibration{});
-    const std::vector<Candidate> frontier = pareto_frontier(all);
+    rank_by_prediction(ranked, CostCalibration{}, context);
+    const std::vector<Candidate> frontier = pareto_frontier(all, policy, context);
     require_test(!frontier.empty() && frontier.size() <= all.size(),
                  "frontier is a nonempty subset");
     Candidate worse = golden;
     worse.metrics.physical_scan_bytes += 1;
-    require_test(dominates(golden, worse) && !dominates(worse, golden) &&
-                     !dominates(golden, golden),
+    require_test(dominates(golden, worse, policy, context) &&
+                     !dominates(worse, golden, policy, context) &&
+                     !dominates(golden, golden, policy, context),
                  "strictly larger scan is dominated");
     Candidate other_context = worse;
     other_context.shape.entry_bits = 255;
-    require_test(!dominates(golden, other_context),
+    require_test(!dominates(golden, other_context, policy, context),
                  "different entry sizes are incomparable");
+    other_context = worse;
+    other_context.scheme.identity.plaintext_modulus += 2;
+    require_test(!dominates(golden, other_context, policy, context),
+                 "different scheme identities are incomparable");
+    other_context = worse;
+    other_context.scheme.payload_bits_per_coeff = c - 1;
+    require_test(!dominates(golden, other_context, policy, context),
+                 "different payload widths are incomparable");
+    other_context = worse;
+    other_context.scheme.eval_key_registration =
+        EvalKeyRegistrationPolicy::CandidateSpecificHeight;
+    require_test(!dominates(golden, other_context, policy, context),
+                 "different key-registration policies are incomparable");
+    PlannerPolicy specific_policy = policy;
+    specific_policy.eval_key_registration =
+        EvalKeyRegistrationPolicy::CandidateSpecificHeight;
+    Candidate shorter_keys = golden;
+    Candidate taller_keys = worse;
+    shorter_keys.scheme.eval_key_registration =
+        EvalKeyRegistrationPolicy::CandidateSpecificHeight;
+    taller_keys.scheme.eval_key_registration =
+        EvalKeyRegistrationPolicy::CandidateSpecificHeight;
+    shorter_keys.scheme.registered_session_key_height = s.required_key_height;
+    taller_keys.scheme.registered_session_key_height = log_n;
+    taller_keys.metrics.modeled_per_client_eval_key_bytes += 1;
+    taller_keys.metrics.eval_key_coefficient_payload_bytes_estimate += 1;
+    require_test(dominates(shorter_keys, taller_keys, specific_policy, context),
+                 "candidate-specific registered heights remain comparable");
     Candidate faster = worse;
     faster.metrics.predicted_server_ms = 0;
-    require_test(dominates(golden, faster),
+    require_test(dominates(golden, faster, policy, context),
                  "predicted time never enters dominance");
+
+    // ---- dispatch-aware costs, comparability, and exact sweep controls ----
+    const std::vector<LevelPlan> golden_plans = build_level_plans(golden.shape);
+    require_test(first_dim_dispatch_signature(golden, context).limb_dispatch.size() ==
+                     golden.shape.plane_count * golden.shape.path_levels * 2,
+                 "dispatch signature records both q1 and q2 for every level/plane");
+
+    CostCalibration calibrated;
+    calibrated.expand_intercept_ms = 1.0;
+    calibrated.expand_per_populated_node_ms = 0.0;
+    calibrated.expand_per_level_ms = 0.0;
+    calibrated.to_rgsw_per_selector_ms = 0.0;
+    calibrated.alpha_pyramid_add_ms = 0.0;
+    calibrated.alpha_carry_copy_ms = 0.0;
+    calibrated.alpha_ntt_per_ciphertext_ms = 0.0;
+    calibrated.alpha_split_per_u32_output_ms = 0.0;
+    calibrated.default_scan_bandwidth_bytes_per_ms = 10.0;
+    calibrated.first_dim_output_ciphertext_ms = 0.0;
+    calibrated.cmux_ms = 0.0;
+    calibrated.substitution_ms = 0.0;
+    calibrated.path_item_pack_ms = 0.0;
+    calibrated.modulus_switch_ms = 0.0;
+
+    for (const LevelPlan &plan : golden_plans) {
+      FirstDimShapeKey q1_key;
+      q1_key.matrix_rows = plan.matrix_rows;
+      q1_key.matrix_cols = plan.matrix_cols;
+      q1_key.cols_mod_simd_width = plan.matrix_cols % 16;
+      q1_key.limb_modulus = scheme.get_composite_rns().q1;
+      q1_key.dispatch =
+          select_matmul32_dispatch(plan.matrix_cols, q1_key.limb_modulus,
+                                   context.avx512);
+      FirstDimShapeKey q2_key = q1_key;
+      q2_key.limb_modulus = scheme.get_composite_rns().q2;
+      q2_key.dispatch =
+          select_matmul32_dispatch(plan.matrix_cols, q2_key.limb_modulus,
+                                   context.avx512);
+      const double q1_bw = 100.0 + static_cast<double>(plan.level);
+      const double q2_bw = 200.0 + static_cast<double>(plan.level);
+      calibrated.scan_bandwidth_bytes_per_ms[q1_key] = q1_bw;
+      calibrated.scan_bandwidth_bytes_per_ms[q2_key] = q2_bw;
+    }
+    double expected_scan_ms = 0.0;
+    for (const LevelPlan &plan : golden_plans) {
+      FirstDimShapeKey q1_key;
+      q1_key.matrix_rows = plan.matrix_rows;
+      q1_key.matrix_cols = plan.matrix_cols;
+      q1_key.cols_mod_simd_width = plan.matrix_cols % 16;
+      q1_key.limb_modulus = scheme.get_composite_rns().q1;
+      q1_key.dispatch =
+          select_matmul32_dispatch(plan.matrix_cols, q1_key.limb_modulus,
+                                   context.avx512);
+      FirstDimShapeKey q2_key = q1_key;
+      q2_key.limb_modulus = scheme.get_composite_rns().q2;
+      q2_key.dispatch =
+          select_matmul32_dispatch(plan.matrix_cols, q2_key.limb_modulus,
+                                   context.avx512);
+      const double q1_bw = calibrated.scan_bandwidth_bytes_per_ms.at(q1_key);
+      const double q2_bw = calibrated.scan_bandwidth_bytes_per_ms.at(q2_key);
+      const double one_limb_bytes = static_cast<double>(
+          plan.matrix_rows * plan.matrix_cols * golden.shape.ring_degree *
+          sizeof(uint32_t));
+      expected_scan_ms += static_cast<double>(golden.shape.plane_count) *
+                          one_limb_bytes / q1_bw;
+      expected_scan_ms += static_cast<double>(golden.shape.plane_count) *
+                          one_limb_bytes / q2_bw;
+    }
+    const double predicted = predict_server_ms(golden, calibrated, context);
+    require_test(std::fabs(predicted - (1.0 + expected_scan_ms)) < 1e-6,
+                 "prediction sums q1/q2 scan costs with actual level shapes");
+    Candidate relabeled = golden;
+    relabeled.shape.alpha_alignment = 16;
+    require_test(predict_server_ms(relabeled, calibrated, context) == predicted,
+                 "same physical shape with a different alignment label has the same prediction");
+
+    Candidate scalar = worse;
+    scalar.shape.N0 = 1024;
+    scalar.shape.alpha_height = std::bit_width(scalar.shape.N0 - 1);
+    scalar.shape.query_width = scalar.shape.N0 + scalar.shape.selector_bits * scheme.get_l();
+    scalar.metrics.physical_scan_bytes = golden.metrics.physical_scan_bytes;
+    scalar.metrics.scalar_u128_required_scan_bytes = sizeof(uint32_t);
+    scalar.metrics.optimized_steady_state_bytes_estimate =
+        golden.metrics.optimized_steady_state_bytes_estimate + 1;
+    require_test(!dominates(golden, scalar, policy, context) &&
+                     !dominates(scalar, golden, policy, context),
+                 "different dispatch profiles are incomparable at Pareto time");
+    const std::vector<LevelPlan> scalar_plans = build_level_plans(scalar.shape);
+    const LevelPlan &scalar_leaf = scalar_plans.back();
+    FirstDimShapeKey scalar_leaf_key;
+    scalar_leaf_key.matrix_rows = scalar_leaf.matrix_rows;
+    scalar_leaf_key.matrix_cols = scalar_leaf.matrix_cols;
+    scalar_leaf_key.cols_mod_simd_width = scalar_leaf.matrix_cols % 16;
+    scalar_leaf_key.dispatch = MatMul32Dispatch::ScalarU128;
+    scalar_leaf_key.limb_modulus = scheme.get_composite_rns().q1;
+    CostCalibration scalar_cal = calibrated;
+    scalar_cal.scan_bandwidth_bytes_per_ms[scalar_leaf_key] = 1.0;
+    require_test(predict_server_ms(scalar, scalar_cal, context) >
+                     predict_server_ms(scalar, calibrated, context),
+                 "unsafe limb uses ScalarU128 calibration");
+
+    std::vector<Candidate> equal_metrics = {golden, golden};
+    equal_metrics[1].shape.N0 += 1;
+    equal_metrics[1].shape.alpha_height = std::bit_width(equal_metrics[1].shape.N0 - 1);
+    equal_metrics[1].shape.query_width += 1;
+    equal_metrics[1].shape.min_expansion_capacity =
+        checked_bit_ceil(equal_metrics[1].shape.query_width, "test capacity");
+    equal_metrics[1].shape.min_expansion_height =
+        std::bit_width(equal_metrics[1].shape.min_expansion_capacity) - 1;
+    if (equal_metrics[1].shape.expansion_capacity <
+        equal_metrics[1].shape.min_expansion_capacity) {
+      equal_metrics[1].shape.expansion_height =
+          equal_metrics[1].shape.min_expansion_height;
+      equal_metrics[1].shape.expansion_capacity =
+          equal_metrics[1].shape.min_expansion_capacity;
+    }
+    equal_metrics[1].shape.required_key_height =
+        std::max(equal_metrics[1].shape.expansion_height,
+                 equal_metrics[1].shape.projection_depth_max);
+    equal_metrics[1].shape.registered_key_height = log_n;
+    equal_metrics[1].scheme = make_scheme_fingerprint(
+        scheme, c, log_n, EvalKeyRegistrationPolicy::FixedMaximumHeight);
+    const std::vector<Candidate> deduped =
+        deduplicate_exact_plans(equal_metrics, context);
+    require_test(deduped.size() == 2,
+                 "equal aggregate metrics with different level plans are retained");
+
+    CostCalibration mandatory_cal = calibrated;
+    mandatory_cal.default_scan_bandwidth_bytes_per_ms = 1e12;
+    const std::vector<Candidate> mandatory =
+        mandatory_controls(all, input, mandatory_cal, context);
+    bool saw_bundle3 = false, saw_h1 = false;
+    for (const Candidate &cand : mandatory) {
+      saw_bundle3 |= cand.shape.bundle_arity == 3 && cand.shape.record_coeffs == 64 &&
+                     cand.shape.plane_count == 1;
+      saw_h1 |= cand.shape.bundle_arity == 1;
+    }
+    require_test(saw_bundle3 && saw_h1,
+                 "mandatory controls retain Bundle3 and h=1 even under a tight frontier cap");
+    const std::vector<Candidate> capped_none =
+        top_nonmandatory(frontier, mandatory, 0, context);
+    require_test(capped_none.empty(),
+                 "max_frontier=0 adds no nonmandatory candidates");
+
+    std::vector<Candidate> nonfinite = {golden, worse};
+    nonfinite[1].shape.N0 += 1;
+    nonfinite[1].shape.alpha_height = std::bit_width(nonfinite[1].shape.N0 - 1);
+    nonfinite[1].shape.query_width += 1;
+    CostCalibration bad_cal = calibrated;
+    bad_cal.default_scan_bandwidth_bytes_per_ms =
+        std::numeric_limits<double>::quiet_NaN();
+    (void)pareto_frontier(nonfinite, policy, context);
+    require_test(throws_invalid([&] { rank_by_prediction(nonfinite, bad_cal, context); }),
+                 "ranking rejects nonfinite predictions after Pareto accepts structural input");
+
+    CostCalibration stage_cal;
+    stage_cal.alpha_pyramid_add_ms = 0.1;
+    stage_cal.alpha_carry_copy_ms = 0.2;
+    stage_cal.alpha_ntt_per_ciphertext_ms = 0.3;
+    stage_cal.alpha_split_per_u32_output_ms = 0.4;
+    TreeServerTiming measured{};
+    measured.query_expand = std::chrono::milliseconds(10);
+    measured.selector_completion = std::chrono::milliseconds(23);
+    measured.alpha_prepare = std::chrono::milliseconds(19);
+    measured.first_dim_finalize = std::chrono::milliseconds(7);
+    apply_measured_control_timing(stage_cal, golden, measured);
+    require_test(stage_cal.expand_per_populated_node_ms > 0 &&
+                     stage_cal.to_rgsw_per_selector_ms == 1.0 &&
+                     stage_cal.first_dim_output_ciphertext_ms > 0 &&
+                     stage_cal.alpha_pyramid_add_ms == 0.1 &&
+                     stage_cal.alpha_carry_copy_ms == 0.2 &&
+                     stage_cal.alpha_ntt_per_ciphertext_ms == 0.3 &&
+                     stage_cal.alpha_split_per_u32_output_ms == 0.4,
+                 "measured control timing calibrates separable stages and preserves independent alpha costs");
+
+    const std::vector<Candidate> small_all = enumerate_candidates(
+        make_input(scheme, 256, size_t{1} << 8, test_policy(1, 4)));
+    require_test(!small_all.empty(), "small calibration fixture has candidates");
+    const CostCalibration measured_cal = calibrate_cost_model(
+        std::span<const Candidate>(&small_all.front(), 1), CostCalibration{},
+        context, CostCalibrationOptions{.trials_per_shape = 1,
+                                        .max_working_set_bytes_per_call =
+                                            4 * 1024 * 1024,
+                                        .seed = 7});
+    require_test(!measured_cal.scan_bandwidth_bytes_per_ms.empty(),
+                 "hardware calibration records measured per-limb shape bandwidths");
     BENCH_PRINT("E=256, N=2^24: " << all.size() << " candidates, frontier "
                 << frontier.size() << ", best predicted: "
                 << describe_candidate(ranked.front()));
@@ -322,6 +544,12 @@ void PirTest::test_tree_superrecord_planner() {
 
   // ---- required policy examples (design section 29) ----
   {
+    const std::vector<Candidate> e160_all = enumerate_candidates(
+        make_input(scheme, 160, size_t{1} << 24, test_policy(1, 8)));
+    const std::optional<Candidate> e160 = pick_candidate(e160_all, 4, 64, 8);
+    require_test(e160.has_value() && e160->shape.plane_count == 1 &&
+                     e160->shape.response_ciphertexts == 1,
+                 "E=160, h=4, G=64 uses one response at H=25");
     const std::vector<Candidate> two = enumerate_candidates(
         make_input(scheme, 512, size_t{1} << 24, test_policy(2, 8)));
     const std::optional<Candidate> e512 = pick_candidate(two, 3, 128, 8);
@@ -337,11 +565,11 @@ void PirTest::test_tree_superrecord_planner() {
     }
     require_test(absent, "the 512-bit point is absent under one response");
     const std::vector<Candidate> large = enumerate_candidates(
-        make_input(scheme, 30000, size_t{1} << 4, test_policy(16, 8)));
+        make_input(scheme, 30000, size_t{1} << 4, test_policy(16, 1)));
     const std::optional<Candidate> big = pick_candidate(large, 1, n, 4);
-    require_test(big.has_value() && big->shape.plane_count == (30000 + c * n - 1) / (c * n) &&
-                     big->shape.response_ciphertexts ==
-                         big->shape.plane_count * 5 / (n / n),
-                 "E=30000, h=1, G=n gives P planes and P*H responses");
+    require_test(big.has_value() && n == 2048 && big->shape.record_coeffs == 2048 &&
+                     big->shape.plane_count == 2 &&
+                     big->shape.response_ciphertexts == 10,
+                 "E=30000, h=1, G=2048 gives P=2 and 10 responses");
   }
 }

@@ -3,6 +3,7 @@
 #include "tests.h"
 #include "tree_superrecord_codec.h"
 #include "tree_superrecord_index.h"
+#include "tree_superrecord_noise.h"
 #include "tree_superrecord_planner.h"
 
 #include <bit>
@@ -104,6 +105,20 @@ inline EntryBits synthetic_entry(size_t entry_bits, size_t level, size_t node,
     if ((word >> (bit % 64)) & 1U) set_bit(entry, bit, 1);
   }
   return entry;
+}
+
+inline CandidateNoiseResult passing_target_noise_result(
+    PirClient &client, const TreeParams &params, const PirParams &scheme,
+    PirServer &server, const TaggedTreeSessionKeys &session,
+    const NoiseEntrySource &source, size_t leaf = 0,
+    double min_noise_margin = 1.0) {
+  const TargetNoiseCase target_case{.leaf = leaf,
+                                    .source = source,
+                                    .label = "test-target"};
+  return run_target_shape_noise_gate(client, server, session, params, scheme,
+                                     std::span<const TargetNoiseCase>(
+                                         &target_case, 1),
+                                     min_noise_margin);
 }
 
 }  // namespace tree_superrecord_test

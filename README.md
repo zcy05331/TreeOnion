@@ -74,11 +74,12 @@ ragged first dimension N0, one shared sigma selector vector, pooled
 multi-plane responses) planned from `(E, N, policy)`; see
 [docs/TREE_PIR_GENERIC_SUPERRECORD.md](docs/TREE_PIR_GENERIC_SUPERRECORD.md).
 Correctness suites: `tree_superrecord_codec`, `tree_superrecord_planner`,
-`tree_superrecord_index`, `tree_superrecord_e2e` (all in `--test all`).
+`tree_superrecord_index`, `tree_superrecord_e2e`, `tree_superrecord_noise`,
+`tree_superrecord_kernel` (all in `--test all`).
 Timed comparison against the legacy g=32 path on the same leaf schedule:
 
 ```bash
-./build/Onion-PIR --test tree_superrecord_bench --leaf-count 4194304 --warmup 3 --experiments 16
+scripts/run_superrecord_sweep.sh --leaf-count 4194304 --warmup 3 --trials 16 --memory-gib 10
 ```
 
 ### Merkle PIR baselines on Apple Silicon

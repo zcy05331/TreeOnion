@@ -180,10 +180,20 @@ void PirTest::test_tree_superrecord_index() {
 
     // ---- incremental m32 update equals a rebuild ----
     if (composite) {
-      PreprocessedTree m32 = m32_from_reference(reference, params, scheme, true);
+      PirClient client(scheme);
+      PirServer server(query_expansion_params(params, scheme));
+      const TaggedTreeSessionKeys session =
+          create_tagged_tree_session_keys(client, params, scheme);
+      set_tree_client_session_keys(server, params, scheme, session);
+      const CandidateNoiseResult noise =
+          passing_target_noise_result(client, params, scheme, server, session,
+                                      source, shape.N - 1);
+      PreprocessedTree m32 =
+          m32_from_reference(reference, params, scheme, noise, true);
       rewrite_preprocessed_superrecord(m32, target_level, target_node / shape.h,
                                        params, scheme, updated);
-      const PreprocessedTree fresh = preprocess_m32(params, scheme, updated, true);
+      const PreprocessedTree fresh =
+          preprocess_m32(params, scheme, noise, updated, true);
       for (size_t level = 0; level <= L; ++level) {
         for (size_t z = 0; z < s.plane_count; ++z) {
           require_test(m32.m32[level][z].lo == fresh.m32[level][z].lo &&

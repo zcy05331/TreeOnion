@@ -23,6 +23,8 @@
 
 namespace tree_superrecord {
 
+struct CandidateNoiseResult;
+
 struct PathResponse {
   PlanTag tag;
   size_t client_id = 0;
@@ -41,6 +43,7 @@ PathResponse answer_path_m32(const PreprocessedTree &db, ExpandedQuery &query,
                              const TaggedTreeSessionKeys &session,
                              const TreeParams &params,
                              const PirParams &runtime_scheme,
+                             const CandidateNoiseResult &noise_result,
                              TreeServerTiming *timing = nullptr);
 
 // Full request: bindings, expansion, selector completion, answer path.
@@ -58,6 +61,7 @@ PathResponse serve_request_m32(PackedQuery packed_query,
                                const TaggedTreeSessionKeys &session,
                                const TreeParams &params,
                                const PirParams &runtime_scheme,
+                               const CandidateNoiseResult &noise_result,
                                TreeServerTiming *timing = nullptr);
 
 struct DecodedPath {

@@ -1,11 +1,15 @@
 #pragma once
 
 #include "pir.h"
+#include "matrix.h"
 #include "tree_superrecord_common.h"
+#include "tree_profile.h"
 
+#include <compare>
 #include <cstddef>
 #include <cstdint>
 #include <limits>
+#include <map>
 #include <span>
 #include <string>
 #include <vector>
@@ -173,6 +177,10 @@ struct CandidateMetrics {
   size_t logical_plaintexts = 0;   // sum over levels and planes of Q
   size_t physical_matrix_cells = 0;
   size_t physical_scan_bytes = 0;  // both composite limbs (or K u64 limbs)
+  size_t scalar_u128_required_scan_bytes = 0;
+  size_t avx512_eligible_level_plane_limbs = 0;
+  size_t scalar_u128_required_level_plane_limbs = 0;
+  size_t avx512_eligible_scan_bytes = 0;
 
   size_t first_dim_output_ciphertexts = 0;
   size_t fold_cmux_count = 0;
@@ -230,6 +238,29 @@ struct Candidate {
   SchemeFingerprint scheme;
 };
 
+struct ParetoContext {
+  Avx512KernelAvailability avx512;
+};
+
+struct FirstDimDispatchSignature {
+  std::vector<MatMul32Dispatch> limb_dispatch;
+
+  bool operator==(const FirstDimDispatchSignature &) const = default;
+};
+
+struct FirstDimShapeKey {
+  size_t matrix_rows = 0;
+  size_t matrix_cols = 0;
+  size_t cols_mod_simd_width = 0;
+  MatMul32Dispatch dispatch = MatMul32Dispatch::ScalarU128;
+  uint64_t limb_modulus = 0;
+
+  auto operator<=>(const FirstDimShapeKey &) const = default;
+};
+
+FirstDimDispatchSignature first_dim_dispatch_signature(
+    const Candidate &candidate, const ParetoContext &context);
+
 // Every feasible candidate under the policy, in a deterministic order
 // (G ascending, then h, b, alignment, expansion height).
 std::vector<Candidate> enumerate_candidates(const PlannerInput &input);
@@ -256,27 +287,62 @@ size_t conservative_scratch_rlwe_count(size_t l_ep);
 struct CostCalibration {
   double expand_intercept_ms = 0;
   double expand_per_populated_node_ms = 0.10;
+  double expand_per_level_ms = 0;
   double to_rgsw_per_selector_ms = 4.6;
   double alpha_pyramid_add_ms = 0.01;
-  double alpha_per_ciphertext_prepare_ms = 0.058;  // NTT + composite split
-  double scan_bandwidth_bytes_per_ms = 3.8e6;
+  double alpha_carry_copy_ms = 0;
+  double alpha_ntt_per_ciphertext_ms = 0.058;
+  double alpha_split_per_u32_output_ms = 0;
+  std::map<FirstDimShapeKey, double> scan_bandwidth_bytes_per_ms;
+  double default_scan_bandwidth_bytes_per_ms = 3.8e6;
   double first_dim_output_ciphertext_ms = 0.05;    // CRT compose + INTT
   double cmux_ms = 0.19;
   double substitution_ms = 0.18;
   double path_item_pack_ms = 0.02;
   double modulus_switch_ms = 0.4;
 };
+
+struct CostCalibrationOptions {
+  size_t trials_per_shape = 2;
+  size_t max_working_set_bytes_per_call = 64 * 1024 * 1024;
+  uint64_t seed = 0x7375706572526563ULL;
+};
+
+void apply_measured_control_timing(CostCalibration &calibration,
+                                   const Candidate &candidate,
+                                   const TreeServerTiming &timing);
+CostCalibration calibrate_cost_model(
+    std::span<const Candidate> candidates,
+    const CostCalibration &base_calibration, const ParetoContext &context,
+    const CostCalibrationOptions &options = {});
+
 double predict_server_ms(const Candidate &candidate,
-                         const CostCalibration &calibration);
+                         const CostCalibration &calibration,
+                         const ParetoContext &context);
 void rank_by_prediction(std::vector<Candidate> &candidates,
-                        const CostCalibration &calibration);
+                        const CostCalibration &calibration,
+                        const ParetoContext &context);
 
 // Structural dominance: same entry size, leaf count, identity, payload width,
 // and key policy; a dominates b when every lower-is-better metric is <= and at
 // least one is <. Predicted or measured times never enter dominance.
-bool same_comparison_context(const Candidate &a, const Candidate &b);
-bool dominates(const Candidate &a, const Candidate &b);
-std::vector<Candidate> pareto_frontier(std::vector<Candidate> candidates);
+bool same_comparison_context(const Candidate &a, const Candidate &b,
+                             const ParetoContext &context);
+bool dominates(const Candidate &a, const Candidate &b,
+               const PlannerPolicy &policy, const ParetoContext &context);
+std::vector<Candidate> pareto_frontier(std::vector<Candidate> candidates,
+                                       const PlannerPolicy &policy,
+                                       const ParetoContext &context);
+
+std::vector<Candidate> deduplicate_exact_plans(
+    std::vector<Candidate> candidates, const ParetoContext &context);
+std::vector<Candidate> mandatory_controls(
+    const std::vector<Candidate> &all, const PlannerInput &input,
+    const CostCalibration &calibration, const ParetoContext &context);
+std::vector<Candidate> top_nonmandatory(
+    const std::vector<Candidate> &frontier,
+    const std::vector<Candidate> &mandatory, size_t max_frontier,
+    const ParetoContext &context);
 
 std::string describe_candidate(const Candidate &candidate);
 
