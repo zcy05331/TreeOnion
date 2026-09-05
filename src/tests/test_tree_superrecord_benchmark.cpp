@@ -186,6 +186,10 @@ bool env_bool(const char *name) {
          text != "no" && text != "NO";
 }
 
+bool contains_size(const std::vector<size_t> &values, size_t value) {
+  return std::find(values.begin(), values.end(), value) != values.end();
+}
+
 std::vector<size_t> env_size_list(const char *name) {
   const char *value = std::getenv(name);
   if (!value || !*value) return {};
@@ -213,6 +217,29 @@ std::vector<size_t> env_size_list(const char *name) {
   std::sort(out.begin(), out.end());
   out.erase(std::unique(out.begin(), out.end()), out.end());
   return out;
+}
+
+std::vector<size_t> benchmark_bundle_arities(const PlannerPolicy &policy) {
+  std::vector<size_t> arities = env_size_list("SUPERRECORD_BUNDLE_ARITIES");
+  for (size_t arity : arities) {
+    if (arity == 0 || arity > policy.max_bundle_arity) {
+      throw std::invalid_argument(
+          "SUPERRECORD_BUNDLE_ARITIES must be within the bundle arity policy");
+    }
+  }
+  return arities;
+}
+
+void filter_candidates_by_bundle_arity(std::vector<Candidate> &candidates,
+                                       const std::vector<size_t> &arities) {
+  if (arities.empty()) return;
+  candidates.erase(
+      std::remove_if(candidates.begin(), candidates.end(),
+                     [&](const Candidate &candidate) {
+                       return !contains_size(arities,
+                                             candidate.shape.bundle_arity);
+                     }),
+      candidates.end());
 }
 
 std::string env_string(const char *name, const std::string &fallback) {
@@ -573,7 +600,9 @@ void write_run_json(const std::string &path, size_t entry_bits, size_t L,
                     size_t N, size_t warmups, size_t trials,
                     uint64_t trial_seed, uint64_t execution_seed,
                     bool plan_only, size_t enumerated, size_t h1_enumerated,
-                    size_t h1_measured, const PlannerPolicy &policy,
+                    size_t h1_measured,
+                    const std::vector<size_t> &bundle_arities,
+                    const PlannerPolicy &policy,
                     const CostCalibration &calibration,
                     const std::optional<Candidate> &calibration_control,
                     const TreeServerTiming &calibration_timing,
@@ -603,7 +632,10 @@ void write_run_json(const std::string &path, size_t entry_bits, size_t L,
       << ",\n  \"measured_trials\": " << trials
       << ",\n  \"trial_seed\": " << trial_seed
       << ",\n  \"execution_seed\": " << execution_seed
-      << ",\n  \"bootstrap_seed\": "
+      << ",\n  \"benchmark_bundle_arities\": ";
+  if (bundle_arities.empty()) out << "null";
+  else json_size_array(out, bundle_arities);
+  out << ",\n  \"bootstrap_seed\": "
       << env_size("SUPERRECORD_BOOTSTRAP_SEED", 0x5352426f6f747374ULL);
   out << ",\n  \"leaf_schedule\": {\"warmup\": ";
   json_size_array(out, warmup_leaf_indices);
@@ -927,9 +959,11 @@ void PirTest::test_tree_superrecord_benchmark() {
   policy.eval_key_registration = env_key_mode();
   policy.fixed_session_key_height =
       env_size("SUPERRECORD_FIXED_KEY_HEIGHT", log_n);
+  const std::vector<size_t> bundle_arities = benchmark_bundle_arities(policy);
 
   const PlannerInput input = make_input(scheme, entry_bits, N, policy);
   std::vector<Candidate> all = enumerate_candidates(input);
+  filter_candidates_by_bundle_arity(all, bundle_arities);
   const size_t enumerated = all.size();
   const size_t h1_enumerated =
       static_cast<size_t>(std::count_if(all.begin(), all.end(),
@@ -945,6 +979,7 @@ void PirTest::test_tree_superrecord_benchmark() {
   if (!plan_only && !all.empty()) {
     const size_t pilot_leaves = std::min<size_t>(N, 4096);
     auto pilots = enumerate_candidates(make_input(scheme, entry_bits, pilot_leaves, policy));
+    filter_candidates_by_bundle_arity(pilots, bundle_arities);
     rank_by_prediction(pilots, calibration, context);
     auto pilot_it = std::find_if(pilots.begin(), pilots.end(), [](const Candidate &candidate) {
       return candidate.shape.bundle_arity == 1 && candidate.shape.beta_bits >= 2;
@@ -980,12 +1015,13 @@ void PirTest::test_tree_superrecord_benchmark() {
   rank_by_prediction(frontier, calibration, context);
 
   std::vector<RunResult> rows;
-  for (const Candidate &cand :
-       mandatory_controls(all, input, calibration, context)) {
+  auto mandatory_label = [&](const Candidate &cand) {
     std::string label = "mandatory-control";
     if (entry_bits == 256 && cand.shape.bundle_arity == 3 &&
         cand.shape.record_coeffs == 64 && cand.shape.plane_count == 1) {
       label = "bundle3";
+    } else if (!bundle_arities.empty() && cand.shape.bundle_arity == 3) {
+      label = "generic-h3-mandatory";
     } else if (cand.shape.bundle_arity == 1) {
       label = "generic-h1-mandatory-" + std::to_string(rows.size());
     } else if (!all.empty() &&
@@ -1001,7 +1037,22 @@ void PirTest::test_tree_superrecord_benchmark() {
     } else {
       label = "minimum-response-count";
     }
-    add_candidate(rows, cand, label, true, context);
+    return label;
+  };
+  if (bundle_arities.empty()) {
+    for (const Candidate &cand :
+         mandatory_controls(all, input, calibration, context)) {
+      add_candidate(rows, cand, mandatory_label(cand), true, context);
+    }
+  } else {
+    for (size_t arity : bundle_arities) {
+      auto best = std::find_if(all.begin(), all.end(), [&](const Candidate &cand) {
+        return cand.shape.bundle_arity == arity;
+      });
+      if (best != all.end()) {
+        add_candidate(rows, *best, mandatory_label(*best), true, context);
+      }
+    }
   }
   size_t extra_h1 = 0;
   for (const Candidate &cand : frontier) {
@@ -1298,7 +1349,7 @@ void PirTest::test_tree_superrecord_benchmark() {
   if (!json_path.empty()) {
     write_run_json(json_path, entry_bits, L, N, kWarmups, kTrials, trial_seed,
                    execution_seed, plan_only, enumerated, h1_enumerated,
-                   count_h1(rows), policy, calibration, calibration_control, calibration_timing,
+                   count_h1(rows), bundle_arities, policy, calibration, calibration_control, calibration_timing,
                    plan.warmup_leaf_indices, plan.measured_leaf_indices,
                    execution_order, block_orders, resident_sum + temporary_peak, rows, peak_rss);
     BENCH_PRINT("generic super-record JSON: " << json_path);

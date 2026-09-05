@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
-# 7 historical controls + generic/h1 sweep + TreePIR, each at 1/8 GiB.
+# Future 1 GiB policy: h3/h1, tuned Layerwise, g32, tuned Cuckoo, TreePIR, Flat.
 set -uo pipefail
 RUN_ROOT="${1:?usage: run_cloudlab_profile_matrix.sh RUN_ROOT}"
 SOURCE="$RUN_ROOT/source"
 BIN="$SOURCE/build-native/Onion-PIR"
 TREEPIR="$RUN_ROOT/deps/TreePIR/VBPIR_TreePIR/build/bin/vbpir_treepir"
 TRIALS="${TRIALS:-100}"
+CUCKOO_TRIALS="${CUCKOO_TRIALS:-16}"
+TREEPIR_TRIALS="${TREEPIR_TRIALS:-16}"
 FLAT_TRIALS="${FLAT_TRIALS:-16}"
 TUNING_TRIALS="${TUNING_TRIALS:-16}"
 WARMUPS="${WARMUPS:-3}"
@@ -45,6 +47,9 @@ PY
         printf '%s\t%s\tcomplete\t0\t%s\n' "$scale" "$case_label" "$(date -u +%FT%TZ)" >> "$STATUS_FILE"
         return 0
       fi
+      echo "Existing completed result does not match this run's sample policy: $folder/$name.json. Use a fresh run directory." >&2
+      FAILURES=$((FAILURES+1))
+      return 1
     fi
   fi
   printf '%s %s\n' "$scale" "$case_label" > "$RUN_ROOT/metadata/current-job.txt"
@@ -107,15 +112,17 @@ PY
   fi
   return "$code"
 }
-for SCALE in 1gb 8gb; do
-  if [[ "$SCALE" == 1gb ]]; then HEIGHT=24; else HEIGHT=27; fi
+for SCALE in 1gb; do
+  HEIGHT=24
   LEAVES=$((1 << HEIGHT))
   FOLDER="$RUN_ROOT/outputs/profiling/$SCALE"
   mkdir -p "$FOLDER"
-  # The generic planner emits the shared leaf schedule without a database allocation.
-  SUPERRECORD_PLAN_ONLY=1 SUPERRECORD_SKIP_LEGACY=1 \
+  # TreePIR must use its own exact trial count: the 16-trial schedule is not
+  # a prefix of the 100-trial schedule generated with the same seed.
+  SUPERRECORD_PLAN_ONLY=1 SUPERRECORD_SKIP_LEGACY=1 SUPERRECORD_BUNDLE_ARITIES=1,3 \
+    SUPERRECORD_MAX_ARITY=3 \
     SUPERRECORD_MEMORY_BYTES=343597383680 SUPERRECORD_OUTPUT_JSON="$FOLDER/schedule.json" \
-    "$BIN" --test tree_superrecord_bench --leaf-count "$LEAVES" --experiments "$TRIALS" --warmup "$WARMUPS" --trial-seed "$TRIAL_SEED" > "$FOLDER/schedule.log" 2>&1
+    "$BIN" --test tree_superrecord_bench --leaf-count "$LEAVES" --experiments "$TREEPIR_TRIALS" --warmup "$WARMUPS" --trial-seed "$TRIAL_SEED" > "$FOLDER/schedule.log" 2>&1
   if [[ "$?" != 0 ]]; then FAILURES=$((FAILURES+1)); continue; fi
   python3 - "$FOLDER/schedule.json" "$FOLDER/leaves.txt" <<'PY'
 import json,sys
@@ -125,8 +132,6 @@ Path(sys.argv[2]).write_text(''.join(str(x)+'\n' for x in schedule['warmup']+sch
 PY
   COMMON=(--leaf-count "$LEAVES" --experiments "$TRIALS" --warmup "$WARMUPS" --trial-seed "$TRIAL_SEED")
   PILOT_COMMON=(--leaf-count "$LEAVES" --experiments "$TUNING_TRIALS" --warmup "$WARMUPS" --trial-seed "$TRIAL_SEED")
-  run_case "$SCALE" standard "$BIN" --test merkle_benchmarks --benchmark-case standard_onionpir "${COMMON[@]}" --benchmark-json "$FOLDER/standard.json"
-  run_case "$SCALE" layerwise "$BIN" --test merkle_benchmarks --benchmark-case merkle_layerwise "${COMMON[@]}" --benchmark-json "$FOLDER/layerwise.json"
   LAYERWISE_PROFILE="$FOLDER/tuning/layerwise/profile.json"
   if run_layerwise_profile "$SCALE" "$LAYERWISE_PROFILE"; then
     run_case "$SCALE" layerwise_tuned "$BIN" --test merkle_benchmarks --benchmark-case merkle_layerwise \
@@ -134,9 +139,6 @@ PY
       --layer-padding-budget 1.1 --benchmark-json "$FOLDER/layerwise_tuned.json"
   fi
   BENCHMARK_OUTPUT_JSON="$FOLDER/tree_g32.json" run_case "$SCALE" tree_g32 "$BIN" --test tree_bench_g32 "${COMMON[@]}"
-  BENCHMARK_OUTPUT_JSON="$FOLDER/tree_g1.json" run_case "$SCALE" tree_g1 "$BIN" --test tree_bench "${COMMON[@]}"
-  BENCHMARK_OUTPUT_JSON="$FOLDER/tree_compressed.json" run_case "$SCALE" tree_compressed "$BIN" --test tree_compress_bench "${COMMON[@]}"
-  BENCHMARK_OUTPUT_JSON="$FOLDER/cuckoo.json" run_case "$SCALE" cuckoo "$BIN" --test cuckoo_bench "${COMMON[@]}"
   CUCKOO_SELECTION="$FOLDER/tuning/cuckoo/selection.json"
   rm -f "$CUCKOO_SELECTION"
   for CUCKOO_HEIGHT in 7 8 9 10; do
@@ -152,21 +154,24 @@ PY
       "$FOLDER/tuning/cuckoo/h7.json" "$FOLDER/tuning/cuckoo/h8.json" \
       "$FOLDER/tuning/cuckoo/h9.json" "$FOLDER/tuning/cuckoo/h10.json"
   )"; then
-    BENCHMARK_OUTPUT_JSON="$FOLDER/cuckoo_tuned.json" CUCKOO_LAYOUT_HEIGHT="$CHOSEN_CUCKOO_HEIGHT" \
-      run_case "$SCALE" cuckoo_tuned "$BIN" --test cuckoo_bench "${COMMON[@]}"
+    CASE_TRIALS="$CUCKOO_TRIALS" BENCHMARK_OUTPUT_JSON="$FOLDER/cuckoo_tuned.json" CUCKOO_LAYOUT_HEIGHT="$CHOSEN_CUCKOO_HEIGHT" \
+      run_case "$SCALE" cuckoo_tuned "$BIN" --test cuckoo_bench \
+        --leaf-count "$LEAVES" --experiments "$CUCKOO_TRIALS" --warmup "$WARMUPS" --trial-seed "$TRIAL_SEED"
   else
     printf '%s\t%s\tfailed\t%s\t%s\n' "$SCALE" "tuning/cuckoo/selection" "1" "$(date -u +%FT%TZ)" >> "$STATUS_FILE"
     FAILURES=$((FAILURES+1))
   fi
-  SUPERRECORD_SKIP_LEGACY=1 SUPERRECORD_MEMORY_BYTES=343597383680 \
+  SUPERRECORD_SKIP_LEGACY=1 SUPERRECORD_BUNDLE_ARITIES=1,3 SUPERRECORD_MAX_ARITY=3 SUPERRECORD_MEMORY_BYTES=343597383680 \
     SUPERRECORD_OUTPUT_JSON="$FOLDER/generic.json" SUPERRECORD_MAX_FRONTIER=2 \
     run_case "$SCALE" generic "$BIN" --test tree_superrecord_bench "${COMMON[@]}"
-  TREEPIR_DATA_DIR="$RUN_ROOT/deps/TreePIR/VBPIR_TreePIR" \
-    run_case "$SCALE" treepir "$TREEPIR" --height "$HEIGHT" --leaf-file "$FOLDER/leaves.txt" --warmup "$WARMUPS" --trials "$TRIALS" --output "$FOLDER/treepir.json"
+  CASE_TRIALS="$TREEPIR_TRIALS" TREEPIR_DATA_DIR="$RUN_ROOT/deps/TreePIR/VBPIR_TreePIR" \
+    run_case "$SCALE" treepir "$TREEPIR" --height "$HEIGHT" --leaf-file "$FOLDER/leaves.txt" --warmup "$WARMUPS" --trials "$TREEPIR_TRIALS" --output "$FOLDER/treepir.json"
   CASE_TRIALS="$FLAT_TRIALS" run_case "$SCALE" flat "$BIN" --test merkle_benchmarks --benchmark-case merkle_paths \
     --leaf-count "$LEAVES" --experiments "$FLAT_TRIALS" --warmup "$WARMUPS" --trial-seed "$TRIAL_SEED" --benchmark-json "$FOLDER/flat.json"
 done
-python3 "$SOURCE/scripts/summarize_cloudlab_profiles.py" --directory "$RUN_ROOT/outputs/profiling" --trials "$TRIALS" --flat-trials "$FLAT_TRIALS" || FAILURES=$((FAILURES+1))
+# Each run_case already enforced its requested count; summarize the mixed
+# 100/16 sample files using the counts recorded in their own headers.
+python3 "$SOURCE/scripts/summarize_cloudlab_profiles.py" --directory "$RUN_ROOT/outputs/profiling" || FAILURES=$((FAILURES+1))
 printf '%s\n' "$FAILURES" > "$RUN_ROOT/metadata/matrix-failures.txt"
 if [[ "$FAILURES" == 0 ]]; then echo complete > "$RUN_ROOT/metadata/matrix.status"; else echo failed > "$RUN_ROOT/metadata/matrix.status"; fi
 exit "$FAILURES"
