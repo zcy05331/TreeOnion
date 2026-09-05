@@ -158,7 +158,15 @@ void write_cuckoo_profile_json(const std::string &path, size_t leaf_count,
   out << std::fixed << std::setprecision(6);
   out << "{\n  \"schema_version\": \"cuckoo_raw_profile.v1\"";
   out << ",\n  \"scheme\": ";
-  write_json_string(out, "cuckoo_batch_pir");
+  write_json_string(out, "cuckoo_batch_pir_1_5x_plus_one");
+  out << ",\n  \"bucket_sizing\": \"ceil(1.5*k)+1\"";
+  out << ",\n  \"hash_seed\": " << params.seed;
+  out << ",\n  \"source_commit\": ";
+  if (const char *commit = std::getenv("ONIONPIR_BENCH_COMMIT")) {
+    write_json_string(out, commit);
+  } else {
+    out << "null";
+  }
   out << ",\n  \"leaf_count\": " << leaf_count
       << ",\n  \"tree_height\": " << tree_height
       << ",\n  \"node_entry_bits\": 256"
@@ -440,6 +448,42 @@ void PirTest::test_cuckoo_batch() {
     }
     require_test(recovered == 20, "every item of the k = 20 batch recovered");
   }
+
+  {
+    const size_t schedule_height = 24;
+    const size_t schedule_leaf_count = size_t{1} << schedule_height;
+    const size_t schedule_item_count = 2 * (schedule_leaf_count - 1);
+    CuckooBatchParams schedule_params = make_cuckoo_batch_params(
+        schedule_item_count, schedule_height, 0x63756b32ULL);
+    const std::vector<uint32_t> failing_schedule_ordinals =
+        sibling_ordinals(4180873, schedule_height);
+    bool rejected = false;
+    try {
+      (void)cuckoo_place(failing_schedule_ordinals, schedule_params);
+    } catch (const std::runtime_error &) {
+      rejected = true;
+    }
+    require_test(rejected, "original 36-bucket CloudLab fixture is unplaceable");
+    ++schedule_params.num_buckets;
+    require_valid_placement(cuckoo_place(failing_schedule_ordinals,
+                                         schedule_params),
+                            failing_schedule_ordinals, schedule_params);
+  }
+  for (const size_t height : {size_t{24}, size_t{27}}) {
+    const size_t leaves = size_t{1} << height;
+    CuckooBatchParams variant = make_cuckoo_batch_params(
+        2 * (leaves - 1), height, 0x63756b32ULL);
+    ++variant.num_buckets;
+    const auto schedule = make_benchmark_trial_plan(leaves, 3, 100, 7);
+    for (const auto &indices : {schedule.warmup_leaf_indices,
+                                schedule.measured_leaf_indices}) {
+      for (const size_t leaf : indices) {
+        const auto ordinals = sibling_ordinals(leaf, height);
+        require_valid_placement(cuckoo_place(ordinals, variant), ordinals,
+                                variant);
+      }
+    }
+  }
 }
 
 // Timed batch retrieval at the comparison workload. Flags select the leaf
@@ -459,8 +503,11 @@ void PirTest::test_cuckoo_benchmark() {
   const size_t tree_height = bench_tree_height(22);
   const size_t leaf_count = size_t{1} << tree_height;
   const size_t item_count = 2 * (leaf_count - 1);
-  const CuckooBatchParams params =
+  CuckooBatchParams params =
       make_cuckoo_batch_params(item_count, tree_height, 0x63756b32ULL);
+  // Explicit benchmark variant: retain the original 1.5x failure evidence,
+  // then measure one extra bucket with unchanged hash seed and leaf schedule.
+  ++params.num_buckets;
   const PirParams reference =
       flat_reference(utils::roundup_div(item_count, size_t{96}));
 
@@ -571,7 +618,8 @@ void PirTest::test_cuckoo_benchmark() {
   }
 
   BENCH_PRINT("cuckoo batch PIR: L=" << tree_height << ", k=" << tree_height
-              << ", buckets=" << params.num_buckets << " (3 hashes, 1.5x)");
+              << ", buckets=" << params.num_buckets
+              << " (3 hashes, 1.5x+slack)");
   BENCH_PRINT("database: " << storage.total_padded_plaintexts
               << " padded PIR matrix plaintexts across buckets ("
               << storage.total_target_plaintexts

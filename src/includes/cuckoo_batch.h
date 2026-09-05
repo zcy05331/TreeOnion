@@ -28,7 +28,7 @@
 struct CuckooBatchParams {
   size_t item_count = 0;   // M: flat root-excluded node ordinals [0, M)
   size_t batch_size = 0;   // k items per batch
-  size_t num_buckets = 0;  // ~ceil(1.5 k)
+  size_t num_buckets = 0;  // ~ceil(1.5 k); benchmark variants report any extra bucket
   size_t num_hashes = 3;
   uint64_t seed = 0x6375636b6f6f5049ULL;
 };
@@ -76,7 +76,7 @@ size_t cuckoo_position(const CuckooBucket &bucket, uint32_t ordinal);
 
 // Deterministic random-walk cuckoo placement: every queried ordinal lands in
 // exactly one of its num_hashes candidate buckets and no bucket holds more
-// than one. Throws when the bounded eviction walk fails (vanishingly rare at
-// the 1.5x sizing) or when the ordinals are not distinct.
+// than one. Throws when the bounded eviction walk fails or when the ordinals
+// are not distinct.
 std::vector<std::optional<uint32_t>> cuckoo_place(
     const std::vector<uint32_t> &ordinals, const CuckooBatchParams &params);
