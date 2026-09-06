@@ -4,6 +4,7 @@ import pathlib
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 SCRIPTS = pathlib.Path(__file__).resolve().parents[1]
 MODULE = SCRIPTS / 'run_entry_size_sweep.py'
@@ -64,6 +65,31 @@ def raw_doc(entry_bits=256, leaf_count=1 << 24, measured_trials=100, warmups=3, 
 
 
 class EntryPlanTests(unittest.TestCase):
+    def test_48b_reuses_32b_leaves_and_reports_larger_capacity(self):
+        plan = sweep.entry_plan(48)
+        self.assertEqual(plan['leaf_count'], sweep.entry_plan(32)['leaf_count'])
+        self.assertEqual(plan['entry_bits'], 384)
+        self.assertEqual(plan['actual_tree_bytes'], 1610612688)
+        self.assertEqual(plan['logical_db_bytes'], 3 * 2 ** 29)
+        self.assertEqual(plan['max_responses'], 2)
+
+    def test_requested_memory_budget_reaches_manifest(self):
+        with patch.dict(sweep.os.environ, {'SUPERRECORD_MEMORY_BYTES': str(80 * 2 ** 30)}):
+            manifest = sweep.build_manifest(pathlib.Path('/tmp/entry-plan'), [16], None, plan_only=True)
+        self.assertEqual(manifest['cases'][0]['environment']['SUPERRECORD_MEMORY_BYTES'], str(80 * 2 ** 30))
+
+    def test_default_matrix_matches_updated_entry_request(self):
+        self.assertEqual(sweep.DEFAULT_ENTRY_BYTES, (16, 48, 64, 128))
+
+    def test_failed_entry_does_not_skip_independent_sizes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.object(sweep, 'run_entry', side_effect=sweep.EntrySweepError('benchmark failed')) as run:
+                code = sweep.main(['--binary', str(MODULE), '--output-dir', tmp])
+            manifest = json.loads((pathlib.Path(tmp) / 'manifest.json').read_text())
+        self.assertEqual(code, 1)
+        self.assertEqual(run.call_count, 4)
+        self.assertTrue(all(case['state'] == 'failed' for case in manifest['cases']))
+
     def test_empty_entry_selection_cannot_report_complete(self):
         with tempfile.TemporaryDirectory() as tmp:
             with self.assertRaises(SystemExit) as error:

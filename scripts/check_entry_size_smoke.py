@@ -5,7 +5,7 @@ import json
 import pathlib
 
 from read_process_peak_memory import run_measured
-from run_entry_size_sweep import entry_plan, env_for, validate_bundle_arities
+from run_entry_size_sweep import DEFAULT_ENTRY_BYTES, entry_plan, env_for, validate_bundle_arities
 from summarize_cloudlab_profiles import validate_profile
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -20,7 +20,7 @@ def main():
     output = args.output_dir.resolve()
     output.mkdir(parents=True, exist_ok=True)
     checks = []
-    for size in (64, 16, 32, 128):
+    for size in DEFAULT_ENTRY_BYTES:
         raw = output / f'e{size}b.json'
         env = env_for(entry_plan(size), raw, args.source_commit)
         env['SUPERRECORD_MEMORY_BYTES'] = str(2 * 1024 ** 3)

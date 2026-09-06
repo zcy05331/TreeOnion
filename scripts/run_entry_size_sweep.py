@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run the 1GiB generic super-record entry-size sweep."""
+"""Run the Generic entry-size sweep: 1 GiB, except 48B at the 32B leaf count."""
 
 from __future__ import annotations
 
@@ -21,7 +21,7 @@ from summarize_cloudlab_profiles import ProfileError, validate_profile
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 LOGICAL_DB_BYTES = 1 << 30
 BASELINE_32B_LEAF_COUNT = 1 << 24
-DEFAULT_ENTRY_BYTES = (64, 16, 32, 128)
+DEFAULT_ENTRY_BYTES = (16, 48, 64, 128)
 TRIALS = 100
 WARMUPS = 3
 SEED = 7
@@ -35,9 +35,13 @@ class EntrySweepError(RuntimeError):
 
 
 def entry_plan(entry_bytes: int) -> dict[str, int]:
-    if entry_bytes <= 0 or (BASELINE_32B_LEAF_COUNT * 32) % entry_bytes != 0:
+    if entry_bytes == 48:
+        # Requested same tree as the 32B reference, hence a 1.5 GiB tier.
+        leaf_count = BASELINE_32B_LEAF_COUNT
+    elif entry_bytes <= 0 or (BASELINE_32B_LEAF_COUNT * 32) % entry_bytes != 0:
         raise EntrySweepError(f"entry size must preserve the 1GiB full-tree target: {entry_bytes}")
-    leaf_count = (BASELINE_32B_LEAF_COUNT * 32) // entry_bytes
+    else:
+        leaf_count = (BASELINE_32B_LEAF_COUNT * 32) // entry_bytes
     if leaf_count & (leaf_count - 1):
         raise EntrySweepError(f"leaf count must be a power of two: {leaf_count}")
     return {
@@ -45,7 +49,7 @@ def entry_plan(entry_bytes: int) -> dict[str, int]:
         "entry_bits": entry_bytes * 8,
         "leaf_count": leaf_count,
         "tree_height": leaf_count.bit_length() - 1,
-        "logical_db_bytes": LOGICAL_DB_BYTES,
+        "logical_db_bytes": 2 * leaf_count * entry_bytes,
         "actual_tree_bytes": (2 * leaf_count - 1) * entry_bytes,
         "max_responses": max(1, math.ceil(entry_bytes / 32)),
     }
@@ -137,6 +141,7 @@ def command_for(binary: pathlib.Path, plan: dict[str, int]) -> list[str]:
 
 def env_for(plan: dict[str, int], raw_path: pathlib.Path, source_commit: str | None = None) -> dict[str, str]:
     env = os.environ.copy()
+    env.setdefault("SUPERRECORD_MEMORY_BYTES", str(MEMORY_GIB * 1024 ** 3))
     if source_commit:
         env["SUPERRECORD_COMMIT"] = source_commit
     env.update({
@@ -144,7 +149,6 @@ def env_for(plan: dict[str, int], raw_path: pathlib.Path, source_commit: str | N
         "SUPERRECORD_OUTPUT_JSON": str(raw_path),
         "SUPERRECORD_SKIP_LEGACY": "1",
         "SUPERRECORD_MAX_RESPONSES": str(plan["max_responses"]),
-        "SUPERRECORD_MEMORY_BYTES": str(MEMORY_GIB * 1024 ** 3),
         "SUPERRECORD_MAX_FRONTIER": "2",
         "SUPERRECORD_MAX_ARITY": "3",
         "SUPERRECORD_BUNDLE_ARITIES": "1,3",
@@ -332,7 +336,8 @@ def build_manifest(output_dir: pathlib.Path, entries: list[int], binary: pathlib
     return {
         "schema_version": "generic-entry-size-sweep.v1",
         "created_utc": _dt.datetime.now(_dt.timezone.utc).isoformat(),
-        "logical_db_bytes": LOGICAL_DB_BYTES,
+        "reference_db_bytes": LOGICAL_DB_BYTES,
+        "capacity_policy": "48B uses the 32B leaf count (1.5 GiB); other entries target 1 GiB",
         "default_entry_order_bytes": list(DEFAULT_ENTRY_BYTES),
         "binary_source_commit": source_commit or os.environ.get("SUPERRECORD_COMMIT"),
         "selection_policy": "mean_server_total_ms_primary; analyzer CI metadata is retained but does not override this entry-size selection",
@@ -395,8 +400,6 @@ def main(argv: list[str] | None = None) -> int:
             case["state"] = "failed"
             case["error"] = str(exc)
         write_manifest(manifest_path, manifest)
-        if failures:
-            break
     manifest["state"] = "failed" if failures else "complete"
     write_manifest(manifest_path, manifest)
     print(f"Artifacts: {output_dir}")
