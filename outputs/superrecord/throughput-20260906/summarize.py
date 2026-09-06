@@ -66,7 +66,7 @@ for host,root in SOURCES.items():
    else:
     assert data['entry_size_bytes']==32 and not data.get('validate_index_only')
     samples=[x for x in data['results'] if x['phase']=='measured']
-    add(host,scale,name,p,[x['server_ms'] for x in samples],statistics.fmean(x['actual_query_payload_bytes_unseeded'] for x in samples),statistics.fmean(x['actual_response_payload_bytes'] for x in samples),'actual_unseeded')
+    add(host,scale,name,p,[x['server_ms'] for x in samples],statistics.fmean(x['actual_query_payload_bytes_unseeded'] for x in samples),statistics.fmean(x['actual_response_payload_bytes'] for x in samples),'actual_unseeded',extra={'configuration':data.get('backend_label') or ('vbpir_fd'+str(data.get('layout',{}).get('first_two_dimensions','unknown')))})
     for key in samples[0]:
      if key.endswith('_ms') and key!='server_ms':
       stages.append(dict(host=host,scale=scale,scheme=name,stage=key,mean_ms=statistics.fmean(x[key] for x in samples),count=n))
@@ -120,7 +120,7 @@ text+='\n## 耗时与通信\n\n| 服务器/档位 | 方案 | 平均服务器秒 
 for x in rows:
  if x['scheme'] not in CORE:continue
  text+=f"| {x['host']} {x['scale']} | {x['scheme']} | {x['mean_server_ms']/1000:.6f} | {x['p95_server_ms']/1000:.6f} | {x['query_bytes']:.0f} | {x['response_bytes']:.0f} |\n"
-text+='\n查询除TreePIR为实际unseeded序列化外均为模型估算；响应为实际序列化。TreePIR旧数据使用VBPIR默认参数，新后端选参尚未完成。\n\n'
+text+='\n查询除TreePIR为实际unseeded序列化外均为模型估算；响应为实际序列化。TreePIR的Clemson1GiB为旧VBPIR默认首维128；Wisconsin1GiB已完成VBPIR首维256的独立16次正式复测。4GiB后端正式复测仍在运行。\n\n'
 text+='## 历史对照附表\n\n| 服务器/档位 | 旧对照 | MiB/s | 次数 |\n|---|---|---:|---:|\n'
 for x in rows:
  if x['scheme'] not in CORE:text+=f"| {x['host']} {x['scale']} | {x['scheme']} | {x['logical_MiB_s']:.2f} | {x['count']} |\n"

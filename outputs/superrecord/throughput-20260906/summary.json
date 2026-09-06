@@ -1,5 +1,5 @@
 {
-  "generated_utc": "2026-09-06T02:47:10.473322+00:00",
+  "generated_utc": "2026-09-06T06:24:11.677149+00:00",
   "metric": "nominal logical tier MiB / mean server seconds",
   "rows": [
     {
@@ -110,7 +110,8 @@
       "query_kind": "actual_unseeded",
       "response_bytes": 131185.0,
       "response_kind": "actual",
-      "source": "/Users/little_sun/Desktop/little_sun/26Summer/OnionPIRv2/.worktrees/generic-superrecord/outputs/superrecord/cloudlab-20260904/profiling/1gb/treepir.json"
+      "source": "/Users/little_sun/Desktop/little_sun/26Summer/OnionPIRv2/.worktrees/generic-superrecord/outputs/superrecord/cloudlab-20260904/profiling/1gb/treepir.json",
+      "configuration": "vbpir_fd128"
     },
     {
       "host": "Clemson",
@@ -387,6 +388,25 @@
     {
       "host": "Wisconsin",
       "scale": "1gb",
+      "scheme": "TreePIR",
+      "count": 16,
+      "mean_server_ms": 8862.8358125,
+      "p95_server_ms": 8872.762,
+      "sample_sd_ms": 7.126664392441968,
+      "logical_MiB_s": 115.53864041526833,
+      "path_queries_s": 0.11283070353053548,
+      "nominal_database_bytes": 1073741824,
+      "entry_bytes": 32,
+      "query_bytes": 1179987.0,
+      "query_kind": "actual_unseeded",
+      "response_bytes": 131185.0,
+      "response_kind": "actual",
+      "source": "/Users/little_sun/Desktop/little_sun/26Summer/OnionPIRv2/.worktrees/generic-superrecord/outputs/superrecord/wisconsin-20260905/profiling/1gb/treepir.json",
+      "configuration": "vbpir_fd256"
+    },
+    {
+      "host": "Wisconsin",
+      "scale": "1gb",
       "scheme": "Flat",
       "count": 16,
       "mean_server_ms": 19750.1686190625,
@@ -493,6 +513,24 @@
       "response_bytes": 450560,
       "response_kind": "actual",
       "source": "/Users/little_sun/Desktop/little_sun/26Summer/OnionPIRv2/.worktrees/generic-superrecord/outputs/superrecord/wisconsin-20260905/profiling/4gb/cuckoo_tuned.json"
+    },
+    {
+      "host": "Wisconsin",
+      "scale": "4gb",
+      "scheme": "Flat",
+      "count": 16,
+      "mean_server_ms": 75647.486128875,
+      "p95_server_ms": 77182.475731,
+      "sample_sd_ms": 662.7984651899785,
+      "logical_MiB_s": 54.14588388333156,
+      "path_queries_s": 0.013219209932453993,
+      "nominal_database_bytes": 4294967296,
+      "entry_bytes": 32,
+      "query_bytes": 386880,
+      "query_kind": "modeled",
+      "response_bytes": 292864,
+      "response_kind": "actual",
+      "source": "/Users/little_sun/Desktop/little_sun/26Summer/OnionPIRv2/.worktrees/generic-superrecord/outputs/superrecord/wisconsin-20260905/profiling/4gb/flat.json"
     }
   ],
   "generic_candidates": [

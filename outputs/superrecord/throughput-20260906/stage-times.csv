@@ -186,6 +186,15 @@ Wisconsin,1gb,Cuckoo tuned,first_dim_core,1801.06920775,16
 Wisconsin,1gb,Cuckoo tuned,first_dim_finalize,285.704052,16
 Wisconsin,1gb,Cuckoo tuned,other_dim,648.2380763125,16
 Wisconsin,1gb,Cuckoo tuned,mod_switch,3.5365921875,16
+Wisconsin,1gb,TreePIR,index_ms,0.014562499999999999,16
+Wisconsin,1gb,TreePIR,query_ms,8.3260625,16
+Wisconsin,1gb,TreePIR,query_serialize_ms,0.17712499999999998,16
+Wisconsin,1gb,TreePIR,server_first_dimension_ms,5514.9540625,16
+Wisconsin,1gb,TreePIR,server_second_dimension_ms,3239.4565625,16
+Wisconsin,1gb,TreePIR,server_last_dimension_ms,86.4099375,16
+Wisconsin,1gb,TreePIR,server_merge_ms,21.7228125,16
+Wisconsin,1gb,TreePIR,response_serialize_ms,0.0403125,16
+Wisconsin,1gb,TreePIR,decode_ms,0.933,16
 Wisconsin,1gb,Flat,convert,417.3045540625,16
 Wisconsin,1gb,Flat,expand,1991.9532309375,16
 Wisconsin,1gb,Flat,first_dim_core,12775.734029375,16
@@ -240,3 +249,11 @@ Wisconsin,4gb,Cuckoo tuned,first_dim_core,6360.4408103125,16
 Wisconsin,4gb,Cuckoo tuned,first_dim_finalize,590.2167194375,16
 Wisconsin,4gb,Cuckoo tuned,other_dim,1298.569803125,16
 Wisconsin,4gb,Cuckoo tuned,mod_switch,3.817297125,16
+Wisconsin,4gb,Flat,convert,534.6857746875,16
+Wisconsin,4gb,Flat,expand,2218.46385075,16
+Wisconsin,4gb,Flat,first_dim_core,54833.5588983125,16
+Wisconsin,4gb,Flat,first_dim_finalize,5340.43364225,16
+Wisconsin,4gb,Flat,first_dim_query_ntt,183.18566525,16
+Wisconsin,4gb,Flat,first_dim_query_pack,744.7869845625,16
+Wisconsin,4gb,Flat,mod_switch,2.4889675625,16
+Wisconsin,4gb,Flat,other_dim,11704.1487719375,16

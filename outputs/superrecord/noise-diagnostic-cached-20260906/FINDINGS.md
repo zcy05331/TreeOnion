@@ -30,9 +30,13 @@ comparable to normalized preflight budgets.
 The historical process omitted its failed candidate identity and random
 key/query state. This reproduces the same failure class for the h1 shape;
 it does not prove that this exact shape or ciphertext caused the old run's
-first-warmup exception. The h2/G16/P3/N0=512 case has also completed three correct queries with
-residuals158/216/172 and final budgets1/1/1. The other four shapes continue
-in the fixed diagnostic queue. The preflight fixture coverage weakness is documented separately in
+first-warmup exception. All six shapes have now completed their three prescribed queries. All18
+returned correct plaintext;17 met the one-bit threshold. The only reproduced
+shortfall was the h1/G8/P3/N0=512 query above. The three h3 layouts had maximum
+residuals134 (G64/P1/N0=352),206 (G64/P1/N0=683),136 (G32/P2/N0=352), with
+all9 diagnostic queries meeting the threshold. These three-query diagnostics
+do not supply the missing100-query formal8GiB Generic measurement.
+The preflight fixture coverage weakness is documented separately in
 ../cloudlab-20260904/failures/8gb-generic-20260906/INVESTIGATION.md.
 
 The measured256 residual exceeds the one-bit limit by about0.66%; reported
