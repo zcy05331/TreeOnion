@@ -1,7 +1,7 @@
 {
   "decision": {
     "chosen_expansion_height": 9,
-    "chosen_pilot": "/users/zcy05331/generic-superrecord-bench-20260904/outputs/profiling/1gb/tuning/cuckoo/h9.json",
+    "chosen_pilot": "/users/zcy05331/generic-superrecord-bench-20260904/revision-fb79387/outputs/profiling/1gb/tuning/cuckoo/h9.json",
     "score": "min_mean_complete_path_server_ms",
     "tie_breakers": [
       "physical_db_bytes",
@@ -17,7 +17,7 @@
       },
       "mean_server_ms": 13153.767098,
       "median_server_ms": 13154.495962500001,
-      "path": "/users/zcy05331/generic-superrecord-bench-20260904/outputs/profiling/1gb/tuning/cuckoo/h7.json",
+      "path": "/users/zcy05331/generic-superrecord-bench-20260904/revision-fb79387/outputs/profiling/1gb/tuning/cuckoo/h7.json",
       "physical_db_bytes": 16737370112.0,
       "requested_expansion_height": 7,
       "storage": {
@@ -43,7 +43,7 @@
       },
       "mean_server_ms": 9990.9877801875,
       "median_server_ms": 9990.259106,
-      "path": "/users/zcy05331/generic-superrecord-bench-20260904/outputs/profiling/1gb/tuning/cuckoo/h8.json",
+      "path": "/users/zcy05331/generic-superrecord-bench-20260904/revision-fb79387/outputs/profiling/1gb/tuning/cuckoo/h8.json",
       "physical_db_bytes": 16760438784.0,
       "requested_expansion_height": 8,
       "storage": {
@@ -69,7 +69,7 @@
       },
       "mean_server_ms": 9791.7174126875,
       "median_server_ms": 9791.4286675,
-      "path": "/users/zcy05331/generic-superrecord-bench-20260904/outputs/profiling/1gb/tuning/cuckoo/h9.json",
+      "path": "/users/zcy05331/generic-superrecord-bench-20260904/revision-fb79387/outputs/profiling/1gb/tuning/cuckoo/h9.json",
       "physical_db_bytes": 16760438784.0,
       "requested_expansion_height": 9,
       "storage": {
@@ -95,7 +95,7 @@
       },
       "mean_server_ms": 12181.038599,
       "median_server_ms": 12180.597678,
-      "path": "/users/zcy05331/generic-superrecord-bench-20260904/outputs/profiling/1gb/tuning/cuckoo/h10.json",
+      "path": "/users/zcy05331/generic-superrecord-bench-20260904/revision-fb79387/outputs/profiling/1gb/tuning/cuckoo/h10.json",
       "physical_db_bytes": 16760438784.0,
       "requested_expansion_height": 10,
       "storage": {

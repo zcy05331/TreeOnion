@@ -1,0 +1,49 @@
+scale	case	status	exit_code	utc
+1gb	tuning/layerwise/profile	running		2026-09-05T23:30:04Z
+1gb	tuning/layerwise/profile	complete	0	2026-09-05T23:32:18Z
+1gb	layerwise_tuned	running		2026-09-05T23:32:18Z
+1gb	layerwise_tuned	complete	0	2026-09-05T23:34:51Z
+1gb	tree_g32	running		2026-09-05T23:34:51Z
+1gb	tree_g32	complete	0	2026-09-05T23:38:22Z
+1gb	tuning/cuckoo/h7	running		2026-09-05T23:38:22Z
+1gb	tuning/cuckoo/h7	complete	0	2026-09-05T23:41:19Z
+1gb	tuning/cuckoo/h8	running		2026-09-05T23:41:19Z
+1gb	tuning/cuckoo/h8	complete	0	2026-09-05T23:43:36Z
+1gb	tuning/cuckoo/h9	running		2026-09-05T23:43:36Z
+1gb	tuning/cuckoo/h9	complete	0	2026-09-05T23:45:46Z
+1gb	tuning/cuckoo/h10	running		2026-09-05T23:45:46Z
+1gb	tuning/cuckoo/h10	complete	0	2026-09-05T23:48:14Z
+1gb	cuckoo_tuned	running		2026-09-05T23:48:14Z
+1gb	cuckoo_tuned	complete	0	2026-09-05T23:50:24Z
+1gb	generic	running		2026-09-05T23:50:24Z
+1gb	generic	complete	0	2026-09-06T00:13:29Z
+1gb	treepir	pending		2026-09-06T00:13:29Z
+1gb	flat	running		2026-09-06T00:13:29Z
+1gb	flat	complete	0	2026-09-06T00:20:40Z
+4gb	tuning/layerwise/profile	running		2026-09-06T00:20:40Z
+4gb	tuning/layerwise/profile	complete	0	2026-09-06T00:26:59Z
+4gb	layerwise_tuned	running		2026-09-06T00:26:59Z
+4gb	layerwise_tuned	complete	0	2026-09-06T00:34:06Z
+4gb	tree_g32	running		2026-09-06T00:34:06Z
+1gb	standard	running		2026-09-06T00:47:24Z
+1gb	standard	complete	0	2026-09-06T00:49:01Z
+4gb	standard	running		2026-09-06T00:49:01Z
+4gb	standard	complete	0	2026-09-06T00:54:48Z
+4gb	tree_g32	complete	0	2026-09-06T00:54:48Z
+4gb	tuning/cuckoo/h7	running		2026-09-06T00:54:48Z
+4gb	tuning/cuckoo/h7	complete	0	2026-09-06T01:11:47Z
+4gb	tuning/cuckoo/h8	running		2026-09-06T01:11:47Z
+4gb	tuning/cuckoo/h8	complete	0	2026-09-06T01:19:34Z
+4gb	tuning/cuckoo/h9	running		2026-09-06T01:19:34Z
+4gb	tuning/cuckoo/h9	complete	0	2026-09-06T01:26:10Z
+4gb	tuning/cuckoo/h10	running		2026-09-06T01:26:10Z
+4gb	tuning/cuckoo/h10	complete	0	2026-09-06T01:32:30Z
+4gb	cuckoo_tuned	running		2026-09-06T01:32:30Z
+4gb	cuckoo_tuned	complete	0	2026-09-06T01:38:50Z
+4gb	generic	running		2026-09-06T01:38:50Z
+4gb	generic	complete	0	2026-09-06T02:29:07Z
+4gb	treepir	pending		2026-09-06T02:29:07Z
+4gb	flat	running		2026-09-06T02:29:07Z
+4gb	flat	complete	0	2026-09-06T02:56:29Z
+1gb	treepir	complete	0	2026-09-06T06:44:31.747753+00:00
+4gb	treepir	complete	0	2026-09-06T06:44:31.749666+00:00

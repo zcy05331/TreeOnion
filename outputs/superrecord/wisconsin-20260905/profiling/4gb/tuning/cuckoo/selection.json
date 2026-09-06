@@ -1,0 +1,118 @@
+{
+  "decision": {
+    "chosen_expansion_height": 10,
+    "chosen_pilot": "/users/zcy05331/core-pir-20260905/outputs/profiling/4gb/tuning/cuckoo/h10.json",
+    "score": "min_mean_complete_path_server_ms",
+    "tie_breakers": [
+      "physical_db_bytes",
+      "requested_expansion_height"
+    ]
+  },
+  "pilots": [
+    {
+      "communication": {
+        "actual_response_bytes": 450560,
+        "modeled_helper_key_bytes": 1488000,
+        "modeled_query_bytes": 595200
+      },
+      "mean_server_ms": 46058.233559125,
+      "median_server_ms": 46041.056142,
+      "path": "/users/zcy05331/core-pir-20260905/outputs/profiling/4gb/tuning/cuckoo/h7.json",
+      "physical_db_bytes": 67024977920.0,
+      "requested_expansion_height": 7,
+      "storage": {
+        "bucket_count": 40,
+        "estimated_peak_resident_bytes": 69709332480,
+        "estimated_preprocessed_bytes": 67024977920,
+        "logical_padded_bytes": 12567183360,
+        "logical_replicated_bytes": 12565567264,
+        "max_bucket_members": 9823414,
+        "max_bucket_plaintexts": 102336,
+        "max_bucket_target_plaintexts": 102328,
+        "public_metadata_bytes": 2684354560,
+        "total_member_entries": 392673977,
+        "total_padded_plaintexts": 4090880,
+        "total_target_plaintexts": 4090375
+      }
+    },
+    {
+      "communication": {
+        "actual_response_bytes": 450560,
+        "modeled_helper_key_bytes": 1488000,
+        "modeled_query_bytes": 595200
+      },
+      "mean_server_ms": 16965.33488075,
+      "median_server_ms": 16965.2605825,
+      "path": "/users/zcy05331/core-pir-20260905/outputs/profiling/4gb/tuning/cuckoo/h8.json",
+      "physical_db_bytes": 67054338048.0,
+      "requested_expansion_height": 8,
+      "storage": {
+        "bucket_count": 40,
+        "estimated_peak_resident_bytes": 69738692608,
+        "estimated_preprocessed_bytes": 67054338048,
+        "logical_padded_bytes": 12572688384,
+        "logical_replicated_bytes": 12565567264,
+        "max_bucket_members": 9823414,
+        "max_bucket_plaintexts": 102400,
+        "max_bucket_target_plaintexts": 102328,
+        "public_metadata_bytes": 2684354560,
+        "total_member_entries": 392673977,
+        "total_padded_plaintexts": 4092672,
+        "total_target_plaintexts": 4090375
+      }
+    },
+    {
+      "communication": {
+        "actual_response_bytes": 450560,
+        "modeled_helper_key_bytes": 1488000,
+        "modeled_query_bytes": 595200
+      },
+      "mean_server_ms": 13567.237280125,
+      "median_server_ms": 13567.410057500001,
+      "path": "/users/zcy05331/core-pir-20260905/outputs/profiling/4gb/tuning/cuckoo/h9.json",
+      "physical_db_bytes": 67108864000.0,
+      "requested_expansion_height": 9,
+      "storage": {
+        "bucket_count": 40,
+        "estimated_peak_resident_bytes": 69793218560,
+        "estimated_preprocessed_bytes": 67108864000,
+        "logical_padded_bytes": 12582912000,
+        "logical_replicated_bytes": 12565567264,
+        "max_bucket_members": 9823414,
+        "max_bucket_plaintexts": 102400,
+        "max_bucket_target_plaintexts": 102328,
+        "public_metadata_bytes": 2684354560,
+        "total_member_entries": 392673977,
+        "total_padded_plaintexts": 4096000,
+        "total_target_plaintexts": 4090375
+      }
+    },
+    {
+      "communication": {
+        "actual_response_bytes": 450560,
+        "modeled_helper_key_bytes": 1488000,
+        "modeled_query_bytes": 595200
+      },
+      "mean_server_ms": 12735.404461,
+      "median_server_ms": 12735.0322805,
+      "path": "/users/zcy05331/core-pir-20260905/outputs/profiling/4gb/tuning/cuckoo/h10.json",
+      "physical_db_bytes": 67108864000.0,
+      "requested_expansion_height": 10,
+      "storage": {
+        "bucket_count": 40,
+        "estimated_peak_resident_bytes": 69793218560,
+        "estimated_preprocessed_bytes": 67108864000,
+        "logical_padded_bytes": 12582912000,
+        "logical_replicated_bytes": 12565567264,
+        "max_bucket_members": 9823414,
+        "max_bucket_plaintexts": 102400,
+        "max_bucket_target_plaintexts": 102328,
+        "public_metadata_bytes": 2684354560,
+        "total_member_entries": 392673977,
+        "total_padded_plaintexts": 4096000,
+        "total_target_plaintexts": 4090375
+      }
+    }
+  ],
+  "schema_version": "cuckoo_layout_selection.v1"
+}
