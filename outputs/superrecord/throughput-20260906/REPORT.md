@@ -91,3 +91,13 @@
 Generic/g32返回含根路径，Layerwise/Cuckoo/TreePIR/Flat为非根层路径。保留既有语义。Standard单次查找和g1的12bit标量数据不进入32B路径吞吐量对照。旧node0历史运行也未并入当前两台服务器的表格。各方案在独立进程执行，跨方案倍数为描述性比较。
 
 Generic完整候选及形状见generic-candidates.csv。阶段均值见stage-times.csv；原始路径、样本数、标准差、通信口径见formal-throughput.csv。选参pilot与正式试验分开，主表不采用pilot。
+
+## Latest progress: 2026-09-06 17:56 UTC
+
+Wisconsin remains fully complete. Clemson is actively running the 1 GiB
+SealPIR d1 pilot (PID37745, 99.9% CPU, elapsed53m31s at check).
+The VBPIR fd256 pilot completed16 correct queries at13737.4684ms /74.5407MiB/s.
+The fd64 candidate failed with step-count-too-large; fd128 failed its noise
+check. No new Clemson formal TreePIR result exists yet, so its formal table
+still uses the older completed measurement. Generic8GiB remains failed;
+entry-size work waits behind the restored TreePIR/Flat continuation.
