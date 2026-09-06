@@ -1,5 +1,5 @@
 {
-  "generated_utc": "2026-09-06T06:24:11.677149+00:00",
+  "generated_utc": "2026-09-06T15:12:00.803175+00:00",
   "metric": "nominal logical tier MiB / mean server seconds",
   "rows": [
     {
@@ -513,6 +513,25 @@
       "response_bytes": 450560,
       "response_kind": "actual",
       "source": "/Users/little_sun/Desktop/little_sun/26Summer/OnionPIRv2/.worktrees/generic-superrecord/outputs/superrecord/wisconsin-20260905/profiling/4gb/cuckoo_tuned.json"
+    },
+    {
+      "host": "Wisconsin",
+      "scale": "4gb",
+      "scheme": "TreePIR",
+      "count": 16,
+      "mean_server_ms": 101185.5481875,
+      "p95_server_ms": 101236.327,
+      "sample_sd_ms": 30.473137850065253,
+      "logical_MiB_s": 40.4800890381103,
+      "path_queries_s": 0.009882834237819898,
+      "nominal_database_bytes": 4294967296,
+      "entry_bytes": 32,
+      "query_bytes": 27268852.0,
+      "query_kind": "actual_unseeded",
+      "response_bytes": 20464860.0,
+      "response_kind": "actual",
+      "source": "/Users/little_sun/Desktop/little_sun/26Summer/OnionPIRv2/.worktrees/generic-superrecord/outputs/superrecord/wisconsin-20260905/profiling/4gb/treepir.json",
+      "configuration": "sealpir_d2"
     },
     {
       "host": "Wisconsin",

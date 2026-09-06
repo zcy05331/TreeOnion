@@ -249,6 +249,18 @@ Wisconsin,4gb,Cuckoo tuned,first_dim_core,6360.4408103125,16
 Wisconsin,4gb,Cuckoo tuned,first_dim_finalize,590.2167194375,16
 Wisconsin,4gb,Cuckoo tuned,other_dim,1298.569803125,16
 Wisconsin,4gb,Cuckoo tuned,mod_switch,3.817297125,16
+Wisconsin,4gb,TreePIR,query_ms,122.4169375,16
+Wisconsin,4gb,TreePIR,query_serialize_ms,5.504625,16
+Wisconsin,4gb,TreePIR,server_generate_reply_ms,101103.648875,16
+Wisconsin,4gb,TreePIR,server_expansion_ms,20227.189125,16
+Wisconsin,4gb,TreePIR,server_query_ntt_ms,3522.6003125,16
+Wisconsin,4gb,TreePIR,server_database_ntt_ms,6250.3100625,16
+Wisconsin,4gb,TreePIR,server_multiply_accumulate_ms,67864.26425000001,16
+Wisconsin,4gb,TreePIR,server_inverse_ntt_ms,1703.669,16
+Wisconsin,4gb,TreePIR,server_recursive_decomposition_modswitch_ms,1535.1015625,16
+Wisconsin,4gb,TreePIR,server_modswitch_ms,81.8995625,16
+Wisconsin,4gb,TreePIR,response_serialize_ms,2.61875,16
+Wisconsin,4gb,TreePIR,decode_ms,82.266875,16
 Wisconsin,4gb,Flat,convert,534.6857746875,16
 Wisconsin,4gb,Flat,expand,2218.46385075,16
 Wisconsin,4gb,Flat,first_dim_core,54833.5588983125,16
