@@ -33,3 +33,18 @@ m32 noise before/after projection, pooling and modulus switch. These are
 diagnostic observations, not formal performance samples or a forged noise-gate
 certificate. The threshold remains1. Future benchmark failure messages now
 include candidate, phase/block, leaf, layout, budget and maximum residual.
+
+## Diagnostic launch
+
+Revision247a8c6 was deployed under
+`/users/zcy05331/generic-superrecord-bench-20260904/noise-diagnostic-20260906`,
+in tmux `generic-noise-diagnostic`. Native build and small-H smoke succeeded.
+Six fixed shapes are being checked, three original warmup leaves each, with
+fresh key/query randomness per isolated shape. Original parent18736 remains
+held and the failed output remains untouched.
+
+Independent source review confirmed the streaming path uses the same m32
+packing, selection, rotation, projection and pooling primitives as the formal
+path. Raw intermediate projection budgets are explicitly labeled raw and are
+not treated as normalized preflight budgets. The final post-switch threshold
+is the pass/fail criterion.

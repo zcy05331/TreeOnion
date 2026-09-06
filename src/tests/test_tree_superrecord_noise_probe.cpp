@@ -89,6 +89,7 @@ struct ProbeResult {
 };
 
 using PhaseResidualFn = std::function<std::vector<uint64_t>(const PirClient &, const PirParams &, const RlweCt &, const RlwePt &)>;
+using CachedM32Levels = std::vector<std::vector<LevelPlaneM32>>;
 
 size_t bit_width_minus_one(size_t value, const char *label) {
   require_test(value > 0 && std::has_single_bit(value),
@@ -269,7 +270,26 @@ void observe_small_q_budget(QueryObservation &query, const std::string &stage,
   query.budgets.push_back(std::move(obs));
 }
 
-PathResponse answer_path_m32_probe_checked(const EntrySource &source,
+CachedM32Levels build_cached_m32_level_views(const EntrySource &source,
+                                            const TreeParams &params,
+                                            const PirParams &scheme) {
+  CachedM32Levels levels;
+  levels.reserve(params.shape.path_levels);
+  for (size_t level = 0; level <= params.shape.tree_height; ++level) {
+    const std::vector<LevelPlaneDatabase> planes =
+        pack_level_planes(params, source, level);
+    std::vector<LevelPlaneM32> views;
+    views.reserve(planes.size());
+    for (const LevelPlaneDatabase &plane : planes) {
+      views.push_back(build_level_plane_m32(plane, params.level_plans[level],
+                                            scheme));
+    }
+    levels.push_back(std::move(views));
+  }
+  return levels;
+}
+
+PathResponse answer_path_m32_probe_checked(const CachedM32Levels &m32_levels,
                                            ExpandedQuery &expanded,
                                            PirClient &client,
                                            PirServer &server,
@@ -301,13 +321,14 @@ PathResponse answer_path_m32_probe_checked(const EntrySource &source,
 
   std::span<GSWCt> sigma(expanded.sigma_selectors);
   const bvks::BvGaloisKeys &keys = session.material->bv_galois_keys;
+  require_test(m32_levels.size() == shape.path_levels,
+               "cached M32 levels do not match path height");
   for (size_t level = 0; level <= shape.tree_height; ++level) {
     const tree_superrecord::LevelPlan &plan = params.level_plans[level];
-    const std::vector<LevelPlaneDatabase> planes =
-        pack_level_planes(params, source, level);
+    require_test(m32_levels[level].size() == shape.plane_count,
+                 "cached M32 plane count does not match shape");
     for (size_t plane = 0; plane < shape.plane_count; ++plane) {
-      const LevelPlaneM32 m32 = build_level_plane_m32(planes[plane], plan,
-                                                     scheme);
+      const LevelPlaneM32 &m32 = m32_levels[level][plane];
       RlweCt ct = select_level_m32(m32, plan, pyramid_m32, sigma, server,
                                    params, scheme, &obs.timing);
       observe_budget(obs, "select_level_m32 level " + std::to_string(level) +
@@ -471,6 +492,7 @@ bool selected_bundle_matches(const std::vector<std::vector<EntryBits>> &lanes,
 
 QueryObservation run_query_probe(size_t index, size_t leaf,
                                  const EntrySource &source,
+                                 const CachedM32Levels &m32_levels,
                                  PirClient &client, PirServer &server,
                                  const TaggedTreeSessionKeys &session,
                                  const TreeParams &params,
@@ -495,7 +517,7 @@ QueryObservation run_query_probe(size_t index, size_t leaf,
                      expanded.alpha[i], threshold_bits);
     }
     PathResponse response = answer_path_m32_probe_checked(
-        source, expanded, client, server, session, params, scheme, obs,
+        m32_levels, expanded, client, server, session, params, scheme, obs,
         threshold_bits, phase_residuals);
     compare_response_coefficients(obs, response, client, source, params,
                                   scheme, leaf, phase_residuals);
@@ -670,10 +692,14 @@ ProbeResult run_probe(const PhaseResidualFn &phase_residuals) {
       create_tagged_tree_session_keys(client, params, scheme);
   set_tree_client_session_keys(server, params, scheme, session);
 
+  const CachedM32Levels m32_levels =
+      build_cached_m32_level_views(source, params, scheme);
+
   const size_t query_count = std::min<size_t>(3, shape.leaves.size());
   for (size_t i = 0; i < query_count; ++i) {
-    QueryObservation obs = run_query_probe(i, shape.leaves[i], source, client,
-                                           server, session, params, scheme,
+    QueryObservation obs = run_query_probe(i, shape.leaves[i], source,
+                                           m32_levels, client, server,
+                                           session, params, scheme,
                                            result.fixed_threshold_bits,
                                            phase_residuals);
     result.all_correct = result.all_correct && obs.decrypt_ok;
