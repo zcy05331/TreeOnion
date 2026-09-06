@@ -80,6 +80,7 @@ void PirTest::run_test(const std::string &test_name) {
   else if (test_name == "tree_superrecord_e2e")     test_tree_superrecord_e2e();
   else if (test_name == "tree_superrecord_noise")   test_tree_superrecord_noise();
   else if (test_name == "tree_superrecord_kernel")  test_tree_superrecord_kernel();
+  else if (test_name == "tree_superrecord_noise_probe") test_tree_superrecord_noise_probe();
   else if (test_name == "tree_superrecord_bench")   test_tree_superrecord_benchmark();
   else if (test_name == "decrypt_mod_q")     test_decrypt_mod_q();
   else if (test_name == "mod_switch")        test_mod_switch();

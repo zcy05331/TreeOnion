@@ -130,6 +130,7 @@ class PirTest {
     void test_tree_superrecord_e2e();
     void test_tree_superrecord_noise();
     void test_tree_superrecord_kernel();
+    void test_tree_superrecord_noise_probe();
     // Timed: planner candidates for 32-byte nodes against the legacy g=32 path.
     void test_tree_superrecord_benchmark();
     void test_mod_switch();

@@ -18,7 +18,7 @@ exited process did not preserve its client key/query randomness for exact replay
 Budget calculation (src/client.cpp) is integer log2(q_small/(2*t*max_residual)),
 where residual is measured against the decoded coefficient over the entire
 response polynomial. For this fixed config: q_small=4169729, t=4099,
-decoder boundary=508.6282 and1-bit boundary=254.3141. Correct selected entries
+decoder boundary=508.6276 and1-bit boundary=254.3138. Correct selected entries
 and a budget below1 can therefore coexist.
 
 Target preflight uses a finite set of boundary leaves/patterns and fresh

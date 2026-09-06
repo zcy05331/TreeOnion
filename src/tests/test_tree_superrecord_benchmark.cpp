@@ -1281,7 +1281,8 @@ void PirTest::test_tree_superrecord_benchmark() {
       r.scan_bytes = cand.metrics.physical_scan_bytes;
       r.plaintexts = cand.metrics.physical_matrix_cells;
       r.query_bytes = scheme.get_BFV_size(true);
-      runners[index] = [&, params, session, noise_result, server_ptr, db, source](size_t leaf) {
+      runners[index] = [&, params, session, noise_result, server_ptr, db, source,
+                        candidate_label = r.label](size_t leaf) {
         Sample sample; sample.leaf = leaf;
         auto start = Clock::now();
         auto query = make_query(client, session, scheme, params, leaf);
@@ -1297,7 +1298,25 @@ void PirTest::test_tree_superrecord_benchmark() {
           require_test(decoded.entries[level] == source(level, leaf >> (params.shape.tree_height-level)),
                        "generic path entry mismatch");
         sample.min_budget_bits = decoded.min_budget_bits; sample.max_noise = decoded.max_noise;
-        require_test(sample.min_budget_bits >= static_cast<int>(policy.min_noise_margin), "measured noise margin failed");
+        if (sample.min_budget_bits < static_cast<int>(policy.min_noise_margin)) {
+          std::ostringstream message;
+          message << "measured noise margin failed: candidate=" << candidate_label
+                  << " leaf=" << leaf
+                  << " h=" << params.shape.bundle_arity
+                  << " G=" << params.shape.record_coeffs
+                  << " P=" << params.shape.plane_count
+                  << " N0=" << params.shape.N0
+                  << " b=" << params.shape.beta_bits
+                  << " h_q=" << params.shape.expansion_height
+                  << " min_budget_bits=" << sample.min_budget_bits
+                  << " required_budget_bits=" << policy.min_noise_margin
+                  << " max_residual=" << sample.max_noise
+                  << " decoder_bound="
+                  << static_cast<double>(scheme.get_small_q()) /
+                         (2.0 * static_cast<double>(scheme.get_plain_mod()))
+                  << " selected_path_correct=true";
+          throw std::runtime_error(message.str());
+        }
         const std::array<TreeStageDuration,10> stages = {timing.query_expand,timing.selector_completion,
             timing.alpha_prepare,timing.alpha_scan,timing.first_dim_finalize,timing.beta_fold,
             timing.private_rotate,timing.projection,timing.path_pack,timing.modulus_switch};
@@ -1320,7 +1339,16 @@ void PirTest::test_tree_superrecord_benchmark() {
       std::shuffle(active.begin(),active.end(),rng);
       block_orders.push_back(active);
       for (size_t index : active) {
-        Sample sample = runners[index](leaf);
+        Sample sample;
+        try {
+          sample = runners[index](leaf);
+        } catch (const std::exception &error) {
+          throw std::runtime_error(
+              "generic block failure: phase=" +
+              std::string(measured ? "measured" : "warmup") +
+              " block=" + std::to_string(block) +
+              " row_id=" + rows[index].row_id + ": " + error.what());
+        }
         if (measured) {
           sample.block_id = block-kWarmups;
           rows[index].samples.push_back(std::move(sample));
