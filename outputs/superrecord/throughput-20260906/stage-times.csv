@@ -194,3 +194,49 @@ Wisconsin,1gb,Flat,first_dim_query_ntt,169.05164675,16
 Wisconsin,1gb,Flat,first_dim_query_pack,452.1184545,16
 Wisconsin,1gb,Flat,mod_switch,2.2924415625,16
 Wisconsin,1gb,Flat,other_dim,2688.814982625,16
+Wisconsin,4gb,Generic best h3,expand,69.14631833,100
+Wisconsin,4gb,Generic best h3,complete,42.734109360000005,100
+Wisconsin,4gb,Generic best h3,prepare,33.61504143,100
+Wisconsin,4gb,Generic best h3,scan,2054.6228055,100
+Wisconsin,4gb,Generic best h3,finalize,271.55930437,100
+Wisconsin,4gb,Generic best h3,fold,665.9604067800001,100
+Wisconsin,4gb,Generic best h3,rotate,48.73272488,100
+Wisconsin,4gb,Generic best h3,project,35.387649190000005,100
+Wisconsin,4gb,Generic best h3,pack,0.29131746,100
+Wisconsin,4gb,Generic best h3,switch,0.09619199,100
+Wisconsin,4gb,Generic fastest h1,expand,91.95977307999999,100
+Wisconsin,4gb,Generic fastest h1,complete,44.54023786,100
+Wisconsin,4gb,Generic fastest h1,prepare,50.17992821,100
+Wisconsin,4gb,Generic fastest h1,scan,2481.27039327,100
+Wisconsin,4gb,Generic fastest h1,finalize,206.29328647999998,100
+Wisconsin,4gb,Generic fastest h1,fold,501.17125964,100
+Wisconsin,4gb,Generic fastest h1,rotate,95.57817975,100
+Wisconsin,4gb,Generic fastest h1,project,70.37457605,100
+Wisconsin,4gb,Generic fastest h1,pack,0.43819094,100
+Wisconsin,4gb,Generic fastest h1,switch,0.09625427,100
+Wisconsin,4gb,Layerwise tuned,convert,157.62189504,100
+Wisconsin,4gb,Layerwise tuned,expand,509.53432904,100
+Wisconsin,4gb,Layerwise tuned,first_dim_core,2153.35098631,100
+Wisconsin,4gb,Layerwise tuned,first_dim_finalize,225.3496745,100
+Wisconsin,4gb,Layerwise tuned,first_dim_query_ntt,42.944543890000006,100
+Wisconsin,4gb,Layerwise tuned,first_dim_query_pack,105.57811207,100
+Wisconsin,4gb,Layerwise tuned,mod_switch,1.90432814,100
+Wisconsin,4gb,Layerwise tuned,other_dim,501.51340454999996,100
+Wisconsin,4gb,Tree g=32,fold,675.2555816299999,100
+Wisconsin,4gb,Tree g=32,pack,0.1411536,100
+Wisconsin,4gb,Tree g=32,project,18.400488969999998,100
+Wisconsin,4gb,Tree g=32,pyramid,58.089411309999996,100
+Wisconsin,4gb,Tree g=32,query_expand,84.14245741999999,100
+Wisconsin,4gb,Tree g=32,rotate,25.05756884,100
+Wisconsin,4gb,Tree g=32,scan_core,3285.73215265,100
+Wisconsin,4gb,Tree g=32,scan_finalize,499.23893464,100
+Wisconsin,4gb,Tree g=32,selector_completion,28.90017008,100
+Wisconsin,4gb,Tree g=32,switch,0.09635811,100
+Wisconsin,4gb,Cuckoo tuned,expand,3068.8622646875,16
+Wisconsin,4gb,Cuckoo tuned,convert,544.8481598125001,16
+Wisconsin,4gb,Cuckoo tuned,first_dim_query_ntt,281.146701125,16
+Wisconsin,4gb,Cuckoo tuned,first_dim_query_pack,579.96956675,16
+Wisconsin,4gb,Cuckoo tuned,first_dim_core,6360.4408103125,16
+Wisconsin,4gb,Cuckoo tuned,first_dim_finalize,590.2167194375,16
+Wisconsin,4gb,Cuckoo tuned,other_dim,1298.569803125,16
+Wisconsin,4gb,Cuckoo tuned,mod_switch,3.817297125,16
