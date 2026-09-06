@@ -21,6 +21,7 @@ typedef unsigned __int128 uint128_t;
 // aliases.
 //   CONFIG_N2048_K1        K=1, N=2048, log Q ≈ 60.
 //   CONFIG_N2048_K1_COMP   K=1 composite split (q1*q2 ≈ 2^58, 29+29).
+//   CONFIG_N2048_K1_COMP_T257 same composite arithmetic, 8-bit payloads at t=257.
 //   CONFIG_N2048_K2_MP     K=2, N=2048, log Q ≈ 58.
 //   CONFIG_N4096_K2_MP     K=2, N=4096, log Q ≈ 120.
 //
@@ -35,6 +36,7 @@ typedef unsigned __int128 uint128_t;
 // single-mod K=1 modulus, but the first-dim matmul splits each NTT coefficient
 // into (mod q1, mod q2) for 32x32->64 multiplies.
 #define CONFIG_N2048_K1_COMP     3
+#define CONFIG_N2048_K1_COMP_T257 4
 #ifndef ACTIVE_CONFIG
 #define ACTIVE_CONFIG CONFIG_N2048_K1
 #endif
@@ -74,7 +76,7 @@ namespace DBConsts {
   constexpr bool CompositeFirstDim = false;
   constexpr std::array<size_t, 2> FirstDimRNSMods = {0, 0};
 
-#elif ACTIVE_CONFIG == CONFIG_N2048_K1_COMP
+#elif ACTIVE_CONFIG == CONFIG_N2048_K1_COMP || ACTIVE_CONFIG == CONFIG_N2048_K1_COMP_T257
   // K=1 composite paper path: RnsMods describes one logical q≈2^58, while
   // FirstDimRNSMods supplies the real 29-bit CRT limbs used only inside the
   // first-dimension matmul. This keeps Algorithm 1-4 on the single-mod layout
@@ -84,7 +86,8 @@ namespace DBConsts {
   constexpr size_t L_KEY        = 10;
   constexpr size_t L_KS         = 8;
   constexpr size_t TREE_HEIGHT  = 10;
-  constexpr size_t PlainMod     = 13;
+  // The t257 comparison changes only plaintext capacity (8-bit digits).
+  constexpr size_t PlainMod     = ACTIVE_CONFIG == CONFIG_N2048_K1_COMP_T257 ? 9 : 13;
   constexpr size_t SmallQWidth  = 22;
   // Logical (single) RNS view: rns_mods_ holds {q1*q2}, ~58 bits. The 58 here
   // is the bit width passed to inter_coeff_t / db_coeff_t selectors; actual
