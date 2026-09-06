@@ -10,7 +10,6 @@ META="$RUN_ROOT/metadata"
 mkdir -p "$META" "$RUN_ROOT/deps"
 echo "$$" > "$META/controller.pid"
 echo waiting_for_generic > "$META/queue.status"
-trap 'echo failed > "$META/queue.status"' ERR
 require_held_parent() {
   python3 - "$HELD_PARENT_PID" <<'PY_HELD'
 from pathlib import Path
@@ -23,6 +22,21 @@ if state != 'T' or 'run_cloudlab_profile_matrix.sh' not in command or 'revision-
 PY_HELD
 }
 require_held_parent
+finish() {
+  local code=$?
+  trap - EXIT
+  echo "$code" > "$META/queue.exit-code.txt"
+  if require_held_parent; then
+    kill -CONT "$HELD_PARENT_PID"
+    if [[ "$code" == 0 ]]; then echo complete_parent_resumed > "$META/queue.status";
+    else echo failed_parent_resumed > "$META/queue.status"; fi
+  else
+    echo failed_parent_state_changed > "$META/queue.status"
+    code=1
+  fi
+  exit "$code"
+}
+trap finish EXIT
 python3 - "$GENERIC_PID" <<'PY'
 from pathlib import Path
 import sys,time
@@ -34,7 +48,7 @@ while status.exists():
     time.sleep(45)
 PY
 # The wrapper writes process metadata just after its worker exits.
-python3 - "$BASE" <<'PY'
+python3 - "$BASE" "$META" <<'PY'
 import json,sys,time
 from pathlib import Path
 base=Path(sys.argv[1])
@@ -42,10 +56,18 @@ process=base/'outputs/profiling/8gb/generic-process.json'
 for _ in range(30):
     if process.exists(): break
     time.sleep(1)
-if json.loads(process.read_text())['exit_code'] != 0:
-    raise RuntimeError('Generic worker failed; keep held parent for inspection')
+result=json.loads(process.read_text())
+record={'exit_code':result['exit_code'],
+        'formal_result_status':'process_succeeded' if result['exit_code']==0 else 'failed',
+        'independent_treepir_work_may_continue':True}
+(Path(sys.argv[2])/'generic-prerequisite.json').write_text(json.dumps(record,indent=2)+'\n')
+(Path(sys.argv[2])/'generic-exit-code.txt').write_text(str(result['exit_code'])+'\n')
 PY
-python3 "$SOURCE/scripts/summarize_cloudlab_profiles.py" --validate "$BASE/outputs/profiling/8gb/generic.json" --trials 100 --leaf-count 134217728
+if [[ "$(cat "$META/generic-exit-code.txt")" == 0 ]]; then
+  python3 "$SOURCE/scripts/summarize_cloudlab_profiles.py" --validate "$BASE/outputs/profiling/8gb/generic.json" --trials 100 --leaf-count 134217728
+else
+  echo "Generic failed; its result remains failed. Continuing independent TreePIR work."
+fi
 export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1
 export SUPERRECORD_MEMORY_BYTES=343597383680
 export SUPERRECORD_COMMIT=fb793878713fc017e228af15750a4d247c2ea6d1
@@ -93,7 +115,5 @@ for scale,height,trials,stem in [('1gb',24,16,'treepir_tuned'),('8gb',27,100,'tr
     for a,b in [('formal.json',stem+'.json'),('formal-process.json',stem+'-process.json'),('formal.log',stem+'.log')]:
         shutil.copyfile(source/a,dest/b)
 PY
-# The old controller reuses the validated 8 GiB result, then runs its Flat row.
-require_held_parent
-kill -CONT "$HELD_PARENT_PID"
-echo parent_resumed > "$META/queue.status"
+# The EXIT handler resumes the old controller. It retains the Generic failure,
+# reuses the validated TreePIR result when available, and continues to Flat.
