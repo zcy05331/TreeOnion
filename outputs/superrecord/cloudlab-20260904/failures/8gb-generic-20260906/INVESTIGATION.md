@@ -48,3 +48,26 @@ packing, selection, rotation, projection and pooling primitives as the formal
 path. Raw intermediate projection budgets are explicitly labeled raw and are
 not treated as normalized preflight budgets. The final post-switch threshold
 is the pass/fail criterion.
+
+## Confirmed fixture coverage weakness
+
+`fixture-coverage.json` evaluates the same source-pattern and pairing formulas.
+For all six shapes, structured patterns0/2/3/4 repeat with periodh*rho nodes,
+which is exactly one full plaintext block. Equal full plaintext blocks produce
+equal first-dimension ciphertext rows; a CMux of equal rows has zero difference
+and does not exercise its data-dependent selector-error term. Tail/padding
+rows can still differ, so this is not a claim that every fold is noise-free.
+
+Pattern1 is the actual deterministic random-looking benchmark database. The
+h1/G8/P3 shape sees that source only atleaf1; the other five shapes see it at
+leaf1 or2 andthe final leaf. The first scheduled warmup leaf15830119 is absent.
+This is a concrete coverage gap, not proof of which layout caused the historical
+exception. Fresh ciphertext randomness is another difference between those
+preflight fixtures andthe later warmup.
+
+The first diagnostic attempt was interrupted for redundant preprocessing before
+using any outcome to select a retry. Revision8af612c caches one candidate's
+M32 data across three queries and runs in a separate preserved directory:
+`/users/zcy05331/generic-superrecord-bench-20260904/noise-diagnostic-cached-20260906`.
+The cryptographic operations, original six layouts, three leaves andthreshold1
+are unchanged. Results remain diagnostic only.
