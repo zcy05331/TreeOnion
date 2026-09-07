@@ -88,7 +88,8 @@ NoiseCheckpoint selector_probe_checkpoint(const std::string &stage,
   return remaining_budget_checkpoint(stage, client, out);
 }
 
-double normalized_margin(NoiseCheckpoint &checkpoint) {
+double normalized_margin(NoiseCheckpoint &checkpoint,
+                         bool require_nonnegative_margin) {
   require(std::isfinite(checkpoint.value),
           "noise checkpoint value must be finite");
   if (checkpoint.kind == NoiseMeasureKind::RemainingBudgetBits) {
@@ -97,13 +98,24 @@ double normalized_margin(NoiseCheckpoint &checkpoint) {
   } else {
     require(std::isfinite(checkpoint.decoder_threshold),
             "absolute-noise threshold must be finite");
-    require(checkpoint.value < checkpoint.decoder_threshold,
-            "absolute noise exceeds the decoder threshold");
     checkpoint.margin = checkpoint.decoder_threshold - checkpoint.value;
   }
-  require(std::isfinite(checkpoint.margin) && checkpoint.margin >= 0,
-          "noise checkpoint margin must be finite and nonnegative");
+  require(std::isfinite(checkpoint.margin),
+          "noise checkpoint margin must be finite");
+  if (require_nonnegative_margin) {
+    require(checkpoint.margin >= 0,
+            "noise checkpoint margin must be finite and nonnegative");
+  }
   return checkpoint.margin;
+}
+
+bool noise_margin_policy_passes(const CandidateNoiseResult &result) {
+  if (!std::isfinite(result.min_noise_margin) || result.min_noise_margin < 0 ||
+      !std::isfinite(result.minimum_margin)) {
+    return false;
+  }
+  return result.min_noise_margin == 0 ||
+         result.minimum_margin >= result.min_noise_margin;
 }
 
 }  // namespace
@@ -117,10 +129,7 @@ bool noise_result_unlocks_candidate(const CandidateNoiseResult &result,
          result.eligibility == NoiseEligibility::Passed &&
          result.decrypts_correctly &&
          !result.checkpoints.empty() &&
-         std::isfinite(result.min_noise_margin) &&
-         result.min_noise_margin >= 0 &&
-         std::isfinite(result.minimum_margin) &&
-         result.minimum_margin >= result.min_noise_margin &&
+         noise_margin_policy_passes(result) &&
          result.observed_key_coverage_matches_tag &&
          observed_coverage_matches_tag(result.observed_key_coverage, params);
 }
@@ -144,10 +153,7 @@ void require_trusted_target_noise_result(const CandidateNoiseResult &result,
           "target-shape noise fixture did not decrypt correctly");
   require(!result.checkpoints.empty(),
           "target-shape noise gate has no checkpoints");
-  require(std::isfinite(result.min_noise_margin) &&
-              result.min_noise_margin >= 0 &&
-              std::isfinite(result.minimum_margin) &&
-              result.minimum_margin >= result.min_noise_margin,
+  require(noise_margin_policy_passes(result),
           "target-shape noise margin is below policy");
   require(result.observed_key_coverage_matches_tag,
           "noise fixture key coverage does not match plan");
@@ -181,15 +187,17 @@ CandidateNoiseResult build_target_noise_result(
   result.observed_key_coverage_matches_tag =
       observed_coverage_matches_tag(result.observed_key_coverage, params);
   result.checkpoints = std::move(checkpoints);
+  const bool require_nonnegative_margin = min_noise_margin > 0;
   result.minimum_margin = std::numeric_limits<double>::infinity();
   for (NoiseCheckpoint &checkpoint : result.checkpoints) {
-    result.minimum_margin =
-        std::min(result.minimum_margin, normalized_margin(checkpoint));
+    result.minimum_margin = std::min(
+        result.minimum_margin,
+        normalized_margin(checkpoint, require_nonnegative_margin));
   }
   if (result.checkpoints.empty()) result.minimum_margin = 0;
   result.eligibility =
       result.decrypts_correctly && result.observed_key_coverage_matches_tag &&
-              result.minimum_margin >= min_noise_margin
+              noise_margin_policy_passes(result)
           ? NoiseEligibility::Passed
           : NoiseEligibility::Failed;
   return result;

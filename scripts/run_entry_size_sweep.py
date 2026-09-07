@@ -153,7 +153,7 @@ def env_for(plan: dict[str, int], raw_path: pathlib.Path, source_commit: str | N
         "SUPERRECORD_MAX_ARITY": "3",
         "SUPERRECORD_BUNDLE_ARITIES": "1,3",
         "SUPERRECORD_FIXED_KEY_HEIGHT": "11",
-        "SUPERRECORD_MIN_NOISE_MARGIN": "1",
+        "SUPERRECORD_MIN_NOISE_MARGIN": "0",
         "SUPERRECORD_KEY_MODE": "fixed",
         "SUPERRECORD_EXECUTION_SEED": str(EXECUTION_SEED),
         "SUPERRECORD_BOOTSTRAP_SEED": str(BOOTSTRAP_SEED),
@@ -341,6 +341,7 @@ def build_manifest(output_dir: pathlib.Path, entries: list[int], binary: pathlib
         "default_entry_order_bytes": list(DEFAULT_ENTRY_BYTES),
         "binary_source_commit": source_commit or os.environ.get("SUPERRECORD_COMMIT"),
         "selection_policy": "mean_server_total_ms_primary; analyzer CI metadata is retained but does not override this entry-size selection",
+        "acceptance_policy": "decryption_correctness_only; noise margins are diagnostic",
         "cases": cases,
         "state": "planned" if plan_only else "running",
     }

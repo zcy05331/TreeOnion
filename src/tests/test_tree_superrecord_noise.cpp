@@ -72,6 +72,33 @@ void PirTest::test_tree_superrecord_noise() {
       std::span<const TargetNoiseCase>(&target_case, 1), 100.0);
   require_test(impossible_margin.eligibility == NoiseEligibility::Failed,
                "impossible noise margin fails the target fixture");
+  CandidateNoiseResult zero_margin_low_budget = passed;
+  zero_margin_low_budget.min_noise_margin = 0.0;
+  zero_margin_low_budget.minimum_margin = -2.0;
+  zero_margin_low_budget.eligibility = NoiseEligibility::Passed;
+  zero_margin_low_budget.checkpoints.front().kind =
+      NoiseMeasureKind::RemainingBudgetBits;
+  zero_margin_low_budget.checkpoints.front().value = -2.0;
+  zero_margin_low_budget.checkpoints.front().decoder_threshold = 0.0;
+  zero_margin_low_budget.checkpoints.front().margin = -2.0;
+  require_test(noise_result_unlocks_candidate(zero_margin_low_budget, params,
+                                              client.get_client_id()),
+               "zero-margin noise gate admits correct decrypt with low diagnostic budget");
+  require_test(!throws_invalid([&] {
+                 require_target_noise_gate(zero_margin_low_budget, params,
+                                           client.get_client_id());
+               }),
+               "zero-margin trusted gate admits correct decrypt with low diagnostic budget");
+  CandidateNoiseResult zero_margin_bad_decrypt = zero_margin_low_budget;
+  zero_margin_bad_decrypt.decrypts_correctly = false;
+  require_test(!noise_result_unlocks_candidate(zero_margin_bad_decrypt, params,
+                                               client.get_client_id()),
+               "zero-margin noise gate still rejects failed decrypt diagnostics");
+  CandidateNoiseResult positive_margin_low_budget = zero_margin_low_budget;
+  positive_margin_low_budget.min_noise_margin = 1.0;
+  require_test(!noise_result_unlocks_candidate(positive_margin_low_budget, params,
+                                               client.get_client_id()),
+               "positive-margin noise gate still enforces numeric margin");
   CandidateNoiseResult empty_checkpoints = passed;
   empty_checkpoints.checkpoints.clear();
   require_test(throws_invalid([&] {

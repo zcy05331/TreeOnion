@@ -72,6 +72,9 @@ CandidateNoiseResult run_target_shape_noise_gate(
     PirClient &client, PirServer &query_eval_server,
     const TaggedTreeSessionKeys &session, const TreeParams &params,
     const PirParams &runtime_scheme, std::span<const TargetNoiseCase> cases,
+    // Zero means decrypt-correctness admission: keep all diagnostics, but do
+    // not reject solely because a checkpoint has no remaining numeric margin.
+    // Positive values retain the strict minimum-margin gate.
     double min_noise_margin = 0);
 
 }  // namespace tree_superrecord

@@ -122,7 +122,7 @@ class EntryPlanTests(unittest.TestCase):
         self.assertEqual(first_env['SUPERRECORD_MAX_ARITY'], '3')
         self.assertEqual(first_env['SUPERRECORD_BUNDLE_ARITIES'], '1,3')
         self.assertEqual(first_env['SUPERRECORD_FIXED_KEY_HEIGHT'], '11')
-        self.assertEqual(first_env['SUPERRECORD_MIN_NOISE_MARGIN'], '1')
+        self.assertEqual(first_env['SUPERRECORD_MIN_NOISE_MARGIN'], '0')
         self.assertEqual(first_env['SUPERRECORD_COMMIT'], 'fb79387')
 
 

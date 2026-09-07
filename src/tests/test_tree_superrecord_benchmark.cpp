@@ -667,7 +667,11 @@ void write_run_json(const std::string &path, size_t entry_bits, size_t L,
                           : std::optional<size_t>(
                                 policy.max_steady_state_bytes));
   out << ", \"min_noise_margin\": " << policy.min_noise_margin
-      << ", \"key_registration_mode\": ";
+      << ", \"acceptance_policy\": ";
+  json_string(out, policy.min_noise_margin == 0
+                       ? "decryption_correctness_only"
+                       : "decryption_and_minimum_noise_margin");
+  out << ", \"key_registration_mode\": ";
   json_string(out, key_mode_name(policy.eval_key_registration));
   out << ", \"fixed_session_key_height\": " << policy.fixed_session_key_height
       << ", \"expansion_heights\": ";
@@ -949,7 +953,7 @@ void PirTest::test_tree_superrecord_benchmark() {
   policy.max_steady_state_bytes =
       env_size2("SUPERRECORD_MEMORY_BYTES", "SUPERRECORD_MAX_STEADY_STATE_BYTES",
                 std::numeric_limits<size_t>::max());
-  policy.min_noise_margin = env_size("SUPERRECORD_MIN_NOISE_MARGIN", 1);
+  policy.min_noise_margin = env_size("SUPERRECORD_MIN_NOISE_MARGIN", 0);
   policy.expansion_heights = env_size_list("SUPERRECORD_EXPANSION_HEIGHTS");
   if (policy.expansion_heights.empty()) {
     policy.expansion_heights = default_expansion_heights(log_n);
@@ -1215,7 +1219,8 @@ void PirTest::test_tree_superrecord_benchmark() {
             for (size_t j = 0; j < tree.g; ++j)
               require_test(pt.data[response.level_offsets[level] + j * tree.rho] ==
                                chunk_source(level, leaf >> (tree.L - level), j), "legacy path chunk mismatch");
-          require_test(sample.min_budget_bits >= static_cast<int>(policy.min_noise_margin), "legacy noise margin failed");
+          if (policy.min_noise_margin > 0)
+            require_test(sample.min_budget_bits >= static_cast<int>(policy.min_noise_margin), "legacy noise margin failed");
           const std::array<const char *, 7> names = {TREE_PYRAMID_TIME, TREE_SCAN_TIME, TREE_FOLD_TIME,
               TREE_ROTATE_TIME, TREE_PROJECT_TIME, TREE_PACK_TIME, TREE_SWITCH_TIME};
           const std::array<size_t, 7> slots = {2,3,5,6,7,8,9};
@@ -1298,7 +1303,8 @@ void PirTest::test_tree_superrecord_benchmark() {
           require_test(decoded.entries[level] == source(level, leaf >> (params.shape.tree_height-level)),
                        "generic path entry mismatch");
         sample.min_budget_bits = decoded.min_budget_bits; sample.max_noise = decoded.max_noise;
-        if (sample.min_budget_bits < static_cast<int>(policy.min_noise_margin)) {
+        if (policy.min_noise_margin > 0 &&
+            sample.min_budget_bits < static_cast<int>(policy.min_noise_margin)) {
           std::ostringstream message;
           message << "measured noise margin failed: candidate=" << candidate_label
                   << " leaf=" << leaf

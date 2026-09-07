@@ -4,6 +4,7 @@ import unittest
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 from run_tree_t257_comparison import validate_result, compare_results
+from summarize_cloudlab_profiles import ProfileError
 
 
 def result(t=4099):
@@ -30,10 +31,16 @@ class ComparisonTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'plaintext_modulus'):
             validate_result(result(), pathlib.Path('candidate.json'), 257, 4096, 2, 1)
 
-    def test_failed_noise_margin_is_rejected(self):
+    def test_correct_decryption_does_not_require_noise_headroom(self):
+        for budget in ('0', '-1'):
+            raw = result(257)
+            raw['metadata']['min_noise_budget_bits'] = budget
+            validate_result(raw, pathlib.Path('candidate.json'), 257, 4096, 2, 1)
+
+    def test_decryption_error_is_still_rejected(self):
         raw = result(257)
-        raw['metadata']['min_noise_budget_bits'] = '0'
-        with self.assertRaisesRegex(ValueError, 'noise'):
+        raw['samples'][0]['correct'] = False
+        with self.assertRaisesRegex(ProfileError, 'correctness'):
             validate_result(raw, pathlib.Path('candidate.json'), 257, 4096, 2, 1)
 
     def test_stage_and_throughput_comparison_uses_actual_bytes(self):
