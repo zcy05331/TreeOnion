@@ -1,0 +1,11 @@
+Running test: tree_superrecord_e2e
+==============================================================================
+                    test_tree_superrecord_e2e(Benchmark build)
+==============================================================================
+E=13 N=64 h=3 G=2 b=0 N0=1 m=5 chunks=1 leaves=7 min budget 3 bits
+E=256 N=256 h=3 G=64 b=0 N0=3 m=7 chunks=1 leaves=11 min budget 3 bits
+E=256 N=1024 h=3 G=64 b=2 N0=3 m=9 chunks=1 leaves=11 min budget 3 bits
+E=13 N=8 h=8 G=4 b=0 N0=1 m=0 chunks=1 leaves=2 min budget 3 bits
+E=40 N=128 h=5 G=8 b=0 N0=1 m=5 chunks=1 leaves=7 min budget 3 bits
+E=4096 N=16 h=1 G=256 b=0 N0=2 m=4 chunks=2 leaves=6 min budget 3 bits
+E=30000 N=16 h=1 G=2048 b=2 N0=4 m=4 chunks=10 leaves=4 min budget 3 bits
