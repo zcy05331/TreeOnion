@@ -1,0 +1,15 @@
+Running test: tree_compress_bench
+==============================================================================
+                    test_tree_compress_benchmark(Benchmark build)
+==============================================================================
+Compressed-response noise: max 37 of bound 508
+Compressed-response noise: max 34 of bound 508
+Compressed-response noise: max 46 of bound 508
+tree compressed 32-byte-node benchmark: N=2^10 leaves, g=32, N0=16, b=0, rho=64, h_q=6, setup 1.66888 ms
+trials: 2 measured after 1 warmup
+client query avg 0.075229 ms
+server unpack (expand+convert) avg 18.9361 ms
+server compressed path avg 26.8744 ms
+server total avg 45.8105 ms
+client compressed decode avg 1.082 ms
+communication: compressed response 16520 B (struct wire model)

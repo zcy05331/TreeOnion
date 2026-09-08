@@ -1,0 +1,5 @@
+Running test: layer_layout_planner
+==============================================================================
+                    test_layer_layout_planner(Benchmark build)
+==============================================================================
+Error: latency priority keeps the faster layout despite extra padding

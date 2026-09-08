@@ -1,0 +1,46 @@
+-- Build type (CMAKE_BUILD_TYPE): Release
+-- The CXX compiler identification is AppleClang 17.0.0.17000603
+-- The C compiler identification is AppleClang 17.0.0.17000603
+-- Detecting CXX compiler ABI info
+-- Detecting CXX compiler ABI info - done
+-- Check for working CXX compiler: /usr/bin/arch - skipped
+-- Detecting CXX compile features
+-- Detecting CXX compile features - done
+-- Detecting C compiler ABI info
+-- Detecting C compiler ABI info - done
+-- Check for working C compiler: /usr/bin/arch - skipped
+-- Detecting C compile features
+-- Detecting C compile features - done
+-- Microsoft SEAL debug mode: OFF
+-- SEAL_USE_CXX17: ON
+-- SEAL_BUILD_DEPS: ON
+-- SEAL_USE_MSGSL: OFF
+-- SEAL_USE_ZLIB: OFF
+-- SEAL_USE_ZSTD: OFF
+-- SEAL_USE_INTEL_HEXL: OFF
+-- BUILD_SHARED_LIBS: OFF
+-- SEAL_THROW_ON_TRANSPARENT_CIPHERTEXT: ON
+-- SEAL_USE_GAUSSIAN_NOISE: OFF
+-- SEAL_DEFAULT_PRNG: Blake2xb
+-- SEAL_AVOID_BRANCHING: OFF
+-- x86intrin.h - found
+-- SEAL_USE_INTRIN: ON
+-- Performing Test SEAL_MEMSET_S_FOUND
+-- Performing Test SEAL_MEMSET_S_FOUND - Success
+-- Looking for explicit_bzero
+-- Looking for explicit_bzero - not found
+-- Looking for explicit_memset
+-- Looking for explicit_memset - not found
+-- SEAL_USE_MEMSET_S: ON
+-- SEAL_USE_EXPLICIT_BZERO: OFF
+-- SEAL_USE_EXPLICIT_MEMSET: OFF
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD - Success
+-- Found Threads: TRUE
+-- SEAL_BUILD_SEAL_C: OFF
+-- SEAL_BUILD_EXAMPLES: OFF
+-- SEAL_BUILD_TESTS: OFF
+-- SEAL_BUILD_BENCH: OFF
+-- Configuring done (6.4s)
+-- Generating done (0.0s)
+-- Build files have been written to: /Users/little_sun/Desktop/little_sun/26Summer/OnionPIRv2/.worktrees/generic-superrecord/.benchmarks/SEAL-4.0.0/build-x86_64

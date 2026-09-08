@@ -1,0 +1,147 @@
+{
+  "balanced_base_size": 9942053,
+  "balanced_larger_color_count": 23,
+  "checked_triples": 2781,
+  "color_sequence": [
+    {
+      "color": "A",
+      "color_id": 0,
+      "size": 9942053
+    },
+    {
+      "color": "B",
+      "color_id": 1,
+      "size": 9942053
+    },
+    {
+      "color": "C",
+      "color_id": 2,
+      "size": 9942053
+    },
+    {
+      "color": "D",
+      "color_id": 3,
+      "size": 9942053
+    },
+    {
+      "color": "E",
+      "color_id": 4,
+      "size": 9942054
+    },
+    {
+      "color": "F",
+      "color_id": 5,
+      "size": 9942054
+    },
+    {
+      "color": "G",
+      "color_id": 6,
+      "size": 9942054
+    },
+    {
+      "color": "H",
+      "color_id": 7,
+      "size": 9942054
+    },
+    {
+      "color": "I",
+      "color_id": 8,
+      "size": 9942054
+    },
+    {
+      "color": "J",
+      "color_id": 9,
+      "size": 9942054
+    },
+    {
+      "color": "K",
+      "color_id": 10,
+      "size": 9942054
+    },
+    {
+      "color": "L",
+      "color_id": 11,
+      "size": 9942054
+    },
+    {
+      "color": "M",
+      "color_id": 12,
+      "size": 9942054
+    },
+    {
+      "color": "N",
+      "color_id": 13,
+      "size": 9942054
+    },
+    {
+      "color": "O",
+      "color_id": 14,
+      "size": 9942054
+    },
+    {
+      "color": "P",
+      "color_id": 15,
+      "size": 9942054
+    },
+    {
+      "color": "Q",
+      "color_id": 16,
+      "size": 9942054
+    },
+    {
+      "color": "R",
+      "color_id": 17,
+      "size": 9942054
+    },
+    {
+      "color": "S",
+      "color_id": 18,
+      "size": 9942054
+    },
+    {
+      "color": "T",
+      "color_id": 19,
+      "size": 9942054
+    },
+    {
+      "color": "U",
+      "color_id": 20,
+      "size": 9942054
+    },
+    {
+      "color": "V",
+      "color_id": 21,
+      "size": 9942054
+    },
+    {
+      "color": "W",
+      "color_id": 22,
+      "size": 9942054
+    },
+    {
+      "color": "X",
+      "color_id": 23,
+      "size": 9942054
+    },
+    {
+      "color": "Y",
+      "color_id": 24,
+      "size": 9942054
+    },
+    {
+      "color": "Z",
+      "color_id": 25,
+      "size": 9942054
+    },
+    {
+      "color": "0",
+      "color_id": 26,
+      "size": 9942054
+    }
+  ],
+  "height": 27,
+  "leaf_count": 103,
+  "mismatch_count_reported": 0,
+  "mismatches": [],
+  "pass": true
+}

@@ -1,0 +1,39 @@
+{
+  "scheme": "legacy-tree-g32-compressed",
+  "leaf_count": 1024,
+  "node_entry_bits": 256,
+  "actual_logical_bytes": 32768,
+  "warmups": 1,
+  "measured_trials": 2,
+  "trial_seed": 7,
+  "diagnostic_non_comparable_32B_payload": false,
+  "mode": "compressed",
+  "stage_definitions": {
+    "query_expand": "ExpandBFV over the packed tree query",
+    "selector_completion": "RLWE-star selector rows completed to RGSW",
+    "pyramid": "alpha pyramid construction and server-domain preparation",
+    "scan_core": "composite m32 first-dimension matrix multiplication core",
+    "scan_finalize": "composite m32 CRT reconstruction and inverse NTT finalize",
+    "fold": "beta-dimension CMux folding",
+    "rotate": "private gamma rotation",
+    "project": "stride projection and BV key switching",
+    "pack": "public shifts and response accumulation",
+    "switch": "same-ring response modulus switch or compressed response ring switch",
+    "response_serialize": "actual response wire serialization outside server timing",
+    "client_decode": "client decryption and path extraction/decode",
+    "diagnostic_scan_combined": "legacy combined first-dimension scan timer; overlaps scan_core plus scan_finalize",
+    "diagnostic_response_ring_switch_key_switch": "compressed-response even/odd split plus small-ring gadget key switching; overlaps switch",
+    "diagnostic_response_ring_switch_modswitch": "compressed-response final full-q to small-q rescale; overlaps switch"
+  },
+  "metadata": {
+    "chunk_bits": "12",
+    "g": "32",
+    "hardware_target": "CloudLab Xeon 6142 AVX-512 376GiB RAM",
+    "payload_note": "compressed path benchmark carries full 32-byte nodes",
+    "response_bytes_model": "16520"
+  },
+  "samples": [
+    {"trial": 0, "leaf": 297, "client_query_ms": 0.076040999999999997, "server_total_ms": 45.978625999999998, "stages_ms": {"fold": 0.00058299999999999997, "pack": 0.030374999999999996, "project": 6.3330000000000002, "pyramid": 0.80041700000000005, "query_expand": 8.4037919999999993, "rotate": 7.8577900000000005, "scan_core": 0.433749, "scan_finalize": 0.38841599999999993, "selector_completion": 10.594208999999999, "switch": 11.0905}, "diagnostics_ms": {"response_ring_switch_key_switch": 10.930790999999999, "response_ring_switch_modswitch": 0.15625, "scan_combined": 0.84175300000000008}, "response_serialize_ms": 0.021957999999999998, "client_decode_ms": 1.117291, "correct": true},
+    {"trial": 1, "leaf": 514, "client_query_ms": 0.074416999999999997, "server_total_ms": 45.634708000000003, "stages_ms": {"fold": 0.00037500000000000001, "pack": 0.030872999999999998, "project": 6.2545419999999998, "pyramid": 0.636625, "query_expand": 8.312875, "rotate": 7.8886240000000001, "scan_core": 0.37533499999999997, "scan_finalize": 0.37195799999999996, "selector_completion": 10.553625, "switch": 11.173959}, "diagnostics_ms": {"response_ring_switch_key_switch": 11.026084000000001, "response_ring_switch_modswitch": 0.144458, "scan_combined": 0.76837500000000003}, "response_serialize_ms": 0.020250000000000001, "client_decode_ms": 1.046708, "correct": true}
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "treepir_upstream": "https://github.com/PIR-PIXR/TreePIR",
+  "treepir_commit": "930063c5aefc441244abb4890fdf35383f3aa956",
+  "seal_upstream": "https://github.com/cnquang/SEAL-4.0.0",
+  "seal_commit": "7e21ef9353ef8e6c5e1f646c9ed8ff486d2ddb8c",
+  "seal_options": {
+    "SEAL_USE_MSGSL": false,
+    "SEAL_USE_ZLIB": false,
+    "SEAL_USE_ZSTD": false,
+    "SEAL_USE_INTEL_HEXL": false
+  },
+  "architecture": "x86_64/Rosetta on Apple M4",
+  "compiler": "Apple Clang 17.0.0",
+  "patch": "scripts/benchmarks/treepir-h10-prototype.patch",
+  "data_fixture": "upstream VBPIR_TreePIR h10 provided colorSubDB and treedata",
+  "index_validation": "all ten provided upstream subIndices examples matched",
+  "correctness": "19/19 encrypted queries returned all 10 requested source entries"
+}

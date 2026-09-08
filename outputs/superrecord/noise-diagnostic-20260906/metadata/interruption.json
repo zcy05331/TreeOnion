@@ -1,0 +1,9 @@
+{
+  "utc": "2026-09-06T03:23:48.200538+00:00",
+  "controller": 31634,
+  "workers": [
+    32094
+  ],
+  "reason": "diagnostic repeated identical DB preprocessing per query; replace with per-candidate reuse before inspecting outcomes",
+  "original_formal_parent_untouched": 18736
+}

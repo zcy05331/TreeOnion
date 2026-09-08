@@ -1,0 +1,274 @@
+{
+  "surface": "report",
+  "manifest": {
+    "version": 1,
+    "surface": "report",
+    "title": "OnionPIR 三种模式综合性能报告",
+    "description": "综合最早 v1 与全部可比 v2 正式实验的服务器延迟、数据库吞吐、扫描带宽、通信和原始样本。",
+    "generatedAt": "2026-08-15T23:45:00-05:00",
+    "charts": [
+      {
+        "id": "server_latency",
+        "title": "Trial-weighted server computation latency",
+        "subtitle": "Standard n=52; Naive Flat and Layerwise n=36; Merkle modes return a 24-level path",
+        "type": "bar",
+        "dataset": "aggregate_modes",
+        "sourceId": "synthesis_data",
+        "encodings": {
+          "x": {"field": "mode", "type": "nominal", "label": "Mode"},
+          "y": {"field": "server_compute_ms", "type": "quantitative", "label": "Server computation (ms)", "format": "number"}
+        },
+        "yAxisTitle": "Milliseconds",
+        "valueFormat": "number",
+        "layout": "full"
+      },
+      {
+        "id": "database_throughput",
+        "title": "Plaintext database throughput",
+        "subtitle": "Database bytes divided by trial-weighted mean server computation time, MiB/s",
+        "type": "bar",
+        "dataset": "aggregate_modes",
+        "sourceId": "synthesis_data",
+        "encodings": {
+          "x": {"field": "mode", "type": "nominal", "label": "Mode"},
+          "y": {"field": "paper_database_throughput_mib_s", "type": "quantitative", "label": "Database throughput (MiB/s)", "format": "number"}
+        },
+        "yAxisTitle": "MiB/s",
+        "valueFormat": "number",
+        "layout": "full"
+      },
+      {
+        "id": "scan_throughput",
+        "title": "Physical scan-equivalent throughput",
+        "subtitle": "Flat counts 24 complete scans; Standard and Layerwise scan bytes equal database bytes",
+        "type": "bar",
+        "dataset": "aggregate_modes",
+        "sourceId": "synthesis_data",
+        "encodings": {
+          "x": {"field": "mode", "type": "nominal", "label": "Mode"},
+          "y": {"field": "paper_scan_throughput_mib_s", "type": "quantitative", "label": "Scan throughput (MiB/s)", "format": "number"}
+        },
+        "yAxisTitle": "MiB/s",
+        "valueFormat": "number",
+        "layout": "full"
+      }
+    ],
+    "tables": [
+      {
+        "id": "aggregate_summary",
+        "title": "综合延迟与吞吐量",
+        "dataset": "aggregate_modes",
+        "sourceId": "synthesis_data",
+        "defaultSort": {"field": "server_compute_ms", "direction": "asc"},
+        "columns": [
+          {"field": "mode", "label": "模式", "type": "text"},
+          {"field": "measured_trials", "label": "Trials", "type": "number"},
+          {"field": "pir_calls_per_trial", "label": "PIR calls/trial", "type": "number"},
+          {"field": "server_compute_ms", "label": "Server ms", "type": "number"},
+          {"field": "local_online_pipeline_ms", "label": "Online pipeline ms", "type": "number"},
+          {"field": "paper_database_throughput_mib_s", "label": "DB MiB/s", "type": "number"},
+          {"field": "paper_scan_throughput_mib_s", "label": "Scan MiB/s", "type": "number"},
+          {"field": "run_mean_server_min_ms", "label": "Run-mean min ms", "type": "number"},
+          {"field": "run_mean_server_max_ms", "label": "Run-mean max ms", "type": "number"}
+        ]
+      },
+      {
+        "id": "latency_components",
+        "title": "在线延迟分解",
+        "dataset": "aggregate_modes",
+        "sourceId": "synthesis_data",
+        "defaultSort": {"field": "server_compute_ms", "direction": "asc"},
+        "columns": [
+          {"field": "mode", "label": "模式", "type": "text"},
+          {"field": "client_query_ms", "label": "Client query ms", "type": "number"},
+          {"field": "server_compute_ms", "label": "Server ms", "type": "number"},
+          {"field": "response_serialize_ms", "label": "Serialize ms", "type": "number"},
+          {"field": "response_load_decrypt_extract_ms", "label": "Load/decrypt/extract ms", "type": "number"},
+          {"field": "nonserver_online_ms", "label": "Non-server online ms", "type": "number"},
+          {"field": "local_online_pipeline_ms", "label": "Pipeline ms", "type": "number"},
+          {"field": "per_call_server_ms", "label": "Server ms/call", "type": "number"}
+        ]
+      },
+      {
+        "id": "communication",
+        "title": "在线与首次会话通信",
+        "dataset": "aggregate_modes",
+        "sourceId": "synthesis_data",
+        "defaultSort": {"field": "online_total_bytes", "direction": "asc"},
+        "columns": [
+          {"field": "mode", "label": "模式", "type": "text"},
+          {"field": "online_query_bytes", "label": "Online query B", "type": "number"},
+          {"field": "online_response_bytes", "label": "Online response B", "type": "number"},
+          {"field": "online_total_bytes", "label": "Online total B", "type": "number"},
+          {"field": "helper_key_bytes", "label": "Helper keys B", "type": "number"},
+          {"field": "first_session_total_bytes", "label": "First session B", "type": "number"}
+        ]
+      },
+      {
+        "id": "run_points",
+        "title": "全部正式 run-level 数据点",
+        "dataset": "run_points",
+        "sourceId": "synthesis_data",
+        "defaultSort": {"field": "artifact", "direction": "asc"},
+        "columns": [
+          {"field": "run", "label": "Run", "type": "text"},
+          {"field": "artifact", "label": "Artifact", "type": "text"},
+          {"field": "trials", "label": "Trials", "type": "number"},
+          {"field": "mode", "label": "模式", "type": "text"},
+          {"field": "server_compute_ms", "label": "Server ms", "type": "number"},
+          {"field": "local_online_pipeline_ms", "label": "Pipeline ms", "type": "number"},
+          {"field": "database_throughput_mib_s", "label": "DB MiB/s", "type": "number"},
+          {"field": "scan_throughput_mib_s", "label": "Scan MiB/s", "type": "number"},
+          {"field": "setup_ms", "label": "Setup ms", "type": "number"}
+        ]
+      },
+      {
+        "id": "latest_path_stats",
+        "title": "最新 16-trial Path 离散度",
+        "dataset": "latest_path_stats",
+        "sourceId": "synthesis_data",
+        "defaultSort": {"field": "server_mean_ms", "direction": "asc"},
+        "columns": [
+          {"field": "mode", "label": "模式", "type": "text"},
+          {"field": "server_mean_ms", "label": "Mean ms", "type": "number"},
+          {"field": "server_median_ms", "label": "Median ms", "type": "number"},
+          {"field": "server_p95_ms", "label": "P95 ms", "type": "number"},
+          {"field": "server_sample_sd_ms", "label": "Sample SD ms", "type": "number"},
+          {"field": "server_cv_pct", "label": "CV %", "type": "number"},
+          {"field": "headline_database_throughput_mib_s", "label": "DB/mean MiB/s", "type": "number"},
+          {"field": "mean_per_trial_throughput_mib_s", "label": "Mean trial MiB/s", "type": "number"},
+          {"field": "throughput_sample_sd", "label": "Throughput SD", "type": "number"}
+        ]
+      },
+      {
+        "id": "latest_path_samples",
+        "title": "Flat/Layerwise 全部 16 个成对原始样本",
+        "dataset": "latest_path_samples",
+        "sourceId": "synthesis_data",
+        "defaultSort": {"field": "trial", "direction": "asc"},
+        "columns": [
+          {"field": "trial", "label": "Trial", "type": "number"},
+          {"field": "query_id", "label": "Query ID", "type": "number"},
+          {"field": "flat_server_ms", "label": "Flat ms", "type": "number"},
+          {"field": "flat_throughput_mib_s", "label": "Flat MiB/s", "type": "number"},
+          {"field": "layerwise_server_ms", "label": "Layerwise ms", "type": "number"},
+          {"field": "layerwise_throughput_mib_s", "label": "Layerwise MiB/s", "type": "number"}
+        ]
+      },
+      {
+        "id": "artifact_inventory",
+        "title": "纳入的原始 artifact",
+        "dataset": "artifact_inventory",
+        "sourceId": "synthesis_data",
+        "defaultSort": {"field": "sequence", "direction": "asc"},
+        "columns": [
+          {"field": "sequence", "label": "#", "type": "number"},
+          {"field": "schema", "label": "Schema", "type": "text"},
+          {"field": "file", "label": "File", "type": "text"},
+          {"field": "measured_trials", "label": "Trials", "type": "number"},
+          {"field": "modes", "label": "Modes", "type": "text"},
+          {"field": "sha256", "label": "SHA-256", "type": "text"}
+        ]
+      }
+    ],
+    "sources": [
+      {
+        "id": "synthesis_data",
+        "label": "OnionPIR three-mode benchmark synthesis",
+        "path": "outputs/merkle_baselines/three-mode-comprehensive-v2/report_datasets.sql"
+      }
+    ],
+    "blocks": [
+      {"id": "title", "type": "markdown", "body": "# OnionPIR 三种模式综合性能报告"},
+      {"id": "technical_summary", "type": "markdown", "sourceId": "synthesis_data", "body": "## 综合结论：Layerwise 保留路径语义，同时将 Flat 延迟降低 94.0%\n\n纳入最早 v1 及全部可比 v2 正式结果后，Standard OnionPIR 共 **52** 次、Naive Flat 与 Naive Layerwise 各 **36** 次。按 trial 数加权，三者平均服务器延迟分别为 **1.629 s、36.121 s、2.151 s**；统一数据库吞吐分别为 **628.644、28.349、476.046 MiB/s**。Layerwise 相对 Flat 快 **16.79×**，但与 Standard 不能直接视为同一业务单位：Standard 每次只有 1 个 PIR call，而两种 Merkle baseline 每次完成 24 个 PIR calls 并返回整条 H24 path。"},
+      {"id": "latency_finding", "type": "markdown", "sourceId": "synthesis_data", "body": "## Flat 的 36.1 秒来自 24 次完整数据库 PIR\n\nFlat 的平均单 call 服务器耗时为 **1.505 s**，与 Standard 的 **1.629 s** 同量级；整条路径需要重复 24 次，因此总延迟达到 36.121 s。Layerwise 把每层映射到最小数据库后，平均单层 call 降到 **89.631 ms**，整条路径只需 2.151 s。"},
+      {"id": "latency_chart_block", "type": "chart", "chartId": "server_latency", "layout": "full"},
+      {"id": "throughput_finding", "type": "markdown", "sourceId": "synthesis_data", "body": "## 数据库吞吐与扫描带宽回答不同问题\n\nHeadline DB throughput 使用一次逻辑数据库大小作分子，因此 Flat 只有 **28.349 MiB/s**。若把它实际执行的 24 次完整扫描计入分子，Flat scan throughput 为 **680.376 MiB/s**。最早 v1 把这个 scan throughput 写成 Flat headline；本报告将该点按当前定义重算为 **29.391 MiB/s**，同时保留原始 scan 值 **705.389 MiB/s**。"},
+      {"id": "throughput_chart_block", "type": "chart", "chartId": "database_throughput", "layout": "full"},
+      {"id": "scan_chart_block", "type": "chart", "chartId": "scan_throughput", "layout": "full"},
+      {"id": "aggregate_intro", "type": "markdown", "body": "## 综合指标与 run 间范围\n\n下表中的延迟均值按每个 artifact 的 measured-trial 数加权；setup 是每个会话一次，因此单独按 5 个会话求均值。Run-mean 范围描述不同批次均值漂移，不等同于单 trial 分布。"},
+      {"id": "aggregate_table_block", "type": "table", "tableId": "aggregate_summary", "layout": "full"},
+      {"id": "definitions", "type": "markdown", "sourceId": "synthesis_data", "body": "## 指标定义与比较单位\n\n**Server computation latency** 只覆盖服务器 PIR 计算；**local online pipeline** 还包括客户端查询、响应序列化及加载/解密/提取。**DB throughput** = paper plaintext database bytes ÷ trial-weighted mean server time；**scan throughput** 使用实际累计扫描字节。所有 MB/s 字段按代码中的 2^20 字节换算，本文写作 MiB/s。Standard 返回一次标准 PIR 响应；Merkle 模式返回 24 个 32-byte path nodes。"},
+      {"id": "latency_components_block", "type": "table", "tableId": "latency_components", "layout": "full"},
+      {"id": "communication_finding", "type": "markdown", "sourceId": "synthesis_data", "body": "## 通信差异完全来自 1 call 与 24 calls\n\nStandard 在线通信为 **26,144 B**，首次会话为 **1,514,144 B**。两种 Merkle baseline 使用相同共享 helper-key bundle，在线通信均为 **627,456 B**，首次会话均为 **2,115,456 B**。"},
+      {"id": "communication_table_block", "type": "table", "tableId": "communication", "layout": "full"},
+      {"id": "methodology", "type": "markdown", "sourceId": "synthesis_data", "body": "## 数据范围与加权方法\n\n纳入 1 个 v1 artifact、3 个全模式 5-trial v2 artifact、1 个 Standard 32-trial artifact 和 1 个 Path 16-trial artifact；全部为 H24、CONFIG_N2048_K1_COMP、x86_64、HEXL 1.2.6、Apple M4 Rosetta 2。每个 run mean 乘以该 run 的 measured-trial 数后求和，再除以该模式总 trial 数。吞吐量随后用数据库字节除以这个加权平均延迟重新计算，而不是直接平均各 run 的吞吐量。"},
+      {"id": "artifact_inventory_block", "type": "table", "tableId": "artifact_inventory", "layout": "full"},
+      {"id": "run_points_intro", "type": "markdown", "body": "## 15 个 run-level 模式数据点\n\n每一行是一个 artifact 中某模式的 measured-trial 平均。它们是当前能覆盖全部历史正式实验的最细共同粒度。"},
+      {"id": "run_points_table_block", "type": "table", "tableId": "run_points", "layout": "full"},
+      {"id": "dispersion", "type": "markdown", "sourceId": "synthesis_data", "body": "## 只有最新 Path 16-trial 保存了逐次分布\n\nFlat 的样本 CV 为 **4.01%**；Layerwise 为 **15.53%**，主要受一次 **3,351.836 ms** 慢样本影响。P95 使用常见的线性插值定义，但 n=16 时仅作描述。Standard 及早期 5-trial artifact 没有保存逐次 server-time，无法恢复全历史 pooled variance、median 或 p95。"},
+      {"id": "dispersion_table_block", "type": "table", "tableId": "latest_path_stats", "layout": "full"},
+      {"id": "raw_samples_intro", "type": "markdown", "body": "## 最新 16 个 Flat/Layerwise 成对样本\n\n两种模式使用同一组不同 query ID；吞吐量逐行由该模式数据库字节除以对应 server time 得到。"},
+      {"id": "raw_samples_table_block", "type": "table", "tableId": "latest_path_samples", "layout": "full"},
+      {"id": "limitations", "type": "markdown", "sourceId": "synthesis_data", "body": "## 限制与稳健性\n\n第一，v1 与早期 v2 仅保存 grouped means，因此综合结果是精确的 trial-weighted mean，但不是可恢复的完整样本分布。第二，各 run 跨不同 commit 与机器状态；虽然密码学参数和平台一致，run-mean 漂移仍表明缓存、热状态或系统负载影响明显。第三，Standard 与 Merkle path 的调用数和输出单位不同，不能把 1.629 s 与 2.151 s 解释成同一请求语义下的直接回归。第四，所有结果均为 Rosetta x86_64，不代表 M4 原生 ARM64。"},
+      {"id": "next_steps", "type": "markdown", "body": "## 建议的下一步\n\n若要获得可用于误差条和显著性比较的最终论文表，应在冻结 commit 上让三种模式都保存逐 trial 原始时间，并用同一交错顺序或随机化顺序运行；同时分别报告 DB throughput、scan throughput 与完整 path latency。当前综合表适合描述工程量级和设计差异，但不支持跨全部历史样本的 pooled variance。"},
+      {"id": "further_questions", "type": "markdown", "body": "## 尚待回答的问题\n\n- Standard 在早期 5-trial run 中从 2.45 s 降到后期约 1.44 s 的漂移来自系统热状态、缓存还是代码路径变化？\n- Layerwise 的 3.35 s 慢样本能否通过交错运行和进程级 telemetry 定位？\n- ARM64 标量或兼容后端是否保持同样的相对排序？"}
+    ]
+  },
+  "snapshot": {
+    "version": 1,
+    "generatedAt": "2026-08-15T23:45:00-05:00",
+    "status": "ready",
+    "datasets": {
+      "aggregate_modes": [
+        {"mode": "Standard OnionPIR", "runs": 5, "measured_trials": 52, "pir_calls_per_trial": 1, "server_compute_ms": 1628.906535, "local_online_pipeline_ms": 1629.322745, "client_query_ms": 0.087739, "response_serialize_ms": 0.078590, "response_load_decrypt_extract_ms": 0.249881, "nonserver_online_ms": 0.416210, "per_call_server_ms": 1628.906535, "session_setup_mean_ms": 5818.834933, "run_mean_server_min_ms": 1373.952541, "run_mean_server_max_ms": 2452.228283, "paper_database_throughput_mib_s": 628.643775, "paper_scan_throughput_mib_s": 628.643775, "padded_scan_throughput_mib_s": 628.949530, "online_query_bytes": 14880, "online_response_bytes": 11264, "online_total_bytes": 26144, "helper_key_bytes": 1488000, "first_session_total_bytes": 1514144},
+        {"mode": "Naive Flat", "runs": 5, "measured_trials": 36, "pir_calls_per_trial": 24, "server_compute_ms": 36121.247914, "local_online_pipeline_ms": 36131.749070, "client_query_ms": 2.095012, "response_serialize_ms": 2.479377, "response_load_decrypt_extract_ms": 5.926768, "nonserver_online_ms": 10.501156, "per_call_server_ms": 1505.051996, "session_setup_mean_ms": 6239.234683, "run_mean_server_min_ms": 34840.405241, "run_mean_server_max_ms": 40687.264992, "paper_database_throughput_mib_s": 28.349019, "paper_scan_throughput_mib_s": 680.376462, "padded_scan_throughput_mib_s": 680.707379, "online_query_bytes": 357120, "online_response_bytes": 270336, "online_total_bytes": 627456, "helper_key_bytes": 1488000, "first_session_total_bytes": 2115456},
+        {"mode": "Naive Layerwise", "runs": 5, "measured_trials": 36, "pir_calls_per_trial": 24, "server_compute_ms": 2151.138035, "local_online_pipeline_ms": 2159.885939, "client_query_ms": 2.014842, "response_serialize_ms": 1.318031, "response_load_decrypt_extract_ms": 5.415031, "nonserver_online_ms": 8.747904, "per_call_server_ms": 89.630751, "session_setup_mean_ms": 5855.918784, "run_mean_server_min_ms": 1990.783874, "run_mean_server_max_ms": 2434.073241, "paper_database_throughput_mib_s": 476.045713, "paper_scan_throughput_mib_s": 476.045713, "padded_scan_throughput_mib_s": 476.515577, "online_query_bytes": 357120, "online_response_bytes": 270336, "online_total_bytes": 627456, "helper_key_bytes": 1488000, "first_session_total_bytes": 2115456}
+      ],
+      "run_points": [
+        {"run": "earliest v1", "artifact": "abaca522bc98", "trials": 5, "mode": "Standard OnionPIR", "server_compute_ms": 1373.952541, "local_online_pipeline_ms": 1374.394407, "database_throughput_mib_s": 745.296451, "scan_throughput_mib_s": 745.296451, "setup_ms": 5673.237458},
+        {"run": "earliest v1", "artifact": "abaca522bc98", "trials": 5, "mode": "Naive Flat", "server_compute_ms": 34840.405241, "local_online_pipeline_ms": 34851.460127, "database_throughput_mib_s": 29.391218, "scan_throughput_mib_s": 705.389237, "setup_ms": 5815.468000},
+        {"run": "earliest v1", "artifact": "abaca522bc98", "trials": 5, "mode": "Naive Layerwise", "server_compute_ms": 2009.909550, "local_online_pipeline_ms": 2018.703183, "database_throughput_mib_s": 509.495584, "scan_throughput_mib_s": 509.495584, "setup_ms": 5732.566708},
+        {"run": "v2 schema2", "artifact": "be3845bae149", "trials": 5, "mode": "Standard OnionPIR", "server_compute_ms": 2452.228283, "local_online_pipeline_ms": 2452.857915, "database_throughput_mib_s": 417.580190, "scan_throughput_mib_s": 417.580190, "setup_ms": 6101.455292},
+        {"run": "v2 schema2", "artifact": "be3845bae149", "trials": 5, "mode": "Naive Flat", "server_compute_ms": 40687.264992, "local_online_pipeline_ms": 40697.510850, "database_throughput_mib_s": 25.167628, "scan_throughput_mib_s": 604.023074, "setup_ms": 6859.236708},
+        {"run": "v2 schema2", "artifact": "be3845bae149", "trials": 5, "mode": "Naive Layerwise", "server_compute_ms": 2434.073241, "local_online_pipeline_ms": 2443.228559, "database_throughput_mib_s": 420.710446, "scan_throughput_mib_s": 420.710446, "setup_ms": 6207.687625},
+        {"run": "unique queries", "artifact": "fff03386deea", "trials": 5, "mode": "Standard OnionPIR", "server_compute_ms": 2397.799725, "local_online_pipeline_ms": 2398.212465, "database_throughput_mib_s": 427.059000, "scan_throughput_mib_s": 427.059000, "setup_ms": 5842.000083},
+        {"run": "unique queries", "artifact": "fff03386deea", "trials": 5, "mode": "Naive Flat", "server_compute_ms": 35265.343458, "local_online_pipeline_ms": 35276.072367, "database_throughput_mib_s": 29.037062, "scan_throughput_mib_s": 696.889480, "setup_ms": 6082.373000},
+        {"run": "unique queries", "artifact": "fff03386deea", "trials": 5, "mode": "Naive Layerwise", "server_compute_ms": 1990.783874, "local_online_pipeline_ms": 1999.278025, "database_throughput_mib_s": 514.390363, "scan_throughput_mib_s": 514.390363, "setup_ms": 5664.378167},
+        {"run": "unique rerun", "artifact": "21ac4a543523", "trials": 5, "mode": "Standard OnionPIR", "server_compute_ms": 1473.732483, "local_online_pipeline_ms": 1474.108339, "database_throughput_mib_s": 694.835708, "scan_throughput_mib_s": 694.835708, "setup_ms": 5679.268000},
+        {"run": "unique rerun", "artifact": "21ac4a543523", "trials": 5, "mode": "Naive Flat", "server_compute_ms": 35420.045675, "local_online_pipeline_ms": 35429.785183, "database_throughput_mib_s": 28.910238, "scan_throughput_mib_s": 693.845714, "setup_ms": 5873.488166},
+        {"run": "unique rerun", "artifact": "21ac4a543523", "trials": 5, "mode": "Naive Layerwise", "server_compute_ms": 2107.126842, "local_online_pipeline_ms": 2115.862349, "database_throughput_mib_s": 485.988797, "scan_throughput_mib_s": 485.988797, "setup_ms": 5833.116834},
+        {"run": "Standard 32", "artifact": "4f6499894f13", "trials": 32, "mode": "Standard OnionPIR", "server_compute_ms": 1444.205458, "local_online_pipeline_ms": 1444.591160, "database_throughput_mib_s": 709.041742, "scan_throughput_mib_s": 709.041742, "setup_ms": 5798.213833},
+        {"run": "Merkle paths 16", "artifact": "7eb7a735fff5", "trials": 16, "mode": "Naive Flat", "server_compute_ms": 35581.226754, "local_online_pipeline_ms": 35591.801493, "database_throughput_mib_s": 28.779276, "scan_throughput_mib_s": 690.702629, "setup_ms": 6565.607541},
+        {"run": "Merkle paths 16", "artifact": "7eb7a735fff5", "trials": 16, "mode": "Naive Layerwise", "server_compute_ms": 2170.718858, "local_online_pipeline_ms": 2179.408327, "database_throughput_mib_s": 471.751575, "scan_throughput_mib_s": 471.751575, "setup_ms": 5841.844584}
+      ],
+      "latest_path_stats": [
+        {"mode": "Naive Flat", "server_mean_ms": 35581.226755, "server_median_ms": 35226.234708, "server_p95_ms": 37526.438750, "server_sample_sd_ms": 1428.575243, "server_cv_pct": 4.014969, "headline_database_throughput_mib_s": 28.779276, "mean_per_trial_throughput_mib_s": 28.820510, "throughput_sample_sd": 1.097170},
+        {"mode": "Naive Layerwise", "server_mean_ms": 2170.718859, "server_median_ms": 2044.487666, "server_p95_ms": 2632.732820, "server_sample_sd_ms": 337.184174, "server_cv_pct": 15.533295, "headline_database_throughput_mib_s": 471.751575, "mean_per_trial_throughput_mib_s": 479.399701, "throughput_sample_sd": 53.069101}
+      ],
+      "latest_path_samples": [
+        {"trial": 1, "query_id": 2419157, "flat_server_ms": 33906.329289, "flat_throughput_mib_s": 30.200909, "layerwise_server_ms": 2016.294705, "layerwise_throughput_mib_s": 507.882125},
+        {"trial": 2, "query_id": 294839, "flat_server_ms": 35805.843752, "flat_throughput_mib_s": 28.598738, "layerwise_server_ms": 2079.561583, "layerwise_throughput_mib_s": 492.430735},
+        {"trial": 3, "query_id": 4718255, "flat_server_ms": 36760.343330, "flat_throughput_mib_s": 27.856159, "layerwise_server_ms": 2365.478166, "layerwise_throughput_mib_s": 432.910375},
+        {"trial": 4, "query_id": 7699409, "flat_server_ms": 39751.678622, "flat_throughput_mib_s": 25.759968, "layerwise_server_ms": 2393.031830, "layerwise_throughput_mib_s": 427.925791},
+        {"trial": 5, "query_id": 9435589, "flat_server_ms": 35531.086709, "flat_throughput_mib_s": 28.819888, "layerwise_server_ms": 3351.835791, "layerwise_throughput_mib_s": 305.516172},
+        {"trial": 6, "query_id": 1298722, "flat_server_ms": 36784.692126, "flat_throughput_mib_s": 27.837720, "layerwise_server_ms": 2089.335416, "layerwise_throughput_mib_s": 490.127163},
+        {"trial": 7, "query_id": 15165185, "flat_server_ms": 34973.600082, "flat_throughput_mib_s": 29.279284, "layerwise_server_ms": 2035.117540, "layerwise_throughput_mib_s": 503.184715},
+        {"trial": 8, "query_id": 2726882, "flat_server_ms": 35043.645999, "flat_throughput_mib_s": 29.220760, "layerwise_server_ms": 2013.265625, "layerwise_throughput_mib_s": 508.646264},
+        {"trial": 9, "query_id": 2567763, "flat_server_ms": 35179.425833, "flat_throughput_mib_s": 29.107978, "layerwise_server_ms": 2015.085127, "layerwise_throughput_mib_s": 508.186987},
+        {"trial": 10, "query_id": 13314512, "flat_server_ms": 35061.729667, "flat_throughput_mib_s": 29.205688, "layerwise_server_ms": 2015.257832, "layerwise_throughput_mib_s": 508.143436},
+        {"trial": 11, "query_id": 13202926, "flat_server_ms": 34179.789793, "flat_throughput_mib_s": 29.959282, "layerwise_server_ms": 2053.857791, "layerwise_throughput_mib_s": 498.593449},
+        {"trial": 12, "query_id": 16052204, "flat_server_ms": 35780.262125, "flat_throughput_mib_s": 28.619185, "layerwise_server_ms": 2015.029791, "layerwise_throughput_mib_s": 508.200943},
+        {"trial": 13, "query_id": 10960092, "flat_server_ms": 35273.043584, "flat_throughput_mib_s": 29.030723, "layerwise_server_ms": 2013.571166, "layerwise_throughput_mib_s": 508.569082},
+        {"trial": 14, "query_id": 107107, "flat_server_ms": 34459.852083, "flat_throughput_mib_s": 29.715797, "layerwise_server_ms": 2115.101251, "layerwise_throughput_mib_s": 484.156510},
+        {"trial": 15, "query_id": 326845, "flat_server_ms": 36631.856249, "flat_throughput_mib_s": 27.953865, "layerwise_server_ms": 2007.539292, "layerwise_throughput_mib_s": 510.097134},
+        {"trial": 16, "query_id": 14861253, "flat_server_ms": 34176.448833, "flat_throughput_mib_s": 29.962210, "layerwise_server_ms": 2152.138832, "layerwise_throughput_mib_s": 475.824340}
+      ],
+      "artifact_inventory": [
+        {"sequence": 1, "schema": "v1", "file": "abaca522bc98-m4-rosetta-v2.json", "measured_trials": 5, "modes": "Standard, Flat, Layerwise", "sha256": "ffbfbeb39ec1905120e102bc4ce5f5153ea1a6a8ad6c697f612098a8ff167269"},
+        {"sequence": 2, "schema": "v2", "file": "be3845bae149-m4-rosetta-v2-schema2.json", "measured_trials": 5, "modes": "Standard, Flat, Layerwise", "sha256": "ead028cfc52117eeff8788920b4fa3a6d5873815c358803338be9c295773e6da"},
+        {"sequence": 3, "schema": "v2", "file": "fff03386deea-m4-rosetta-v2-unique-queries.json", "measured_trials": 5, "modes": "Standard, Flat, Layerwise", "sha256": "c41b147c1d2caa432b2cf5e7bc9cc96562fb3df2874b2b1d31eb61f3492ff556"},
+        {"sequence": 4, "schema": "v2", "file": "21ac4a543523-m4-rosetta-v2-unique-queries-rerun.json", "measured_trials": 5, "modes": "Standard, Flat, Layerwise", "sha256": "d83713ebbbcbc8beab48152e6a6975a4376ab98be91b15eeb53c8e9fd0e9ba79"},
+        {"sequence": 5, "schema": "v2", "file": "4f6499894f13-m4-rosetta-v2-standard-32-trials.json", "measured_trials": 32, "modes": "Standard", "sha256": "77d8b1353f87fbd4e4dedde9462bb7c1c7cfacf42d942b4cfbf7ca094df891aa"},
+        {"sequence": 6, "schema": "v2", "file": "7eb7a735fff5-m4-rosetta-v2-merkle-paths-16-trials.json", "measured_trials": 16, "modes": "Flat, Layerwise", "sha256": "a42575c3762a1a6db5bb93539091423bffad6f7f40144fecb7a28e86bde2255c"}
+      ]
+    }
+  },
+  "sources": [
+    {
+      "id": "synthesis_data",
+      "label": "OnionPIR three-mode benchmark synthesis",
+      "path": "outputs/merkle_baselines/three-mode-comprehensive-v2/report_datasets.sql"
+    }
+  ]
+}

@@ -1,0 +1,6 @@
+[  2%] Building CXX object CMakeFiles/Onion-PIR.dir/src/tests/test_tree_superrecord_noise.cpp.o
+[  2%] Building CXX object CMakeFiles/Onion-PIR.dir/src/tests/test_tree_superrecord_codec.cpp.o
+[  4%] Building CXX object CMakeFiles/Onion-PIR.dir/src/tree_superrecord_codec.cpp.o
+[  5%] Building CXX object CMakeFiles/Onion-PIR.dir/src/tree_superrecord_select.cpp.o
+[  6%] Linking CXX executable Onion-PIR
+[100%] Built target Onion-PIR

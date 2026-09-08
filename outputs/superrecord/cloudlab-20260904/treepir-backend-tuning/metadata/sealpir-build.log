@@ -1,0 +1,23 @@
+-- The CXX compiler identification is GNU 13.3.0
+-- Detecting CXX compiler ABI info
+-- Detecting CXX compiler ABI info - done
+-- Check for working CXX compiler: /usr/bin/c++ - skipped
+-- Detecting CXX compile features
+-- Detecting CXX compile features - done
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD - Success
+-- Found Threads: TRUE  
+-- Microsoft SEAL -> Version 4.0.0 detected
+-- Microsoft SEAL -> Targets available: SEAL::seal
+-- Found Python3: /usr/bin/python3 (found version "3.12.3") found components: Interpreter 
+-- Configuring done (0.9s)
+-- Generating done (0.0s)
+-- Build files have been written to: /users/zcy05331/generic-superrecord-bench-20260904/treepir-backend-tuning-20260905/source/build-treepir-sealpir
+[ 33%] Building CXX object CMakeFiles/sealpirplus_core.dir/sealpirplus_instrumented/pir.cpp.o
+[ 33%] Building CXX object CMakeFiles/sealpirplus_core.dir/sealpirplus_instrumented/pir_client.cpp.o
+[ 50%] Building CXX object CMakeFiles/sealpirplus_core.dir/sealpirplus_instrumented/pir_server.cpp.o
+[ 66%] Linking CXX static library libsealpirplus_core.a
+[ 66%] Built target sealpirplus_core
+[ 83%] Building CXX object CMakeFiles/treepir_sealpir_adapter.dir/treepir_sealpir_adapter.cpp.o
+[100%] Linking CXX executable treepir_sealpir_adapter
+[100%] Built target treepir_sealpir_adapter

@@ -1,0 +1,38 @@
+{
+  "scope": "small encrypted smoke checks, not 1 GiB performance results",
+  "source_commit": "c5eb5ae8ef4201c3dce84cfbd5ff7f3b65652224",
+  "checks": [
+    {
+      "entry_bytes": 64,
+      "leaf_count": 4096,
+      "samples_per_candidate": 2,
+      "warmups": 1,
+      "measured_candidates": 6,
+      "passed": true
+    },
+    {
+      "entry_bytes": 16,
+      "leaf_count": 4096,
+      "samples_per_candidate": 2,
+      "warmups": 1,
+      "measured_candidates": 6,
+      "passed": true
+    },
+    {
+      "entry_bytes": 32,
+      "leaf_count": 4096,
+      "samples_per_candidate": 2,
+      "warmups": 1,
+      "measured_candidates": 6,
+      "passed": true
+    },
+    {
+      "entry_bytes": 128,
+      "leaf_count": 4096,
+      "samples_per_candidate": 2,
+      "warmups": 1,
+      "measured_candidates": 6,
+      "passed": true
+    }
+  ]
+}

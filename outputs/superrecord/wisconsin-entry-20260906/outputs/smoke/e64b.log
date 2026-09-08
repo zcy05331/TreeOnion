@@ -1,0 +1,60 @@
+Running test: tree_superrecord_bench
+==============================================================================
+                    test_tree_superrecord_benchmark(Benchmark build)
+==============================================================================
+calibrating first-dimension kernels for 758 candidate shapes
+planner: E=512 c=12 N=2^12: 758 candidates (404 h=1), Pareto frontier 137, benchmark rows 6, execution seed 20260904
+preparing [generic-h1-mandatory-0] E=512 N=2^12 h=1 G=64 P=1 rho=32 m=12 b=3 N0=16(align 1) width=88 h_q=7 keys req/reg=7/11 resp=1 scan=4 MiB folds=11 rot=50 proj=50 util=0.666667 pred=55.9592 ms
+preparing [generic-h3-mandatory] E=512 N=2^12 h=3 G=128 P=1 rho=16 m=11 b=3 N0=16(align 16) width=82 h_q=7 keys req/reg=7/11 resp=1 scan=4 MiB folds=11 rot=38 proj=38 util=1 pred=50.0126 ms
+preparing [frontier-1] E=512 N=2^12 h=3 G=128 P=1 rho=16 m=11 b=2 N0=22(align 1) width=88 h_q=7 keys req/reg=7/11 resp=1 scan=2 MiB folds=4 rot=38 proj=38 util=1 pred=50.6149 ms
+preparing [frontier-2] E=512 N=2^12 h=3 G=128 P=1 rho=16 m=11 b=2 N0=32(align 16) width=98 h_q=7 keys req/reg=7/11 resp=1 scan=4 MiB folds=4 rot=38 proj=38 util=1 pred=51.4266 ms
+preparing [generic-h1-frontier-1] E=512 N=2^12 h=1 G=64 P=1 rho=32 m=12 b=2 N0=32(align 1) width=104 h_q=7 keys req/reg=7/11 resp=1 scan=4 MiB folds=4 rot=50 proj=50 util=0.666667 pred=57.3733 ms
+preparing [generic-h1-frontier-2] E=512 N=2^12 h=1 G=128 P=1 rho=16 m=12 b=3 N0=32(align 1) width=104 h_q=7 keys req/reg=7/11 resp=1 scan=8 MiB folds=11 rot=42 proj=42 util=0.333333 pred=57.4622 ms
+completed warmup block 0 leaf 1013
+completed measured block 1 leaf 2544
+completed measured block 2 leaf 2562
+generic super-record JSON: /users/zcy05331/generic-entry-wisconsin-20260906/outputs/smoke/e64b.json
+
+generic super-record benchmark: N=2^12 leaves, E=512 bits, 2 measured trials after 1 warmup, trial seed 7
+[candidate-0 generic-h1-mandatory-0] E=512 N=2^12 h=1 G=64 P=1 rho=32 m=12 b=3 N0=16(align 1) width=88 h_q=7 keys req/reg=7/11 resp=1 scan=4 MiB folds=11 rot=50 proj=50 util=0.666667 pred=55.9592 ms
+  database 4.1 MiB (260 plaintext cells, scan 4.1 MiB per query), setup 29.273 ms
+  server total mean 54.8621 ms, median 54.8621, p95 54.8626, stddev 0.00062084
+  stages avg (ms): expand 11.885509 complete 20.463603 prepare 1.335050 scan 2.564917 finalize 1.296770 fold 2.079846 rotate 8.658992 project 6.395576 pack 0.061218 switch 0.095162
+  stages sum 54.8366 ms; client query 0.096437 ms, client extract 0.17749 ms
+  throughput 74.0493 MiB/s scanned; communication: modeled query 14880 B, actual response payload 11264 B; noise: min budget 3 bits, max residue 57 of decoder bound 508.628; real non-target neighbour slots/trial 0
+  samples(server): 54.862563 54.861685
+[candidate-1 generic-h3-mandatory] E=512 N=2^12 h=3 G=128 P=1 rho=16 m=11 b=3 N0=16(align 16) width=82 h_q=7 keys req/reg=7/11 resp=1 scan=4 MiB folds=11 rot=38 proj=38 util=1 pred=50.0126 ms
+  database 4.1 MiB (260 plaintext cells, scan 4.1 MiB per query), setup 28.43 ms
+  server total mean 49.5034 ms, median 49.5034, p95 50.3058, stddev 1.13473 ; speedup vs fastest eligible measured h1 1.108249x
+  stages avg (ms): expand 11.270435 complete 19.053199 prepare 1.440100 scan 2.546113 finalize 1.328302 fold 1.880425 rotate 6.833669 project 4.966826 pack 0.062659 switch 0.095559
+  stages sum 49.4773 ms; client query 0.0958695 ms, client extract 0.339131 ms
+  throughput 82.065 MiB/s scanned; communication: modeled query 14880 B, actual response payload 11264 B; noise: min budget 3 bits, max residue 48 of decoder bound 508.628; real non-target neighbour slots/trial 23
+  samples(server): 48.701061 50.305814
+[candidate-2 generic-h1-frontier-1] E=512 N=2^12 h=1 G=64 P=1 rho=32 m=12 b=2 N0=32(align 1) width=104 h_q=7 keys req/reg=7/11 resp=1 scan=4 MiB folds=4 rot=50 proj=50 util=0.666667 pred=57.3733 ms
+  database 4.1 MiB (260 plaintext cells, scan 4.1 MiB per query), setup 29.1181 ms
+  server total mean 55.9217 ms, median 55.9217, p95 56.0824, stddev 0.227222
+  stages avg (ms): expand 13.907777 complete 20.291647 prepare 2.800165 scan 2.113416 finalize 0.972745 fold 0.720630 rotate 8.555976 project 6.370500 pack 0.061116 switch 0.095268
+  stages sum 55.8892 ms; client query 0.0950435 ms, client extract 0.180063 ms
+  throughput 72.6462 MiB/s scanned; communication: modeled query 14880 B, actual response payload 11264 B; noise: min budget 3 bits, max residue 50 of decoder bound 508.628; real non-target neighbour slots/trial 0
+  samples(server): 55.761071 56.082411
+[candidate-3 generic-h1-frontier-2] E=512 N=2^12 h=1 G=128 P=1 rho=16 m=12 b=3 N0=32(align 1) width=104 h_q=7 keys req/reg=7/11 resp=1 scan=8 MiB folds=11 rot=42 proj=42 util=0.333333 pred=57.4622 ms
+  database 8.0 MiB (515 plaintext cells, scan 8.0 MiB per query), setup 35.6784 ms
+  server total mean 55.9421 ms, median 55.9421, p95 55.9724, stddev 0.0429235
+  stages avg (ms): expand 13.960583 complete 20.210698 prepare 2.785692 scan 2.947159 finalize 1.390657 fold 1.943001 rotate 7.159866 project 5.355023 pack 0.060900 switch 0.095663
+  stages sum 55.9092 ms; client query 0.105386 ms, client extract 0.182175 ms
+  throughput 143.843 MiB/s scanned; communication: modeled query 14880 B, actual response payload 11264 B; noise: min budget 3 bits, max residue 56 of decoder bound 508.628; real non-target neighbour slots/trial 0
+  samples(server): 55.911734 55.972437
+[candidate-4 frontier-1] E=512 N=2^12 h=3 G=128 P=1 rho=16 m=11 b=2 N0=22(align 1) width=88 h_q=7 keys req/reg=7/11 resp=1 scan=2 MiB folds=4 rot=38 proj=38 util=1 pred=50.6149 ms
+  database 2.8 MiB (182 plaintext cells, scan 2.8 MiB per query), setup 26.864 ms
+  server total mean 49.2763 ms, median 49.2763, p95 49.312, stddev 0.0504683 ; speedup vs fastest eligible measured h1 1.113357x
+  stages avg (ms): expand 11.785036 complete 18.684258 prepare 1.968245 scan 3.796346 finalize 0.963890 fold 0.685323 rotate 6.349705 project 4.860513 pack 0.060909 switch 0.096289
+  stages sum 49.2505 ms; client query 0.0946425 ms, client extract 0.336626 ms
+  throughput 57.7103 MiB/s scanned; communication: modeled query 14880 B, actual response payload 11264 B; noise: min budget 3 bits, max residue 59 of decoder bound 508.628; real non-target neighbour slots/trial 23
+  samples(server): 49.240642 49.312015
+[candidate-5 frontier-2] E=512 N=2^12 h=3 G=128 P=1 rho=16 m=11 b=2 N0=32(align 16) width=98 h_q=7 keys req/reg=7/11 resp=1 scan=4 MiB folds=4 rot=38 proj=38 util=1 pred=51.4266 ms
+  database 4.1 MiB (260 plaintext cells, scan 4.1 MiB per query), setup 28.3946 ms
+  server total mean 50.2078 ms, median 50.2078, p95 50.2609, stddev 0.0750537 ; speedup vs fastest eligible measured h1 1.092702x
+  stages avg (ms): expand 13.435128 complete 18.750417 prepare 2.777275 scan 2.092961 finalize 1.008459 fold 0.773940 rotate 6.294226 project 4.887152 pack 0.060687 switch 0.096145
+  stages sum 50.1764 ms; client query 0.0956745 ms, client extract 0.340431 ms
+  throughput 80.9137 MiB/s scanned; communication: modeled query 14880 B, actual response payload 11264 B; noise: min budget 3 bits, max residue 47 of decoder bound 508.628; real non-target neighbour slots/trial 23
+  samples(server): 50.154713 50.260855

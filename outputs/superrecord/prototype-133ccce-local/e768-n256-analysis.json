@@ -1,0 +1,1120 @@
+{
+  "schema_version": "superrecord-analysis-v1",
+  "run_class": "formal_candidate_selection",
+  "warmup_count": 3,
+  "measured_blocks": 16,
+  "bootstrap_seed": 90304,
+  "bootstrap_resamples": 10000,
+  "comparison_scope": "same leaf per shared measurement block; randomized candidate order within every block; OS drift remains",
+  "fastest_eligible_measured_h1": "generic-h1-mandatory-0",
+  "selection": {
+    "selected": "frontier-1",
+    "fastest_mean": "frontier-1",
+    "unresolved_candidates": [
+      "frontier-1"
+    ],
+    "reason": "smallest arithmetic mean; timing comparison resolved",
+    "comparisons_to_fastest_mean": {
+      "frontier-2": {
+        "candidate_over_control": 1.0223447634731646,
+        "ratio_ci95": [
+          1.017735027236117,
+          1.0269707858092
+        ],
+        "speedup": 0.9781436123394873,
+        "speedup_ci95": [
+          0.9737375335482903,
+          0.9825740229416292
+        ],
+        "server_time_reduction_percent": -2.234476347316461,
+        "reduction_percent_ci95": [
+          -2.6970785809200093,
+          -1.7735027236116974
+        ],
+        "statistically_unresolved": false,
+        "bootstrap_seed": 90304,
+        "bootstrap_resamples": 10000,
+        "paired_blocks": 16,
+        "estimator": "ratio of arithmetic means; percentile paired-block bootstrap",
+        "within_two_percent_of_fastest_mean": false
+      },
+      "minimum-optimized-steady-state": {
+        "candidate_over_control": 1.0983080396833242,
+        "ratio_ci95": [
+          1.093326718919246,
+          1.1033660088105746
+        ],
+        "speedup": 0.9104913775267734,
+        "speedup_ci95": [
+          0.9063175700672501,
+          0.9146396797002277
+        ],
+        "server_time_reduction_percent": -9.830803968332425,
+        "reduction_percent_ci95": [
+          -10.336600881057457,
+          -9.332671891924594
+        ],
+        "statistically_unresolved": false,
+        "bootstrap_seed": 90304,
+        "bootstrap_resamples": 10000,
+        "paired_blocks": 16,
+        "estimator": "ratio of arithmetic means; percentile paired-block bootstrap",
+        "within_two_percent_of_fastest_mean": false
+      },
+      "minimum-response-count": {
+        "candidate_over_control": 1.1928611784638372,
+        "ratio_ci95": [
+          1.1873509543079668,
+          1.198584420548494
+        ],
+        "speedup": 0.8383205171349417,
+        "speedup_ci95": [
+          0.8343175356328942,
+          0.8422109708774673
+        ],
+        "server_time_reduction_percent": -19.28611784638372,
+        "reduction_percent_ci95": [
+          -19.85844205484939,
+          -18.735095430796676
+        ],
+        "statistically_unresolved": false,
+        "bootstrap_seed": 90304,
+        "bootstrap_resamples": 10000,
+        "paired_blocks": 16,
+        "estimator": "ratio of arithmetic means; percentile paired-block bootstrap",
+        "within_two_percent_of_fastest_mean": false
+      },
+      "generic-h1-mandatory-0": {
+        "candidate_over_control": 1.3689720603020867,
+        "ratio_ci95": [
+          1.3629345688908203,
+          1.3751560313468616
+        ],
+        "speedup": 0.7304750980668906,
+        "speedup_ci95": [
+          0.7271902076599813,
+          0.7337109372857256
+        ],
+        "server_time_reduction_percent": -36.89720603020867,
+        "reduction_percent_ci95": [
+          -37.51560313468616,
+          -36.29345688908203
+        ],
+        "statistically_unresolved": false,
+        "bootstrap_seed": 90304,
+        "bootstrap_resamples": 10000,
+        "paired_blocks": 16,
+        "estimator": "ratio of arithmetic means; percentile paired-block bootstrap",
+        "within_two_percent_of_fastest_mean": false
+      },
+      "generic-h1-frontier-2": {
+        "candidate_over_control": 1.398659189409661,
+        "ratio_ci95": [
+          1.3928558490268663,
+          1.405261353051743
+        ],
+        "speedup": 0.7149704571147707,
+        "speedup_ci95": [
+          0.7116114008460739,
+          0.7179493848546213
+        ],
+        "server_time_reduction_percent": -39.8659189409661,
+        "reduction_percent_ci95": [
+          -40.52613530517431,
+          -39.28558490268663
+        ],
+        "statistically_unresolved": false,
+        "bootstrap_seed": 90304,
+        "bootstrap_resamples": 10000,
+        "paired_blocks": 16,
+        "estimator": "ratio of arithmetic means; percentile paired-block bootstrap",
+        "within_two_percent_of_fastest_mean": false
+      },
+      "generic-h1-frontier-1": {
+        "candidate_over_control": 1.40303482206128,
+        "ratio_ci95": [
+          1.3975246818050082,
+          1.40854872641882
+        ],
+        "speedup": 0.7127406848896607,
+        "speedup_ci95": [
+          0.7099505904509679,
+          0.7155508686318333
+        ],
+        "server_time_reduction_percent": -40.303482206128,
+        "reduction_percent_ci95": [
+          -40.85487264188199,
+          -39.75246818050082
+        ],
+        "statistically_unresolved": false,
+        "bootstrap_seed": 90304,
+        "bootstrap_resamples": 10000,
+        "paired_blocks": 16,
+        "estimator": "ratio of arithmetic means; percentile paired-block bootstrap",
+        "within_two_percent_of_fastest_mean": false
+      }
+    },
+    "scope": "eligible measured generic candidates under the recorded policy and hardware"
+  },
+  "candidates": [
+    {
+      "label": "generic-h1-mandatory-0",
+      "server_stats": {
+        "count": 16,
+        "mean": 31.472810125,
+        "median": 31.449354,
+        "p95": 31.864375,
+        "stddev": 0.2089211893778369
+      },
+      "stage_stats": {
+        "expand": {
+          "count": 16,
+          "mean": 8.1742005625,
+          "median": 8.1715205,
+          "p95": 8.450833,
+          "stddev": 0.13569814514525425
+        },
+        "complete": {
+          "count": 16,
+          "mean": 13.6942290625,
+          "median": 13.701604,
+          "p95": 13.779958,
+          "stddev": 0.05905124660097513
+        },
+        "prepare": {
+          "count": 16,
+          "mean": 0.3070676875,
+          "median": 0.305896,
+          "p95": 0.32,
+          "stddev": 0.004253920649922065
+        },
+        "scan": {
+          "count": 16,
+          "mean": 0.4767968125,
+          "median": 0.4745625,
+          "p95": 0.492166,
+          "stddev": 0.007514869235666492
+        },
+        "finalize": {
+          "count": 16,
+          "mean": 0.442244375,
+          "median": 0.435541,
+          "p95": 0.484915,
+          "stddev": 0.015840429130866366
+        },
+        "fold": {
+          "count": 16,
+          "mean": 0.6988491875,
+          "median": 0.696125,
+          "p95": 0.737876,
+          "stddev": 0.011827256611847898
+        },
+        "rotate": {
+          "count": 16,
+          "mean": 3.7640158125,
+          "median": 3.7630844999999997,
+          "p95": 3.863582,
+          "stddev": 0.03897998217413436
+        },
+        "project": {
+          "count": 16,
+          "mean": 3.127714,
+          "median": 3.1325825,
+          "p95": 3.212001,
+          "stddev": 0.05944064868084801
+        },
+        "pack": {
+          "count": 16,
+          "mean": 0.025372000000000002,
+          "median": 0.02527,
+          "p95": 0.027542,
+          "stddev": 0.0008908764224066098
+        },
+        "switch": {
+          "count": 16,
+          "mean": 0.74407025,
+          "median": 0.7307085,
+          "p95": 0.8475,
+          "stddev": 0.031089916816657247
+        }
+      },
+      "legacy": false,
+      "h1": true,
+      "steady_state_bytes": 13314112,
+      "response_count": 2,
+      "shape": {
+        "entry_bits": 768,
+        "leaf_count": 256,
+        "tree_height": 8,
+        "path_levels": 9,
+        "ring_degree": 2048,
+        "bundle_arity": 1,
+        "record_coeffs": 256,
+        "plane_count": 1,
+        "records_per_plaintext": 8,
+        "record_index_bits": 3,
+        "projection_depth_max": 3,
+        "leaf_superrecords": 256,
+        "leaf_plaintexts": 32,
+        "selector_bits": 8,
+        "N0": 8,
+        "beta_bits": 2,
+        "beta_bits_max": 5,
+        "alpha_height": 3,
+        "alpha_alignment": 1,
+        "query_width": 56,
+        "min_expansion_height": 6,
+        "min_expansion_capacity": 64,
+        "expansion_height": 6,
+        "expansion_capacity": 64,
+        "required_key_height": 6,
+        "registered_key_height": 11,
+        "query_ciphertexts": 1,
+        "response_ciphertexts": 2
+      }
+    },
+    {
+      "label": "minimum-optimized-steady-state",
+      "server_stats": {
+        "count": 16,
+        "mean": 25.250216125,
+        "median": 25.236791500000002,
+        "p95": 25.544625,
+        "stddev": 0.16138993629751713
+      },
+      "stage_stats": {
+        "expand": {
+          "count": 16,
+          "mean": 5.92481775,
+          "median": 5.9442085,
+          "p95": 6.117916,
+          "stddev": 0.10701062524472353
+        },
+        "complete": {
+          "count": 16,
+          "mean": 10.365911562500001,
+          "median": 10.389792,
+          "p95": 10.484334,
+          "stddev": 0.08863243766098933
+        },
+        "prepare": {
+          "count": 16,
+          "mean": 0.0205990625,
+          "median": 0.0205,
+          "p95": 0.021459,
+          "stddev": 0.0003632175599187534
+        },
+        "scan": {
+          "count": 16,
+          "mean": 0.62696075,
+          "median": 0.621083,
+          "p95": 0.680668,
+          "stddev": 0.02005944665072629
+        },
+        "finalize": {
+          "count": 16,
+          "mean": 0.676747375,
+          "median": 0.6709989999999999,
+          "p95": 0.718082,
+          "stddev": 0.015546305408359891
+        },
+        "fold": {
+          "count": 16,
+          "mean": 1.9313100625,
+          "median": 1.9163955,
+          "p95": 2.016209,
+          "stddev": 0.03146153948229222
+        },
+        "rotate": {
+          "count": 16,
+          "mean": 2.693828,
+          "median": 2.688416,
+          "p95": 2.773831,
+          "stddev": 0.030536542059200675
+        },
+        "project": {
+          "count": 16,
+          "mean": 2.2378281875,
+          "median": 2.237939,
+          "p95": 2.336206,
+          "stddev": 0.05217071168030165
+        },
+        "pack": {
+          "count": 16,
+          "mean": 0.02544,
+          "median": 0.025354500000000002,
+          "p95": 0.026916,
+          "stddev": 0.0007868300112900286
+        },
+        "switch": {
+          "count": 16,
+          "mean": 0.7315495,
+          "median": 0.7301455,
+          "p95": 0.744708,
+          "stddev": 0.004743550639201262
+        }
+      },
+      "legacy": false,
+      "h1": false,
+      "steady_state_bytes": 9823256,
+      "response_count": 2,
+      "shape": {
+        "entry_bits": 768,
+        "leaf_count": 256,
+        "tree_height": 8,
+        "path_levels": 9,
+        "ring_degree": 2048,
+        "bundle_arity": 4,
+        "record_coeffs": 256,
+        "plane_count": 1,
+        "records_per_plaintext": 8,
+        "record_index_bits": 3,
+        "projection_depth_max": 3,
+        "leaf_superrecords": 64,
+        "leaf_plaintexts": 8,
+        "selector_bits": 6,
+        "N0": 1,
+        "beta_bits": 3,
+        "beta_bits_max": 3,
+        "alpha_height": 0,
+        "alpha_alignment": 1,
+        "query_width": 37,
+        "min_expansion_height": 6,
+        "min_expansion_capacity": 64,
+        "expansion_height": 6,
+        "expansion_capacity": 64,
+        "required_key_height": 6,
+        "registered_key_height": 11,
+        "query_ciphertexts": 1,
+        "response_ciphertexts": 2
+      }
+    },
+    {
+      "label": "minimum-response-count",
+      "server_stats": {
+        "count": 16,
+        "mean": 27.424002625,
+        "median": 27.4333125,
+        "p95": 27.825458,
+        "stddev": 0.19522594458724835
+      },
+      "stage_stats": {
+        "expand": {
+          "count": 16,
+          "mean": 6.873559875,
+          "median": 6.850396,
+          "p95": 7.090792,
+          "stddev": 0.13585000159925173
+        },
+        "complete": {
+          "count": 16,
+          "mean": 11.968528625,
+          "median": 11.964166500000001,
+          "p95": 12.075917,
+          "stddev": 0.06464746774816464
+        },
+        "prepare": {
+          "count": 16,
+          "mean": 0.143908875,
+          "median": 0.1434585,
+          "p95": 0.146917,
+          "stddev": 0.0014992409134847746
+        },
+        "scan": {
+          "count": 16,
+          "mean": 0.3221953125,
+          "median": 0.322168,
+          "p95": 0.327417,
+          "stddev": 0.0027491455089112076
+        },
+        "finalize": {
+          "count": 16,
+          "mean": 0.3340783125,
+          "median": 0.3324195,
+          "p95": 0.350541,
+          "stddev": 0.006975633091638823
+        },
+        "fold": {
+          "count": 16,
+          "mean": 0.175505125,
+          "median": 0.17454150000000002,
+          "p95": 0.182791,
+          "stddev": 0.00272190599580515
+        },
+        "rotate": {
+          "count": 16,
+          "mean": 3.9223618125,
+          "median": 3.917979,
+          "p95": 3.992,
+          "stddev": 0.032499011741320694
+        },
+        "project": {
+          "count": 16,
+          "mean": 3.274981875,
+          "median": 3.26598,
+          "p95": 3.410458,
+          "stddev": 0.07550510940227828
+        },
+        "pack": {
+          "count": 16,
+          "mean": 0.026901125,
+          "median": 0.0264175,
+          "p95": 0.032792,
+          "stddev": 0.0016460078928526847
+        },
+        "switch": {
+          "count": 16,
+          "mean": 0.366247375,
+          "median": 0.3645005,
+          "p95": 0.381292,
+          "stddev": 0.004779649887805596
+        }
+      },
+      "legacy": false,
+      "h1": false,
+      "steady_state_bytes": 10888720,
+      "response_count": 1,
+      "shape": {
+        "entry_bits": 768,
+        "leaf_count": 256,
+        "tree_height": 8,
+        "path_levels": 9,
+        "ring_degree": 2048,
+        "bundle_arity": 2,
+        "record_coeffs": 128,
+        "plane_count": 1,
+        "records_per_plaintext": 16,
+        "record_index_bits": 4,
+        "projection_depth_max": 4,
+        "leaf_superrecords": 128,
+        "leaf_plaintexts": 8,
+        "selector_bits": 7,
+        "N0": 4,
+        "beta_bits": 1,
+        "beta_bits_max": 3,
+        "alpha_height": 2,
+        "alpha_alignment": 1,
+        "query_width": 46,
+        "min_expansion_height": 6,
+        "min_expansion_capacity": 64,
+        "expansion_height": 6,
+        "expansion_capacity": 64,
+        "required_key_height": 6,
+        "registered_key_height": 11,
+        "query_ciphertexts": 1,
+        "response_ciphertexts": 1
+      }
+    },
+    {
+      "label": "generic-h1-frontier-1",
+      "server_stats": {
+        "count": 16,
+        "mean": 32.2559165625,
+        "median": 32.2524375,
+        "p95": 32.527166,
+        "stddev": 0.16592829828692865
+      },
+      "stage_stats": {
+        "expand": {
+          "count": 16,
+          "mean": 8.243989375,
+          "median": 8.230792,
+          "p95": 8.485791,
+          "stddev": 0.1282599549965488
+        },
+        "complete": {
+          "count": 16,
+          "mean": 13.876807375,
+          "median": 13.871500000000001,
+          "p95": 14.026417,
+          "stddev": 0.0703109515859137
+        },
+        "prepare": {
+          "count": 16,
+          "mean": 0.3060574375,
+          "median": 0.305771,
+          "p95": 0.31375,
+          "stddev": 0.002728322585246593
+        },
+        "scan": {
+          "count": 16,
+          "mean": 0.34779175,
+          "median": 0.34748,
+          "p95": 0.363751,
+          "stddev": 0.006955409170806075
+        },
+        "finalize": {
+          "count": 16,
+          "mean": 0.33455475,
+          "median": 0.332771,
+          "p95": 0.344292,
+          "stddev": 0.005344042496088525
+        },
+        "fold": {
+          "count": 16,
+          "mean": 0.17540875,
+          "median": 0.175208,
+          "p95": 0.178416,
+          "stddev": 0.0015597468811744187
+        },
+        "rotate": {
+          "count": 16,
+          "mean": 4.679554125,
+          "median": 4.6778759999999995,
+          "p95": 4.740416,
+          "stddev": 0.03534986690946182
+        },
+        "project": {
+          "count": 16,
+          "mean": 3.8760834375,
+          "median": 3.8813329999999997,
+          "p95": 3.994461,
+          "stddev": 0.06600953244491159
+        },
+        "pack": {
+          "count": 16,
+          "mean": 0.027143375,
+          "median": 0.026812000000000002,
+          "p95": 0.028335,
+          "stddev": 0.0007996574162310586
+        },
+        "switch": {
+          "count": 16,
+          "mean": 0.3701796875,
+          "median": 0.365042,
+          "p95": 0.424291,
+          "stddev": 0.01614302257000941
+        }
+      },
+      "legacy": false,
+      "h1": true,
+      "steady_state_bytes": 12707904,
+      "response_count": 1,
+      "shape": {
+        "entry_bits": 768,
+        "leaf_count": 256,
+        "tree_height": 8,
+        "path_levels": 9,
+        "ring_degree": 2048,
+        "bundle_arity": 1,
+        "record_coeffs": 128,
+        "plane_count": 1,
+        "records_per_plaintext": 16,
+        "record_index_bits": 4,
+        "projection_depth_max": 4,
+        "leaf_superrecords": 256,
+        "leaf_plaintexts": 16,
+        "selector_bits": 8,
+        "N0": 8,
+        "beta_bits": 1,
+        "beta_bits_max": 4,
+        "alpha_height": 3,
+        "alpha_alignment": 1,
+        "query_width": 56,
+        "min_expansion_height": 6,
+        "min_expansion_capacity": 64,
+        "expansion_height": 6,
+        "expansion_capacity": 64,
+        "required_key_height": 6,
+        "registered_key_height": 11,
+        "query_ciphertexts": 1,
+        "response_ciphertexts": 1
+      }
+    },
+    {
+      "label": "generic-h1-frontier-2",
+      "server_stats": {
+        "count": 16,
+        "mean": 32.1553203125,
+        "median": 32.1633125,
+        "p95": 32.652792,
+        "stddev": 0.2317275944977116
+      },
+      "stage_stats": {
+        "expand": {
+          "count": 16,
+          "mean": 9.2368908125,
+          "median": 9.2082505,
+          "p95": 9.68375,
+          "stddev": 0.15275777960471437
+        },
+        "complete": {
+          "count": 16,
+          "mean": 13.7037005,
+          "median": 13.7050625,
+          "p95": 13.84925,
+          "stddev": 0.06836056637857824
+        },
+        "prepare": {
+          "count": 16,
+          "mean": 0.6408229375,
+          "median": 0.6343749999999999,
+          "p95": 0.682208,
+          "stddev": 0.01635475742597548
+        },
+        "scan": {
+          "count": 16,
+          "mean": 0.40979224999999997,
+          "median": 0.4032305,
+          "p95": 0.461251,
+          "stddev": 0.021919865101470554
+        },
+        "finalize": {
+          "count": 16,
+          "mean": 0.3386558125,
+          "median": 0.338937,
+          "p95": 0.348166,
+          "stddev": 0.00626297664287251
+        },
+        "fold": {
+          "count": 16,
+          "mean": 0.1749298125,
+          "median": 0.1748335,
+          "p95": 0.178375,
+          "stddev": 0.0016667134214275318
+        },
+        "rotate": {
+          "count": 16,
+          "mean": 3.778919375,
+          "median": 3.769272,
+          "p95": 3.905835,
+          "stddev": 0.050096086936839035
+        },
+        "project": {
+          "count": 16,
+          "mean": 3.0916871875,
+          "median": 3.086833,
+          "p95": 3.200874,
+          "stddev": 0.049230507857382866
+        },
+        "pack": {
+          "count": 16,
+          "mean": 0.025776375,
+          "median": 0.025458500000000002,
+          "p95": 0.03125,
+          "stddev": 0.0015590022824443417
+        },
+        "switch": {
+          "count": 16,
+          "mean": 0.7324350625,
+          "median": 0.7304375000000001,
+          "p95": 0.743,
+          "stddev": 0.004420207528593348
+        }
+      },
+      "legacy": false,
+      "h1": true,
+      "steady_state_bytes": 14887424,
+      "response_count": 2,
+      "shape": {
+        "entry_bits": 768,
+        "leaf_count": 256,
+        "tree_height": 8,
+        "path_levels": 9,
+        "ring_degree": 2048,
+        "bundle_arity": 1,
+        "record_coeffs": 256,
+        "plane_count": 1,
+        "records_per_plaintext": 8,
+        "record_index_bits": 3,
+        "projection_depth_max": 3,
+        "leaf_superrecords": 256,
+        "leaf_plaintexts": 32,
+        "selector_bits": 8,
+        "N0": 16,
+        "beta_bits": 1,
+        "beta_bits_max": 5,
+        "alpha_height": 4,
+        "alpha_alignment": 1,
+        "query_width": 64,
+        "min_expansion_height": 6,
+        "min_expansion_capacity": 64,
+        "expansion_height": 6,
+        "expansion_capacity": 64,
+        "required_key_height": 6,
+        "registered_key_height": 11,
+        "query_ciphertexts": 1,
+        "response_ciphertexts": 2
+      }
+    },
+    {
+      "label": "frontier-1",
+      "server_stats": {
+        "count": 16,
+        "mean": 22.9901040625,
+        "median": 22.974021,
+        "p95": 23.216708,
+        "stddev": 0.12599451450147522
+      },
+      "stage_stats": {
+        "expand": {
+          "count": 16,
+          "mean": 6.02483325,
+          "median": 5.989041500000001,
+          "p95": 6.167708,
+          "stddev": 0.07952953270536259
+        },
+        "complete": {
+          "count": 16,
+          "mean": 10.3128464375,
+          "median": 10.3142915,
+          "p95": 10.476417,
+          "stddev": 0.07152767556404883
+        },
+        "prepare": {
+          "count": 16,
+          "mean": 0.14300256249999999,
+          "median": 0.142625,
+          "p95": 0.146167,
+          "stddev": 0.0011437905967294293
+        },
+        "scan": {
+          "count": 16,
+          "mean": 0.32244018750000003,
+          "median": 0.32275050000000005,
+          "p95": 0.326873,
+          "stddev": 0.003656125621816086
+        },
+        "finalize": {
+          "count": 16,
+          "mean": 0.3381716875,
+          "median": 0.3313325,
+          "p95": 0.39371,
+          "stddev": 0.016174773666499945
+        },
+        "fold": {
+          "count": 16,
+          "mean": 0.1774349375,
+          "median": 0.17531249999999998,
+          "p95": 0.189875,
+          "stddev": 0.0050301388512147445
+        },
+        "rotate": {
+          "count": 16,
+          "mean": 2.684070375,
+          "median": 2.6777509999999998,
+          "p95": 2.734542,
+          "stddev": 0.01860209852274734
+        },
+        "project": {
+          "count": 16,
+          "mean": 2.214091125,
+          "median": 2.2011675,
+          "p95": 2.285583,
+          "stddev": 0.035701900121001974
+        },
+        "pack": {
+          "count": 16,
+          "mean": 0.0248911875,
+          "median": 0.0247305,
+          "p95": 0.026085,
+          "stddev": 0.0005728119201215468
+        },
+        "switch": {
+          "count": 16,
+          "mean": 0.7340961874999999,
+          "median": 0.7324999999999999,
+          "p95": 0.747458,
+          "stddev": 0.005286575315126034
+        }
+      },
+      "legacy": false,
+      "h1": false,
+      "steady_state_bytes": 10134720,
+      "response_count": 2,
+      "shape": {
+        "entry_bits": 768,
+        "leaf_count": 256,
+        "tree_height": 8,
+        "path_levels": 9,
+        "ring_degree": 2048,
+        "bundle_arity": 4,
+        "record_coeffs": 256,
+        "plane_count": 1,
+        "records_per_plaintext": 8,
+        "record_index_bits": 3,
+        "projection_depth_max": 3,
+        "leaf_superrecords": 64,
+        "leaf_plaintexts": 8,
+        "selector_bits": 6,
+        "N0": 4,
+        "beta_bits": 1,
+        "beta_bits_max": 3,
+        "alpha_height": 2,
+        "alpha_alignment": 1,
+        "query_width": 40,
+        "min_expansion_height": 6,
+        "min_expansion_capacity": 64,
+        "expansion_height": 6,
+        "expansion_capacity": 64,
+        "required_key_height": 6,
+        "registered_key_height": 11,
+        "query_ciphertexts": 1,
+        "response_ciphertexts": 2
+      }
+    },
+    {
+      "label": "frontier-2",
+      "server_stats": {
+        "count": 16,
+        "mean": 23.503812500000002,
+        "median": 23.512916500000003,
+        "p95": 23.828541,
+        "stddev": 0.177712845223974
+      },
+      "stage_stats": {
+        "expand": {
+          "count": 16,
+          "mean": 5.917479125,
+          "median": 5.884,
+          "p95": 6.176584,
+          "stddev": 0.12669295706016975
+        },
+        "complete": {
+          "count": 16,
+          "mean": 10.3032135,
+          "median": 10.3113335,
+          "p95": 10.489125,
+          "stddev": 0.0851609027476811
+        },
+        "prepare": {
+          "count": 16,
+          "mean": 0.062044375,
+          "median": 0.0614375,
+          "p95": 0.065667,
+          "stddev": 0.0014872602944116197
+        },
+        "scan": {
+          "count": 16,
+          "mean": 0.40320275,
+          "median": 0.4012705,
+          "p95": 0.418294,
+          "stddev": 0.006097499919365862
+        },
+        "finalize": {
+          "count": 16,
+          "mean": 0.435300375,
+          "median": 0.4332705,
+          "p95": 0.450959,
+          "stddev": 0.006940935622570395
+        },
+        "fold": {
+          "count": 16,
+          "mean": 0.6985100625,
+          "median": 0.697667,
+          "p95": 0.709291,
+          "stddev": 0.0061992395067863035
+        },
+        "rotate": {
+          "count": 16,
+          "mean": 2.67881775,
+          "median": 2.6700419999999996,
+          "p95": 2.776792,
+          "stddev": 0.03343153591147137
+        },
+        "project": {
+          "count": 16,
+          "mean": 2.2320440625,
+          "median": 2.230354,
+          "p95": 2.30696,
+          "stddev": 0.04842659397682061
+        },
+        "pack": {
+          "count": 16,
+          "mean": 0.024867125,
+          "median": 0.024895,
+          "p95": 0.025793,
+          "stddev": 0.00046288657717991055
+        },
+        "switch": {
+          "count": 16,
+          "mean": 0.733862,
+          "median": 0.729646,
+          "p95": 0.7685,
+          "stddev": 0.010489382924335117
+        }
+      },
+      "legacy": false,
+      "h1": false,
+      "steady_state_bytes": 9839696,
+      "response_count": 2,
+      "shape": {
+        "entry_bits": 768,
+        "leaf_count": 256,
+        "tree_height": 8,
+        "path_levels": 9,
+        "ring_degree": 2048,
+        "bundle_arity": 4,
+        "record_coeffs": 256,
+        "plane_count": 1,
+        "records_per_plaintext": 8,
+        "record_index_bits": 3,
+        "projection_depth_max": 3,
+        "leaf_superrecords": 64,
+        "leaf_plaintexts": 8,
+        "selector_bits": 6,
+        "N0": 2,
+        "beta_bits": 2,
+        "beta_bits_max": 3,
+        "alpha_height": 1,
+        "alpha_alignment": 1,
+        "query_width": 38,
+        "min_expansion_height": 6,
+        "min_expansion_capacity": 64,
+        "expansion_height": 6,
+        "expansion_capacity": 64,
+        "required_key_height": 6,
+        "registered_key_height": 11,
+        "query_ciphertexts": 1,
+        "response_ciphertexts": 2
+      }
+    }
+  ],
+  "comparisons": {
+    "generic-h1-mandatory-0": {},
+    "minimum-optimized-steady-state": {
+      "generic-h1-mandatory-0": {
+        "candidate_over_control": 0.8022866729953305,
+        "ratio_ci95": [
+          0.7993154583647097,
+          0.805523488337863
+        ],
+        "speedup": 1.246437256980112,
+        "speedup_ci95": [
+          1.2414287286189811,
+          1.2510705123179569
+        ],
+        "server_time_reduction_percent": 19.77133270046695,
+        "reduction_percent_ci95": [
+          19.447651166213696,
+          20.068454163529026
+        ],
+        "statistically_unresolved": false,
+        "bootstrap_seed": 90304,
+        "bootstrap_resamples": 10000,
+        "paired_blocks": 16,
+        "estimator": "ratio of arithmetic means; percentile paired-block bootstrap"
+      }
+    },
+    "minimum-response-count": {
+      "generic-h1-mandatory-0": {
+        "candidate_over_control": 0.871355386318558,
+        "ratio_ci95": [
+          0.8685537829560326,
+          0.8741563128781578
+        ],
+        "speedup": 1.1476373655357321,
+        "speedup_ci95": [
+          1.1439601650962197,
+          1.151339179706988
+        ],
+        "server_time_reduction_percent": 12.864461368144198,
+        "reduction_percent_ci95": [
+          12.584368712184224,
+          13.14462170439674
+        ],
+        "statistically_unresolved": false,
+        "bootstrap_seed": 90304,
+        "bootstrap_resamples": 10000,
+        "paired_blocks": 16,
+        "estimator": "ratio of arithmetic means; percentile paired-block bootstrap"
+      }
+    },
+    "generic-h1-frontier-1": {
+      "generic-h1-mandatory-0": {
+        "candidate_over_control": 1.024881999236476,
+        "ratio_ci95": [
+          1.0206156279174985,
+          1.0292316774694907
+        ],
+        "speedup": 0.9757220838545192,
+        "speedup_ci95": [
+          0.9715985447111763,
+          0.9798007914501923
+        ],
+        "server_time_reduction_percent": -2.488199923647594,
+        "reduction_percent_ci95": [
+          -2.9231677469490736,
+          -2.061562791749849
+        ],
+        "statistically_unresolved": false,
+        "bootstrap_seed": 90304,
+        "bootstrap_resamples": 10000,
+        "paired_blocks": 16,
+        "estimator": "ratio of arithmetic means; percentile paired-block bootstrap"
+      }
+    },
+    "generic-h1-frontier-2": {
+      "generic-h1-mandatory-0": {
+        "candidate_over_control": 1.0216857085461797,
+        "ratio_ci95": [
+          1.01794126043153,
+          1.0257266294449754
+        ],
+        "speedup": 0.9787745797315325,
+        "speedup_ci95": [
+          0.9749186296753394,
+          0.9823749550893296
+        ],
+        "server_time_reduction_percent": -2.1685708546179683,
+        "reduction_percent_ci95": [
+          -2.572662944497539,
+          -1.7941260431530104
+        ],
+        "statistically_unresolved": false,
+        "bootstrap_seed": 90304,
+        "bootstrap_resamples": 10000,
+        "paired_blocks": 16,
+        "estimator": "ratio of arithmetic means; percentile paired-block bootstrap"
+      }
+    },
+    "frontier-1": {
+      "generic-h1-mandatory-0": {
+        "candidate_over_control": 0.7304750980668905,
+        "ratio_ci95": [
+          0.7271902076599813,
+          0.7337109372857256
+        ],
+        "speedup": 1.3689720603020867,
+        "speedup_ci95": [
+          1.3629345688908203,
+          1.3751560313468616
+        ],
+        "server_time_reduction_percent": 26.95249019331095,
+        "reduction_percent_ci95": [
+          26.628906271427443,
+          27.28097923400187
+        ],
+        "statistically_unresolved": false,
+        "bootstrap_seed": 90304,
+        "bootstrap_resamples": 10000,
+        "paired_blocks": 16,
+        "estimator": "ratio of arithmetic means; percentile paired-block bootstrap"
+      }
+    },
+    "frontier-2": {
+      "generic-h1-mandatory-0": {
+        "candidate_over_control": 0.7467973913562319,
+        "ratio_ci95": [
+          0.7432531639900035,
+          0.7502309604352732
+        ],
+        "speedup": 1.3390512762557136,
+        "speedup_ci95": [
+          1.3329228634070427,
+          1.3454365866829323
+        ],
+        "server_time_reduction_percent": 25.32026086437681,
+        "reduction_percent_ci95": [
+          24.976903956472686,
+          25.67468360099965
+        ],
+        "statistically_unresolved": false,
+        "bootstrap_seed": 90304,
+        "bootstrap_resamples": 10000,
+        "paired_blocks": 16,
+        "estimator": "ratio of arithmetic means; percentile paired-block bootstrap"
+      }
+    }
+  }
+}

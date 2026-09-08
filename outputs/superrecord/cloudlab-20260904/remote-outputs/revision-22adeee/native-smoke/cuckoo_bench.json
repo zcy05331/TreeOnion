@@ -1,0 +1,27 @@
+{
+  "schema_version": "cuckoo_raw_profile.v1",
+  "scheme": "cuckoo_batch_pir_1_5x_plus_one",
+  "bucket_sizing": "ceil(1.5*k)+1",
+  "hash_seed": 1668639538,
+  "source_commit": null,
+  "leaf_count": 1024,
+  "tree_height": 10,
+  "node_entry_bits": 256,
+  "actual_logical_bytes": 65472,
+  "root_excluded_node_count": 2046,
+  "warmups": 1,
+  "measured_trials": 2,
+  "trial_seed": 7,
+  "batch_size": 10,
+  "num_buckets": 16,
+  "num_hashes": 3,
+  "offline_setup_ms": 32.658537,
+  "setup_ms": 32.658537,
+  "stage_map": ["expand", "convert", "first_dim_query_ntt", "first_dim_query_pack", "first_dim_core", "first_dim_finalize", "other_dim", "mod_switch"],
+  "communication": {"modeled_query_bytes": 238080, "actual_response_bytes": 180224, "modeled_helper_key_bytes": 892800},
+  "storage": {"bucket_count": 16, "total_member_entries": 5792, "total_target_plaintexts": 66, "total_padded_plaintexts": 72, "max_bucket_members": 386, "max_bucket_target_plaintexts": 5, "max_bucket_plaintexts": 8, "logical_replicated_bytes": 185344, "logical_padded_bytes": 221184, "public_metadata_bytes": 32768, "estimated_preprocessed_bytes": 1179648, "estimated_peak_resident_bytes": 1212416},
+  "samples": [
+    {"trial": 0, "leaf": 297, "bucket_routing_ms": 0.001368, "server_total_ms": 43.265129, "client_query_ms": 3.555258, "response_serialize_ms": 6.126582, "client_decode_ms": 11.639607, "stages_ms": {"expand":14.912462,"convert":0.011521,"first_dim_query_ntt":1.673151,"first_dim_query_pack":6.424187,"first_dim_core":8.003685,"first_dim_finalize":2.107760,"other_dim":0.028167,"mod_switch":9.969873}, "correct": true},
+    {"trial": 1, "leaf": 514, "bucket_routing_ms": 0.001394, "server_total_ms": 43.250565, "client_query_ms": 3.545055, "response_serialize_ms": 6.140133, "client_decode_ms": 11.689672, "stages_ms": {"expand":14.915578,"convert":0.011397,"first_dim_query_ntt":1.663953,"first_dim_query_pack":6.417025,"first_dim_core":7.994049,"first_dim_finalize":2.120845,"other_dim":0.028810,"mod_switch":9.970691}, "correct": true}
+  ]
+}

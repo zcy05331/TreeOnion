@@ -1,0 +1,13 @@
+Running test: tree_g32
+==============================================================================
+                    test_tree_g32(Benchmark build)
+==============================================================================
+Noise budget after decryption: 7 (max noise: 38)
+Noise budget after decryption: 7 (max noise: 40)
+Noise budget after decryption: 7 (max noise: 43)
+Noise budget after decryption: 7 (max noise: 48)
+Noise budget after decryption: 7 (max noise: 50)
+Noise budget after decryption: 6 (max noise: 66)
+Noise budget after decryption: 7 (max noise: 50)
+Noise budget after decryption: 7 (max noise: 40)
+Noise budget after decryption: 7 (max noise: 39)

@@ -1,0 +1,24 @@
+Running test: tree_superrecord_bench
+==============================================================================
+                    test_tree_superrecord_benchmark(Benchmark build)
+==============================================================================
+planner: E=256 c=12 N=2^22: 1174 candidates (292 h=1), Pareto frontier 404, benchmark rows 8, execution seed 20260904
+generic super-record JSON: /Users/little_sun/Desktop/little_sun/26Summer/OnionPIRv2/.worktrees/generic-superrecord/outputs/generic-superrecord-validation/large-block-plan/e256-n4194304.json
+
+generic super-record benchmark: N=2^22 leaves, E=256 bits, 16 measured trials after 3 warmup, trial seed 7 (plan-only)
+[candidate-0 bundle3] E=256 N=2^22 h=3 G=64 P=1 rho=32 m=21 b=7 N0=342(align 1) width=468 h_q=9 keys req/reg=9/11 resp=1 scan=1368 MiB folds=247 rot=95 proj=95 util=1 pred=707.922 ms
+  ineligible/unmeasured: plan-only
+[candidate-1 generic-h1-mandatory-1] E=256 N=2^22 h=1 G=8 P=3 rho=256 m=22 b=6 N0=256(align 1) width=388 h_q=9 keys req/reg=9/11 resp=1 scan=1536 MiB folds=360 rot=444 proj=444 util=0.888889 pred=891.734 ms
+  ineligible/unmeasured: plan-only
+[candidate-2 bundle3] E=256 N=2^22 h=3 G=64 P=1 rho=32 m=21 b=9 N0=86(align 1) width=212 h_q=8 keys req/reg=8/11 resp=1 scan=1376 MiB folds=1013 rot=95 proj=95 util=1 pred=810.451 ms
+  ineligible/unmeasured: plan-only
+[candidate-3 generic-h1-frontier-1] E=256 N=2^22 h=1 G=8 P=3 rho=256 m=22 b=5 N0=512(align 1) width=644 h_q=10 keys req/reg=10/11 resp=1 scan=1536 MiB folds=171 rot=444 proj=444 util=0.888889 pred=930.03 ms
+  ineligible/unmeasured: excluded by co-resident benchmark memory budget
+[candidate-4 generic-h1-frontier-2] E=256 N=2^22 h=1 G=8 P=3 rho=256 m=22 b=7 N0=128(align 1) width=260 h_q=9 keys req/reg=9/11 resp=1 scan=1536 MiB folds=741 rot=444 proj=444 util=0.888889 pred=941.646 ms
+  ineligible/unmeasured: excluded by co-resident benchmark memory budget
+[candidate-5 frontier-1] E=256 N=2^22 h=3 G=64 P=1 rho=32 m=21 b=8 N0=171(align 1) width=297 h_q=9 keys req/reg=9/11 resp=1 scan=1368 MiB folds=502 rot=95 proj=95 util=1 pred=713.976 ms
+  ineligible/unmeasured: excluded by co-resident benchmark memory budget
+[candidate-6 frontier-2] E=256 N=2^22 h=3 G=64 P=1 rho=32 m=21 b=7 N0=352(align 16) width=478 h_q=9 keys req/reg=9/11 resp=1 scan=1408 MiB folds=247 rot=95 proj=95 util=1 pred=721.895 ms
+  ineligible/unmeasured: excluded by co-resident benchmark memory budget
+[candidate-7 legacy-g32] 
+  ineligible/unmeasured: plan-only

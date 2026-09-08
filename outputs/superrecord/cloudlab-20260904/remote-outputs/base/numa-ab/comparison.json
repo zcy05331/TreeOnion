@@ -1,0 +1,141 @@
+{
+  "source_commit": "813595513515d8010a8a8b5fd21ba249325c6893",
+  "cpu": 0,
+  "run_order": [
+    "A1",
+    "B1",
+    "B2",
+    "A2"
+  ],
+  "warmups_per_process": 3,
+  "measured_trials_per_process": 16,
+  "same_leaf_schedule": true,
+  "groups": {
+    "interleaved": {
+      "server": {
+        "count": 32,
+        "mean_ms": 3208.2970868125,
+        "median_ms": 3210.5302305,
+        "stdev_ms": 7.413378806037556
+      },
+      "stages": {
+        "convert": {
+          "count": 32,
+          "mean_ms": 262.40734415625,
+          "median_ms": 262.4224535,
+          "stdev_ms": 0.22456274719309488
+        },
+        "expand": {
+          "count": 32,
+          "mean_ms": 394.984315,
+          "median_ms": 394.9994595,
+          "stdev_ms": 2.525331059264043
+        },
+        "first_dim_core": {
+          "count": 32,
+          "mean_ms": 1079.51828359375,
+          "median_ms": 1079.3187950000001,
+          "stdev_ms": 4.822067997853425
+        },
+        "first_dim_finalize": {
+          "count": 32,
+          "mean_ms": 470.516014875,
+          "median_ms": 471.063772,
+          "stdev_ms": 3.5069012975103657
+        },
+        "first_dim_query_ntt": {
+          "count": 32,
+          "mean_ms": 21.63636475,
+          "median_ms": 21.64338,
+          "stdev_ms": 0.03644133016675697
+        },
+        "first_dim_query_pack": {
+          "count": 32,
+          "mean_ms": 96.52992315625,
+          "median_ms": 96.3847255,
+          "stdev_ms": 0.45328536153310894
+        },
+        "mod_switch": {
+          "count": 32,
+          "mean_ms": 11.0414743125,
+          "median_ms": 11.036716,
+          "stdev_ms": 0.022419661968959722
+        },
+        "other_dim": {
+          "count": 32,
+          "mean_ms": 864.68842940625,
+          "median_ms": 864.778444,
+          "stdev_ms": 0.3939490961460901
+        }
+      },
+      "individual_means_ms": {
+        "A1": 3203.4656625000002,
+        "A2": 3213.128511125
+      }
+    },
+    "local_node0": {
+      "server": {
+        "count": 32,
+        "mean_ms": 3029.0091589375,
+        "median_ms": 3030.213468,
+        "stdev_ms": 7.246204066653304
+      },
+      "stages": {
+        "convert": {
+          "count": 32,
+          "mean_ms": 261.787355125,
+          "median_ms": 261.77613,
+          "stdev_ms": 0.182950010665664
+        },
+        "expand": {
+          "count": 32,
+          "mean_ms": 391.762065375,
+          "median_ms": 391.68969100000004,
+          "stdev_ms": 2.462434433975328
+        },
+        "first_dim_core": {
+          "count": 32,
+          "mean_ms": 931.7477258125,
+          "median_ms": 933.6837,
+          "stdev_ms": 5.742182199051365
+        },
+        "first_dim_finalize": {
+          "count": 32,
+          "mean_ms": 458.67491075,
+          "median_ms": 458.826732,
+          "stdev_ms": 0.9303708380927584
+        },
+        "first_dim_query_ntt": {
+          "count": 32,
+          "mean_ms": 21.580769625,
+          "median_ms": 21.579385000000002,
+          "stdev_ms": 0.04455100705624752
+        },
+        "first_dim_query_pack": {
+          "count": 32,
+          "mean_ms": 84.962961875,
+          "median_ms": 84.837699,
+          "stdev_ms": 0.47101554816962476
+        },
+        "mod_switch": {
+          "count": 32,
+          "mean_ms": 11.15450275,
+          "median_ms": 11.160712,
+          "stdev_ms": 0.09719463486952006
+        },
+        "other_dim": {
+          "count": 32,
+          "mean_ms": 861.4900234375,
+          "median_ms": 861.5380205,
+          "stdev_ms": 0.4796708158023055
+        }
+      },
+      "individual_means_ms": {
+        "B1": 3029.9486106875,
+        "B2": 3028.0697071875
+      }
+    }
+  },
+  "interleaved_over_local_latency_ratio": 1.0591902891234206,
+  "local_latency_reduction_percent": 5.5882582885466325
+}

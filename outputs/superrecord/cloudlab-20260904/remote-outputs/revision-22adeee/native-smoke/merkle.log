@@ -1,0 +1,63 @@
+DB gen+NTT+realign: 2 ms
+Noise budget after decryption: 3 (max noise: 37)
+Noise budget after decryption: 3 (max noise: 38)
+Noise budget after decryption: 3 (max noise: 39)
+DB gen+NTT+realign: 2 ms
+Noise budget after decryption: 3 (max noise: 43)
+Noise budget after decryption: 3 (max noise: 42)
+Noise budget after decryption: 3 (max noise: 36)
+Noise budget after decryption: 3 (max noise: 36)
+Noise budget after decryption: 3 (max noise: 39)
+Noise budget after decryption: 3 (max noise: 38)
+Noise budget after decryption: 3 (max noise: 43)
+Noise budget after decryption: 3 (max noise: 35)
+Noise budget after decryption: 3 (max noise: 40)
+Noise budget after decryption: 3 (max noise: 45)
+Noise budget after decryption: 3 (max noise: 35)
+Noise budget after decryption: 3 (max noise: 35)
+Noise budget after decryption: 3 (max noise: 38)
+Noise budget after decryption: 3 (max noise: 36)
+Noise budget after decryption: 3 (max noise: 38)
+Noise budget after decryption: 3 (max noise: 35)
+Noise budget after decryption: 3 (max noise: 43)
+Noise budget after decryption: 3 (max noise: 45)
+Noise budget after decryption: 3 (max noise: 33)
+Noise budget after decryption: 3 (max noise: 40)
+Noise budget after decryption: 3 (max noise: 38)
+Noise budget after decryption: 3 (max noise: 44)
+Noise budget after decryption: 3 (max noise: 37)
+Noise budget after decryption: 3 (max noise: 36)
+Noise budget after decryption: 3 (max noise: 37)
+Noise budget after decryption: 3 (max noise: 37)
+Noise budget after decryption: 3 (max noise: 35)
+Noise budget after decryption: 3 (max noise: 38)
+Noise budget after decryption: 3 (max noise: 37)
+Noise budget after decryption: 3 (max noise: 35)
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 1 ms
+Noise budget after decryption: 3 (max noise: 37)
+Noise budget after decryption: 3 (max noise: 37)
+Noise budget after decryption: 3 (max noise: 36)
+Noise budget after decryption: 3 (max noise: 40)
+Noise budget after decryption: 3 (max noise: 39)
+Noise budget after decryption: 3 (max noise: 41)
+Noise budget after decryption: 3 (max noise: 36)
+Noise budget after decryption: 3 (max noise: 37)
+Noise budget after decryption: 3 (max noise: 33)
+Noise budget after decryption: 3 (max noise: 38)
+Noise budget after decryption: 3 (max noise: 43)
+Noise budget after decryption: 3 (max noise: 35)
+This run is not the frozen Apple M4 Rosetta benchmark environment
+case,correct,server_ms,paper_MBps,paper_scan_MBps,padded_scan_MBps,online_bytes,first_session_bytes
+standard_onionpir,true,13.8516,4.65312,4.65312,6.76818,26144,918944
+merkle_flat,true,137.204,0.469761,4.69761,6.83289,261440,1154240
+merkle_layerwise,true,15.4991,4.40659,4.40659,5.91877,108608,1001408
+case,expand_ms,convert_ms,first_dim_ms,other_dim_ms,mod_switch_ms
+standard_onionpir,9.466,0.000482,3.61013,0.002586,0.61207
+merkle_flat,96.0179,0.0048505,33.5634,0.0463165,6.16684
+merkle_layerwise,7.37766,0.0015915,5.58374,0.006884,2.46891
+merkle_layerwise layout policy legacy: 36 padded plaintexts, heights 0 0 0 0 0 0 1 2 3 4
+optional 4 GB: not_requested (optional 4 GB run flag was not set)
+Benchmark JSON: /users/zcy05331/generic-superrecord-bench-20260904/revision-22adeee/outputs/native-smoke/merkle.json

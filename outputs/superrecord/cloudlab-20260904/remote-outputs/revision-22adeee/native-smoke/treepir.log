@@ -1,0 +1,37 @@
++---------------------------------------------------+
+|               ENCRYPTION PARAMETERS               |
++---------------------------------------------------+
+|  seal_params_.poly_modulus_degree  = 8192
+|  seal_params_.coeff_modulus().bit_count   = [42 + 58 + 58 + 60] bits
+|  seal_params_.coeff_modulus().size = 4
+|  seal_params_.plain_modulus().bit_count = 28
++---------------------------------------------------+
+BatchPIRServer: Populating raw database...
+BatchPIRServer: Raw database populated.
+BatchPIRServer: Reading Color sub-databases and balancing...
+BatchPIRServer: Bucket Statistics:
+===================
+BatchPIRServer: Number of Buckets: 10
+Max Bucket Size: 205
+BatchPIRServer: Reading Color sub-databases completed.
+BatchPIRServer: Preparing PIR servers......
+dim_size = 64
++---------------------------------------------------+
+|                 PIR PARAMETERS                    |
++---------------------------------------------------+
+|  num_entries_                  = 205
+|  num_rounded_entries_          = 256
+|  entry_size_                   = 32
+|  num_columns_per_entry_        = 10
+|  db_ptx_                       = 40
+|  dimensions_                   = [ 64 4 ]
++---------------------------------------------------+
+BatchPIRServer: Converting and merging databases. This may take some time...
+BatchPIRServer: Processed database 1 of 10BatchPIRServer: Processed database 2 of 10BatchPIRServer: Processed database 3 of 10BatchPIRServer: Processed database 4 of 10BatchPIRServer: Processed database 5 of 10BatchPIRServer: Processed database 6 of 10BatchPIRServer: Processed database 7 of 10BatchPIRServer: Processed database 8 of 10BatchPIRServer: Processed database 9 of 10BatchPIRServer: Processed database 10 of 10
+BatchPIRServer: Database converted to PIR DB and merged successfully!
+BatchPIRServer: Database is NTT processed!
+BatchPIRServer: PIR servers preparation complete.
+Main: Noise budget left in the response: 46
+Main: Noise budget left in the response: 46
+Main: Noise budget left in the response: 47
+{"model":"SEAL+VBPIRTreePIR","upstream_commit":"930063c5aefc441244abb4890fdf35383f3aa956","data_dir":"/users/zcy05331/generic-superrecord-bench-20260904/revision-22adeee/deps/TreePIR/VBPIR_TreePIR","leaf_file":"/users/zcy05331/generic-superrecord-bench-20260904/revision-22adeee/outputs/native-smoke/treepir-leaves.txt","height":10,"leaf_count":1024,"data_mode":"fixture_json_validated","entry_size_bytes":32,"layout":{"color_buckets":10,"max_bucket_entries":205,"first_two_dimensions":64,"pir_shape":"64x64xceil(max_bucket/(d*d))"},"warmups":1,"trials":2,"validate_index_only":false,"index_prep_ms_excluded":23.732,"offline_setup_ms":566.236,"actual_helper_key_bytes_uncompressed":39395731,"indexing_validation":"h10 C++ SubIndices port checked against all fixture path nodes and color_indices_10_2.txt; h24/h27 reuse the same port with range checks","stage_definitions":{"index_ms":"per-leaf path_nodes_for_leaf plus map_indices_for_leaf; excludes h10 fixture load/validation and expected-entry setup","query_ms":"client create_queries","query_serialize_ms":"uncompressed expanded query ciphertext serialization after decode, outside query and server timing","server_first_dimension_ms":"sum over PIR servers of process_first_dimension_delayed_mod","server_second_dimension_ms":"sum over PIR servers of process_second_dimension or passthrough for 2D","server_last_dimension_ms":"sum over PIR servers of process_last_dimension","server_merge_ms":"merge_responses_chunks_buckets across color buckets","server_ms":"full BatchPIRServer generate_response wall time including stages and merge","response_serialize_ms":"SEAL Ciphertext::save to uncompressed in-memory streams, outside server and decode timers","decode_ms":"client decode_responses_chunks only; correctness comparison happens after this timer"},"seal_parameters":{"scheme":"BFV","poly_modulus_degree":8192,"coeff_modulus_bits":[42,58,58,60],"plain_modulus_bits":28},"communication_size_labels":{"query":"seeded save_size/2 model plus separately measured actual unseeded ciphertext payload; these are different encodings","helper_keys":"actual GaloisKeys and RelinKeys save bytes, uncompressed, once per session","response":"actual bytes returned by Ciphertext::save(compr_mode_type::none) to in-memory streams"},"serialization_timing":"query and response save uncompressed in memory, outside server timing","measured_summary":{"count":2,"index_ms_mean":0.010,"query_ms_mean":7.404,"server_ms_mean":741.552,"server_first_dimension_ms_mean":497.710,"server_second_dimension_ms_mean":0.670,"server_last_dimension_ms_mean":198.118,"server_merge_ms_mean":44.799,"response_serialize_ms_mean":0.128,"decode_ms_mean":2.654,"actual_response_payload_bytes_mean":262257.000,"all_correct":true},"results":[{"iteration":1,"phase":"warmup","leaf_id":0,"path_nodes":[2,4,8,16,32,64,128,256,512,1024],"sub_indices":[0,1,0,3,0,0,1,1,0,2],"index_ms":0.011,"query_ms":8.737,"query_serialize_ms":0.594,"actual_query_payload_bytes_unseeded":786658,"server_ms":758.555,"server_first_dimension_ms":513.629,"server_second_dimension_ms":0.664,"server_last_dimension_ms":198.856,"server_merge_ms":44.886,"response_serialize_ms":0.473,"decode_ms":3.032,"query_payload_bytes_bound_save_size_seeded_div2":393328,"actual_response_payload_bytes":262257,"query_ciphertexts":2,"response_ciphertexts":1,"decoded_entries":10,"correct":true},{"iteration":2,"phase":"measured","leaf_id":1,"path_nodes":[2,4,8,16,32,64,128,256,512,1025],"sub_indices":[0,1,0,4,0,0,1,1,0,2],"index_ms":0.010,"query_ms":7.944,"query_serialize_ms":0.203,"actual_query_payload_bytes_unseeded":786658,"server_ms":741.148,"server_first_dimension_ms":497.374,"server_second_dimension_ms":0.697,"server_last_dimension_ms":198.081,"server_merge_ms":44.742,"response_serialize_ms":0.130,"decode_ms":2.653,"query_payload_bytes_bound_save_size_seeded_div2":393328,"actual_response_payload_bytes":262257,"query_ciphertexts":2,"response_ciphertexts":1,"decoded_entries":10,"correct":true},{"iteration":3,"phase":"measured","leaf_id":1023,"path_nodes":[3,7,15,31,63,127,255,511,1023,2047],"sub_indices":[199,0,198,102,204,204,179,154,192,193],"index_ms":0.011,"query_ms":6.864,"query_serialize_ms":0.202,"actual_query_payload_bytes_unseeded":786658,"server_ms":741.956,"server_first_dimension_ms":498.046,"server_second_dimension_ms":0.644,"server_last_dimension_ms":198.155,"server_merge_ms":44.856,"response_serialize_ms":0.127,"decode_ms":2.654,"query_payload_bytes_bound_save_size_seeded_div2":393328,"actual_response_payload_bytes":262257,"query_ciphertexts":2,"response_ciphertexts":1,"decoded_entries":10,"correct":true}]}

@@ -1,0 +1,60 @@
+{
+  "scheme": "legacy-tree-g32",
+  "leaf_count": 4096,
+  "node_entry_bits": 256,
+  "actual_logical_bytes": 262112,
+  "actual_logical_bytes_scope": "full_tree_all_nodes",
+  "warmups": 1,
+  "measured_trials": 3,
+  "trial_seed": 7,
+  "offline_setup_ms": 24.582018999999999,
+  "diagnostic_non_comparable_32B_payload": false,
+  "mode": "mvp",
+  "communication": {
+    "modeled_query_bytes_per_trial": 14880,
+    "actual_response_bytes_per_trial": 11264,
+    "modeled_helper_key_bytes": 1607040,
+    "modeled_compression_key_bytes": 0,
+    "query_bytes_kind": "modeled",
+    "response_bytes_kind": "actual",
+    "helper_key_bytes_kind": "modeled",
+    "compression_key_bytes_kind": "modeled"
+  },
+  "stage_definitions": {
+    "query_expand": "ExpandBFV over the packed tree query",
+    "selector_completion": "RLWE-star selector rows completed to RGSW",
+    "pyramid": "alpha pyramid construction and server-domain preparation",
+    "scan_core": "composite m32 first-dimension matrix multiplication core",
+    "scan_finalize": "composite m32 CRT reconstruction and inverse NTT finalize",
+    "fold": "beta-dimension CMux folding",
+    "rotate": "private gamma rotation",
+    "project": "stride projection and BV key switching",
+    "pack": "public shifts and response accumulation",
+    "switch": "same-ring response modulus switch or compressed response ring switch",
+    "response_serialize": "actual response wire serialization outside server timing",
+    "client_decode": "client decryption and path extraction/decode",
+    "diagnostic_scan_combined": "legacy combined first-dimension scan timer; overlaps scan_core plus scan_finalize",
+    "diagnostic_response_ring_switch_key_switch": "compressed-response even/odd split plus small-ring gadget key switching; overlaps switch",
+    "diagnostic_response_ring_switch_modswitch": "compressed-response final full-q to small-q rescale; overlaps switch"
+  },
+  "metadata": {
+    "N0": "64",
+    "acceptance_policy": "decryption_correctness_only; noise margins are diagnostic",
+    "b": "0",
+    "chunk_bits": "12",
+    "ciphertext_modulus": "288135826036838401",
+    "g": "32",
+    "key_height": "10",
+    "max_noise": "57",
+    "min_noise_budget_bits": "3",
+    "payload_note": "full 32-byte nodes; digit width follows plaintext modulus",
+    "plaintext_modulus": "4099",
+    "response_modulus": "4169729",
+    "ring_degree": "2048"
+  },
+  "samples": [
+    {"trial": 0, "leaf": 178, "client_query_ms": 0.23613799999999999, "server_total_ms": 103.28282400000001, "stages_ms": {"fold": 0.00048899999999999996, "pack": 0.086291000000000007, "project": 15.160473999999999, "pyramid": 14.451262, "query_expand": 28.383666999999999, "rotate": 17.533579000000003, "scan_core": 6.1777219999999993, "scan_finalize": 2.7542020000000003, "selector_completion": 17.921616, "switch": 0.61363100000000004}, "diagnostics_ms": {"scan_combined": 9.0308680000000017}, "response_serialize_ms": 0.52874900000000002, "actual_response_bytes": 11264, "client_decode_ms": 0.31946099999999999, "correct": true},
+    {"trial": 1, "leaf": 126, "client_query_ms": 0.19650699999999999, "server_total_ms": 103.580534, "stages_ms": {"fold": 0.00049299999999999995, "pack": 0.086206000000000005, "project": 15.196624, "pyramid": 14.322221000000001, "query_expand": 28.377706, "rotate": 17.548752999999998, "scan_core": 6.1706060000000011, "scan_finalize": 2.758521, "selector_completion": 18.325724999999998, "switch": 0.60595200000000005}, "diagnostics_ms": {"scan_combined": 9.0165420000000012}, "response_serialize_ms": 0.51706600000000003, "actual_response_bytes": 11264, "client_decode_ms": 0.32025599999999999, "correct": true},
+    {"trial": 2, "leaf": 2507, "client_query_ms": 0.19902400000000001, "server_total_ms": 103.09987699999999, "stages_ms": {"fold": 0.00046500000000000003, "pack": 0.086307999999999996, "project": 15.194458000000003, "pyramid": 14.281802000000001, "query_expand": 28.316824, "rotate": 17.549911000000002, "scan_core": 6.1688579999999993, "scan_finalize": 2.7413470000000002, "selector_completion": 17.965503999999999, "switch": 0.61035799999999996}, "diagnostics_ms": {"scan_combined": 8.9944580000000016}, "response_serialize_ms": 0.51820900000000003, "actual_response_bytes": 11264, "client_decode_ms": 0.32281900000000002, "correct": true}
+  ]
+}

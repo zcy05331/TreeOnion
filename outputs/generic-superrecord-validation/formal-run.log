@@ -1,0 +1,29 @@
+e256-n4194304: 16 measured trials, 3 warmups; log /Users/little_sun/Desktop/little_sun/26Summer/OnionPIRv2/.worktrees/generic-superrecord/outputs/superrecord/prototype-133ccce-local/e256-n4194304.log
+Analysis: /Users/little_sun/Desktop/little_sun/26Summer/OnionPIRv2/.worktrees/generic-superrecord/outputs/superrecord/prototype-133ccce-local/e256-n4194304-analysis.md; selected bundle3 (formal_candidate_selection)
+e256-n4194304: saved /Users/little_sun/Desktop/little_sun/26Summer/OnionPIRv2/.worktrees/generic-superrecord/outputs/superrecord/prototype-133ccce-local/e256-n4194304.json
+e13-n256: 16 measured trials, 3 warmups; log /Users/little_sun/Desktop/little_sun/26Summer/OnionPIRv2/.worktrees/generic-superrecord/outputs/superrecord/prototype-133ccce-local/e13-n256.log
+Analysis: /Users/little_sun/Desktop/little_sun/26Summer/OnionPIRv2/.worktrees/generic-superrecord/outputs/superrecord/prototype-133ccce-local/e13-n256-analysis.md; selected minimum-response-count (formal_candidate_selection)
+e13-n256: saved /Users/little_sun/Desktop/little_sun/26Summer/OnionPIRv2/.worktrees/generic-superrecord/outputs/superrecord/prototype-133ccce-local/e13-n256.json
+e128-n256: 16 measured trials, 3 warmups; log /Users/little_sun/Desktop/little_sun/26Summer/OnionPIRv2/.worktrees/generic-superrecord/outputs/superrecord/prototype-133ccce-local/e128-n256.log
+Analysis: /Users/little_sun/Desktop/little_sun/26Summer/OnionPIRv2/.worktrees/generic-superrecord/outputs/superrecord/prototype-133ccce-local/e128-n256-analysis.md; selected minimum-response-count (formal_candidate_selection)
+e128-n256: saved /Users/little_sun/Desktop/little_sun/26Summer/OnionPIRv2/.worktrees/generic-superrecord/outputs/superrecord/prototype-133ccce-local/e128-n256.json
+e160-n256: 16 measured trials, 3 warmups; log /Users/little_sun/Desktop/little_sun/26Summer/OnionPIRv2/.worktrees/generic-superrecord/outputs/superrecord/prototype-133ccce-local/e160-n256.log
+Analysis: /Users/little_sun/Desktop/little_sun/26Summer/OnionPIRv2/.worktrees/generic-superrecord/outputs/superrecord/prototype-133ccce-local/e160-n256-analysis.md; selected minimum-response-count (formal_candidate_selection)
+e160-n256: saved /Users/little_sun/Desktop/little_sun/26Summer/OnionPIRv2/.worktrees/generic-superrecord/outputs/superrecord/prototype-133ccce-local/e160-n256.json
+e192-n256: 16 measured trials, 3 warmups; log /Users/little_sun/Desktop/little_sun/26Summer/OnionPIRv2/.worktrees/generic-superrecord/outputs/superrecord/prototype-133ccce-local/e192-n256.log
+Analysis: /Users/little_sun/Desktop/little_sun/26Summer/OnionPIRv2/.worktrees/generic-superrecord/outputs/superrecord/prototype-133ccce-local/e192-n256-analysis.md; selected minimum-optimized-steady-state (formal_candidate_selection)
+e192-n256: saved /Users/little_sun/Desktop/little_sun/26Summer/OnionPIRv2/.worktrees/generic-superrecord/outputs/superrecord/prototype-133ccce-local/e192-n256.json
+e256-n256: 16 measured trials, 3 warmups; log /Users/little_sun/Desktop/little_sun/26Summer/OnionPIRv2/.worktrees/generic-superrecord/outputs/superrecord/prototype-133ccce-local/e256-n256.log
+Analysis: /Users/little_sun/Desktop/little_sun/26Summer/OnionPIRv2/.worktrees/generic-superrecord/outputs/superrecord/prototype-133ccce-local/e256-n256-analysis.md; selected frontier-1 (formal_candidate_selection)
+e256-n256: saved /Users/little_sun/Desktop/little_sun/26Summer/OnionPIRv2/.worktrees/generic-superrecord/outputs/superrecord/prototype-133ccce-local/e256-n256.json
+e384-n256: 16 measured trials, 3 warmups; log /Users/little_sun/Desktop/little_sun/26Summer/OnionPIRv2/.worktrees/generic-superrecord/outputs/superrecord/prototype-133ccce-local/e384-n256.log
+Analysis: /Users/little_sun/Desktop/little_sun/26Summer/OnionPIRv2/.worktrees/generic-superrecord/outputs/superrecord/prototype-133ccce-local/e384-n256-analysis.md; selected frontier-1 (formal_candidate_selection)
+e384-n256: saved /Users/little_sun/Desktop/little_sun/26Summer/OnionPIRv2/.worktrees/generic-superrecord/outputs/superrecord/prototype-133ccce-local/e384-n256.json
+e512-n256: 16 measured trials, 3 warmups; log /Users/little_sun/Desktop/little_sun/26Summer/OnionPIRv2/.worktrees/generic-superrecord/outputs/superrecord/prototype-133ccce-local/e512-n256.log
+Analysis: /Users/little_sun/Desktop/little_sun/26Summer/OnionPIRv2/.worktrees/generic-superrecord/outputs/superrecord/prototype-133ccce-local/e512-n256-analysis.md; selected frontier-2 (formal_candidate_selection)
+e512-n256: saved /Users/little_sun/Desktop/little_sun/26Summer/OnionPIRv2/.worktrees/generic-superrecord/outputs/superrecord/prototype-133ccce-local/e512-n256.json
+e768-n256: 16 measured trials, 3 warmups; log /Users/little_sun/Desktop/little_sun/26Summer/OnionPIRv2/.worktrees/generic-superrecord/outputs/superrecord/prototype-133ccce-local/e768-n256.log
+Analysis: /Users/little_sun/Desktop/little_sun/26Summer/OnionPIRv2/.worktrees/generic-superrecord/outputs/superrecord/prototype-133ccce-local/e768-n256-analysis.md; selected frontier-1 (formal_candidate_selection)
+e768-n256: saved /Users/little_sun/Desktop/little_sun/26Summer/OnionPIRv2/.worktrees/generic-superrecord/outputs/superrecord/prototype-133ccce-local/e768-n256.json
+e30000-n16: 16 measured trials, 3 warmups; log /Users/little_sun/Desktop/little_sun/26Summer/OnionPIRv2/.worktrees/generic-superrecord/outputs/superrecord/prototype-133ccce-local/e30000-n16.log
+e30000-n16: failed; inspect preserved log

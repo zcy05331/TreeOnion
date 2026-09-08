@@ -1,0 +1,294 @@
+{
+  "diagnostic_only": true,
+  "fresh_replication": true,
+  "shapes": [
+    {
+      "index": 0,
+      "status": "observed",
+      "shape": {
+        "label": "H27_E256_h1_G8_P3_N0_512_b10_hq10",
+        "leaf_count": 134217728,
+        "entry_bits": 256,
+        "bundle_arity": 1,
+        "record_coeffs": 8,
+        "plane_count": 3,
+        "N0": 512,
+        "beta_bits": 10,
+        "expansion_height": 10,
+        "alpha_alignment": 1,
+        "registered_key_height": 11
+      },
+      "all_correct": true,
+      "all_margins_ok": false,
+      "queries": [
+        {
+          "leaf": 15830119,
+          "correct_path": true,
+          "correct_selected_bundle": true,
+          "min_final_budget_bits": 1,
+          "max_noise": 174,
+          "max_used_phase_residual": 174,
+          "max_unused_phase_residual": 121
+        },
+        {
+          "leaf": 113195322,
+          "correct_path": true,
+          "correct_selected_bundle": true,
+          "min_final_budget_bits": 1,
+          "max_noise": 158,
+          "max_used_phase_residual": 158,
+          "max_unused_phase_residual": 112
+        },
+        {
+          "leaf": 40120694,
+          "correct_path": true,
+          "correct_selected_bundle": true,
+          "min_final_budget_bits": 0,
+          "max_noise": 256,
+          "max_used_phase_residual": 256,
+          "max_unused_phase_residual": 101
+        }
+      ]
+    },
+    {
+      "index": 1,
+      "status": "observed",
+      "shape": {
+        "label": "H27_E256_h2_G16_P3_N0_512_b10_hq10",
+        "leaf_count": 134217728,
+        "entry_bits": 256,
+        "bundle_arity": 2,
+        "record_coeffs": 16,
+        "plane_count": 3,
+        "N0": 512,
+        "beta_bits": 10,
+        "expansion_height": 10,
+        "alpha_alignment": 1,
+        "registered_key_height": 11
+      },
+      "all_correct": true,
+      "all_margins_ok": true,
+      "queries": [
+        {
+          "leaf": 15830119,
+          "correct_path": true,
+          "correct_selected_bundle": true,
+          "min_final_budget_bits": 1,
+          "max_noise": 158,
+          "max_used_phase_residual": 158,
+          "max_unused_phase_residual": 115
+        },
+        {
+          "leaf": 113195322,
+          "correct_path": true,
+          "correct_selected_bundle": true,
+          "min_final_budget_bits": 1,
+          "max_noise": 216,
+          "max_used_phase_residual": 216,
+          "max_unused_phase_residual": 108
+        },
+        {
+          "leaf": 40120694,
+          "correct_path": true,
+          "correct_selected_bundle": true,
+          "min_final_budget_bits": 1,
+          "max_noise": 172,
+          "max_used_phase_residual": 172,
+          "max_unused_phase_residual": 98
+        }
+      ]
+    },
+    {
+      "index": 2,
+      "status": "observed",
+      "shape": {
+        "label": "H27_E256_h3_G64_P1_N0_352_b12_hq9",
+        "leaf_count": 134217728,
+        "entry_bits": 256,
+        "bundle_arity": 3,
+        "record_coeffs": 64,
+        "plane_count": 1,
+        "N0": 352,
+        "beta_bits": 12,
+        "expansion_height": 9,
+        "alpha_alignment": 16,
+        "registered_key_height": 11
+      },
+      "all_correct": true,
+      "all_margins_ok": true,
+      "queries": [
+        {
+          "leaf": 15830119,
+          "correct_path": true,
+          "correct_selected_bundle": true,
+          "min_final_budget_bits": 2,
+          "max_noise": 121,
+          "max_used_phase_residual": 121,
+          "max_unused_phase_residual": 50
+        },
+        {
+          "leaf": 113195322,
+          "correct_path": true,
+          "correct_selected_bundle": true,
+          "min_final_budget_bits": 2,
+          "max_noise": 120,
+          "max_used_phase_residual": 120,
+          "max_unused_phase_residual": 58
+        },
+        {
+          "leaf": 40120694,
+          "correct_path": true,
+          "correct_selected_bundle": true,
+          "min_final_budget_bits": 1,
+          "max_noise": 134,
+          "max_used_phase_residual": 134,
+          "max_unused_phase_residual": 53
+        }
+      ]
+    },
+    {
+      "index": 3,
+      "status": "observed",
+      "shape": {
+        "label": "H27_E256_h3_G64_P1_N0_683_b11_hq10",
+        "leaf_count": 134217728,
+        "entry_bits": 256,
+        "bundle_arity": 3,
+        "record_coeffs": 64,
+        "plane_count": 1,
+        "N0": 683,
+        "beta_bits": 11,
+        "expansion_height": 10,
+        "alpha_alignment": 1,
+        "registered_key_height": 11
+      },
+      "all_correct": true,
+      "all_margins_ok": true,
+      "queries": [
+        {
+          "leaf": 15830119,
+          "correct_path": true,
+          "correct_selected_bundle": true,
+          "min_final_budget_bits": 1,
+          "max_noise": 206,
+          "max_used_phase_residual": 206,
+          "max_unused_phase_residual": 56
+        },
+        {
+          "leaf": 113195322,
+          "correct_path": true,
+          "correct_selected_bundle": true,
+          "min_final_budget_bits": 1,
+          "max_noise": 174,
+          "max_used_phase_residual": 174,
+          "max_unused_phase_residual": 70
+        },
+        {
+          "leaf": 40120694,
+          "correct_path": true,
+          "correct_selected_bundle": true,
+          "min_final_budget_bits": 1,
+          "max_noise": 185,
+          "max_used_phase_residual": 185,
+          "max_unused_phase_residual": 55
+        }
+      ]
+    },
+    {
+      "index": 4,
+      "status": "observed",
+      "shape": {
+        "label": "H27_E256_h2_G8_P6_N0_512_b9_hq10",
+        "leaf_count": 134217728,
+        "entry_bits": 256,
+        "bundle_arity": 2,
+        "record_coeffs": 8,
+        "plane_count": 6,
+        "N0": 512,
+        "beta_bits": 9,
+        "expansion_height": 10,
+        "alpha_alignment": 1,
+        "registered_key_height": 11
+      },
+      "all_correct": true,
+      "all_margins_ok": true,
+      "queries": [
+        {
+          "leaf": 15830119,
+          "correct_path": true,
+          "correct_selected_bundle": true,
+          "min_final_budget_bits": 1,
+          "max_noise": 188,
+          "max_used_phase_residual": 188,
+          "max_unused_phase_residual": 170
+        },
+        {
+          "leaf": 113195322,
+          "correct_path": true,
+          "correct_selected_bundle": true,
+          "min_final_budget_bits": 1,
+          "max_noise": 207,
+          "max_used_phase_residual": 207,
+          "max_unused_phase_residual": 139
+        },
+        {
+          "leaf": 40120694,
+          "correct_path": true,
+          "correct_selected_bundle": true,
+          "min_final_budget_bits": 1,
+          "max_noise": 174,
+          "max_used_phase_residual": 174,
+          "max_unused_phase_residual": 164
+        }
+      ]
+    },
+    {
+      "index": 5,
+      "status": "observed",
+      "shape": {
+        "label": "H27_E256_h3_G32_P2_N0_352_b11_hq9",
+        "leaf_count": 134217728,
+        "entry_bits": 256,
+        "bundle_arity": 3,
+        "record_coeffs": 32,
+        "plane_count": 2,
+        "N0": 352,
+        "beta_bits": 11,
+        "expansion_height": 9,
+        "alpha_alignment": 16,
+        "registered_key_height": 11
+      },
+      "all_correct": true,
+      "all_margins_ok": true,
+      "queries": [
+        {
+          "leaf": 15830119,
+          "correct_path": true,
+          "correct_selected_bundle": true,
+          "min_final_budget_bits": 1,
+          "max_noise": 133,
+          "max_used_phase_residual": 133,
+          "max_unused_phase_residual": 69
+        },
+        {
+          "leaf": 113195322,
+          "correct_path": true,
+          "correct_selected_bundle": true,
+          "min_final_budget_bits": 2,
+          "max_noise": 118,
+          "max_used_phase_residual": 118,
+          "max_unused_phase_residual": 56
+        },
+        {
+          "leaf": 40120694,
+          "correct_path": true,
+          "correct_selected_bundle": true,
+          "min_final_budget_bits": 1,
+          "max_noise": 136,
+          "max_used_phase_residual": 136,
+          "max_unused_phase_residual": 57
+        }
+      ]
+    }
+  ]
+}

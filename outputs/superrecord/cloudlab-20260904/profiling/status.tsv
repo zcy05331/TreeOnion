@@ -70,3 +70,7 @@ scale	case	status	exit_code	utc
 8gb	cuckoo_tuned	running		2026-09-05T21:35:59Z
 8gb	cuckoo_tuned	complete	0	2026-09-05T22:56:13Z
 8gb	generic	running		2026-09-05T22:56:13Z
+8gb	generic	failed	1	2026-09-07T07:13:51Z
+8gb	treepir	complete	0	2026-09-07T07:13:51Z
+8gb	flat	running		2026-09-07T07:13:51Z
+8gb	flat	complete	0	2026-09-07T08:58:04Z

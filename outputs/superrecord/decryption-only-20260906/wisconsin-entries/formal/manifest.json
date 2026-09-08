@@ -58,7 +58,19 @@
         "SUPERRECORD_EXECUTION_SEED": "20260904",
         "SUPERRECORD_BOOTSTRAP_SEED": "90304"
       },
-      "state": "running"
+      "state": "complete",
+      "best_overall": {
+        "label": "generic-h3-mandatory",
+        "mean_ms": 1000.70801475
+      },
+      "best_h1": {
+        "label": "generic-h1-mandatory-0",
+        "mean_ms": 1163.79076117
+      },
+      "best_h3": {
+        "label": "generic-h3-mandatory",
+        "mean_ms": 1000.70801475
+      }
     },
     {
       "entry_bytes": 48,
@@ -105,7 +117,7 @@
         "SUPERRECORD_EXECUTION_SEED": "20260904",
         "SUPERRECORD_BOOTSTRAP_SEED": "90304"
       },
-      "state": "pending"
+      "state": "running"
     },
     {
       "entry_bytes": 64,
