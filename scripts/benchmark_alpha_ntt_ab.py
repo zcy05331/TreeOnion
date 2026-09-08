@@ -7,7 +7,30 @@ from pathlib import Path
 from statistics import fmean
 
 from read_process_peak_memory import run_measured
-from summarize_cloudlab_profiles import validate_profile
+from summarize_cloudlab_profiles import finite_ms, require_count, require_leaf_count
+
+
+def validate_h3_result(data, path, trials, leaves):
+    require_leaf_count(data, path, leaves)
+    require_count(data.get('measured_trials'), trials, path, 'measured trials')
+    if data.get('entry_bits') != 256 or data.get('warmup_count') != 3:
+        raise ValueError('expected 32-byte entries and three warmups')
+    cs = [c for c in data['candidates'] if c.get('eligible') and c.get('samples')]
+    if len(cs) != 1:
+        raise ValueError('expected one measured h3 candidate')
+    c = cs[0]
+    if c['shape']['bundle_arity'] != 3:
+        raise ValueError('expected h3')
+    require_count(len(c['samples']), trials, path, 'h3 samples')
+    gate = c['target_noise_result']
+    if gate['decrypts_correctly'] is not True or gate['observed_key_coverage_matches_tag'] is not True:
+        raise ValueError('h3 decryption/key coverage failed')
+    for sample in c['samples']:
+        for key in ('server_total_ms','client_query_ms','client_decode_ms','response_serialize_ms'):
+            finite_ms(sample[key], path, key)
+        for key, value in sample['stages_ms'].items():
+            finite_ms(value, path, key)
+    return c
 
 
 def main():
@@ -47,12 +70,14 @@ def main():
                     'SUPERRECORD_EXPANSION_HEIGHTS':'9', 'SUPERRECORD_ALPHA_ALIGNMENTS':'16',
                     'SUPERRECORD_MAX_RESPONSES':'1', 'SUPERRECORD_FIXED_KEY_HEIGHT':'11',
                     'SUPERRECORD_MEMORY_BYTES':str(4*2**30), 'SUPERRECORD_MIN_NOISE_MARGIN':'0',
+                    'SUPERRECORD_PIN_SHAPE':f'3,64,1,352,{args.leaf_count.bit_length()-1-15}',
                     'SUPERRECORD_OUTPUT_JSON':str(raw), 'SUPERRECORD_COMMIT':commit,
                 })
                 command = [str(binary.resolve()), '--test', 'tree_superrecord_bench',
                            '--leaf-count', str(args.leaf_count), '--experiments', str(args.experiments),
                            '--warmup', '3', '--trial-seed', '7']
-                row = {'name':name, 'state':'running', 'command':command, 'source_commit':commit}
+                row = {'name':name, 'state':'running', 'command':command, 'source_commit':commit,
+                       'environment':{k:v for k,v in env.items() if k.startswith('SUPERRECORD_')}}
                 manifest['runs'].append(row)
                 save()
                 process = run_measured(command, log_path=out/(name+'.log'), env=env)
@@ -60,11 +85,7 @@ def main():
                 if process['exit_code'] != 0:
                     raise RuntimeError(f'{name} failed; inspect preserved log')
                 data = json.loads(raw.read_text())
-                validate_profile(data, raw, args.experiments, args.leaf_count)
-                cs = [c for c in data['candidates'] if c.get('eligible') and c.get('samples')]
-                if len(cs) != 1:
-                    raise ValueError(f'{name}: expected one measured candidate')
-                c = cs[0]
+                c = validate_h3_result(data, raw, args.experiments, args.leaf_count)
                 expected = {'bundle_arity':3, 'record_coeffs':64, 'plane_count':1,
                             'N0':352, 'beta_bits':args.leaf_count.bit_length()-1-15}
                 if any(c['shape'][k] != v for k,v in expected.items()):

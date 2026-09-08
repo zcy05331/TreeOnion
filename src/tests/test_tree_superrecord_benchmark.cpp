@@ -247,6 +247,26 @@ std::string env_string(const char *name, const std::string &fallback) {
   return value && *value ? std::string(value) : fallback;
 }
 
+// Benchmark-only pin for implementation A/B tests: h,G,P,N0,b.
+void filter_candidates_by_pinned_shape(std::vector<Candidate> &candidates) {
+  const char *value = std::getenv("SUPERRECORD_PIN_SHAPE");
+  if (value == nullptr) return;
+  std::istringstream in(value);
+  std::array<size_t, 5> pin{};
+  for (size_t i = 0; i < pin.size(); ++i) {
+    char comma = 0;
+    if (!(in >> pin[i]) || (i + 1 < pin.size() && (!(in >> comma) || comma != ',')))
+      throw std::invalid_argument("SUPERRECORD_PIN_SHAPE must be h,G,P,N0,b");
+  }
+  in >> std::ws;
+  if (!in.eof()) throw std::invalid_argument("unexpected suffix in SUPERRECORD_PIN_SHAPE");
+  std::erase_if(candidates, [&](const Candidate &candidate) {
+    const auto &s = candidate.shape;
+    return std::array<size_t, 5>{s.bundle_arity, s.record_coeffs, s.plane_count, s.N0, s.beta_bits} != pin;
+  });
+  if (candidates.empty()) throw std::invalid_argument("pinned benchmark shape is not feasible");
+}
+
 std::string env_string2(const char *primary, const char *secondary,
                         const std::string &fallback) {
   const char *value = std::getenv(primary);
@@ -635,6 +655,9 @@ void write_run_json(const std::string &path, size_t entry_bits, size_t L,
       << ",\n  \"benchmark_bundle_arities\": ";
   if (bundle_arities.empty()) out << "null";
   else json_size_array(out, bundle_arities);
+  out << ",\n  \"benchmark_shape_pin\": ";
+  if (const char *pin = std::getenv("SUPERRECORD_PIN_SHAPE")) json_string(out, pin);
+  else out << "null";
   out << ",\n  \"bootstrap_seed\": "
       << env_size("SUPERRECORD_BOOTSTRAP_SEED", 0x5352426f6f747374ULL);
   out << ",\n  \"leaf_schedule\": {\"warmup\": ";
@@ -968,6 +991,7 @@ void PirTest::test_tree_superrecord_benchmark() {
   const PlannerInput input = make_input(scheme, entry_bits, N, policy);
   std::vector<Candidate> all = enumerate_candidates(input);
   filter_candidates_by_bundle_arity(all, bundle_arities);
+  filter_candidates_by_pinned_shape(all);
   const size_t enumerated = all.size();
   const size_t h1_enumerated =
       static_cast<size_t>(std::count_if(all.begin(), all.end(),

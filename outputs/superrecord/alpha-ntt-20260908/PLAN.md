@@ -20,3 +20,9 @@ including m32 splitting. Also compare original/new binaries at 256 MiB locally
 with h=3, G=64, P=1, N0=352, b=7, 100 measurements and 3 warmups. Keep expansion
 height 9 and alpha alignment 16; verify the resulting shape matches before
 claiming a direct speedup. This local Rosetta test is not a 1 GiB server result.
+
+The first automatic-selection run is preserved under local/full-query-ab,
+but excluded from the fixed-layout comparison: calibration selected N0=176.
+A benchmark-only h,G,P,N0,b pin now enforces the requested shape. The old
+5a05443 source receives only the same benchmark pin (benchmark-pin.patch),
+with the original pyramid implementation and operation counts retained.
