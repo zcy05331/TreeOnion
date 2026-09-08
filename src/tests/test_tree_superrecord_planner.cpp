@@ -141,6 +141,10 @@ void PirTest::test_tree_superrecord_planner() {
     // N0 = 688 query-server database estimate pin (design section 20.4).
     const Candidate wide = *pick_candidate(all, 3, 64, 8, 16);
     if (scheme.get_composite_rns().enabled) {
+      const Candidate aligned = *pick_candidate(all, 3, 64, 9, 16);
+      require_test(aligned.metrics.alpha_pyramid_ciphertexts == 705 &&
+                       aligned.metrics.alpha_ntt_ciphertexts == 352,
+                   "NTT-domain pyramid transforms only its 352 bottom ciphertexts");
       require_test(wide.metrics.query_eval_server_database_bytes_estimate ==
                        11272192,
                    "N0 = 688 composite query-server database estimate");

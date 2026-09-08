@@ -78,6 +78,12 @@ size_t canonical_database_bytes(const CanonicalTreeDatabase &canonical);
 AlphaPyramid build_ragged_alpha_pyramid(std::span<const RlweCt> alpha,
                                         const TreeParams &params,
                                         const PirParams &runtime_scheme);
+// Same ragged carry-up pyramid, but row 0 is lifted to NTT form first and
+// higher rows are built by NTT-domain modular additions. The input alpha
+// ciphertexts remain unchanged and must be coefficient-form.
+AlphaPyramid build_ragged_alpha_pyramid_ntt(
+    std::span<const RlweCt> alpha, const TreeParams &params,
+    const PirParams &runtime_scheme);
 struct PyramidCounters {
   size_t ciphertexts = 0;
   size_t additions = 0;

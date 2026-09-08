@@ -226,7 +226,8 @@ CandidateMetrics compute_metrics(const CandidateShape &shape,
   m.alpha_pyramid_additions = shape.N0 - 1;
   m.alpha_pyramid_carries =
       m.alpha_pyramid_upper_outputs - m.alpha_pyramid_additions;
-  m.alpha_ntt_ciphertexts = m.alpha_pyramid_ciphertexts;
+  // The m32 path lifts row 0 once and adds/copies all upper rows in NTT form.
+  m.alpha_ntt_ciphertexts = composite ? shape.N0 : m.alpha_pyramid_ciphertexts;
   m.alpha_split_logical_coefficients = m.alpha_pyramid_ciphertexts * 2 * n;
   m.alpha_split_u32_outputs =
       composite ? m.alpha_split_logical_coefficients * 2 : 0;

@@ -191,7 +191,7 @@ struct CandidateMetrics {
   size_t alpha_pyramid_upper_outputs = 0;
   size_t alpha_pyramid_additions = 0;
   size_t alpha_pyramid_carries = 0;
-  size_t alpha_ntt_ciphertexts = 0;
+  size_t alpha_ntt_ciphertexts = 0;  // m32 transforms N0 bottom-row ciphertexts
   size_t alpha_split_logical_coefficients = 0;
   size_t alpha_split_u32_outputs = 0;
 

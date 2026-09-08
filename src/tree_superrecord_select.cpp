@@ -171,6 +171,80 @@ AlphaPyramid build_ragged_alpha_pyramid(std::span<const RlweCt> alpha,
   return pyramid;
 }
 
+namespace {
+
+void require_alpha_ciphertext_shape(const RlweCt &ct,
+                                    const PirParams &runtime_scheme) {
+  const size_t width = checked_mul(runtime_scheme.K(),
+                                   runtime_scheme.get_poly_degree(),
+                                   "alpha ciphertext width");
+  require(!ct.ntt_form && ct.c0.size() == width && ct.c1.size() == width,
+          "alpha pyramid input must be coefficient-form with K*n coefficients");
+}
+
+void ntt_ct_add_inplace(RlweCt &acc, const RlweCt &rhs,
+                        const PirParams &runtime_scheme) {
+  const size_t degree = runtime_scheme.get_poly_degree();
+  const auto &qs = runtime_scheme.get_rns_mods();
+  const size_t width = checked_mul(qs.size(), degree, "alpha ciphertext width");
+  require(acc.ntt_form && rhs.ntt_form && acc.c0.size() == width &&
+              acc.c1.size() == width && rhs.c0.size() == width &&
+              rhs.c1.size() == width,
+          "alpha pyramid NTT addition needs matching NTT-form ciphertexts");
+  for (size_t k = 0; k < qs.size(); ++k) {
+    const size_t offset = k * degree;
+    intel::hexl::EltwiseAddMod(acc.c0.data() + offset,
+                               acc.c0.data() + offset,
+                               rhs.c0.data() + offset, degree, qs[k]);
+    intel::hexl::EltwiseAddMod(acc.c1.data() + offset,
+                               acc.c1.data() + offset,
+                               rhs.c1.data() + offset, degree, qs[k]);
+  }
+}
+
+}  // namespace
+
+AlphaPyramid build_ragged_alpha_pyramid_ntt(
+    std::span<const RlweCt> alpha, const TreeParams &params,
+    const PirParams &runtime_scheme) {
+  require(alpha.size() == params.shape.N0,
+          "alpha pyramid needs the N0 expanded one-hot ciphertexts");
+  const size_t degree = runtime_scheme.get_poly_degree();
+  const auto &qs = runtime_scheme.get_rns_mods();
+  AlphaPyramid pyramid;
+  pyramid.reserve(params.shape.alpha_height + 1);
+  std::vector<RlweCt> base;
+  base.reserve(alpha.size());
+  for (const RlweCt &ct : alpha) {
+    require_alpha_ciphertext_shape(ct, runtime_scheme);
+    RlweCt lifted = ct;
+    for (size_t k = 0; k < qs.size(); ++k) {
+      const size_t offset = k * degree;
+      utils::ntt_fwd(lifted.c0.data() + offset, degree, qs[k]);
+      utils::ntt_fwd(lifted.c1.data() + offset, degree, qs[k]);
+    }
+    lifted.ntt_form = true;
+    base.push_back(std::move(lifted));
+  }
+  pyramid.push_back(std::move(base));
+  while (pyramid.back().size() > 1) {
+    const std::vector<RlweCt> &prev = pyramid.back();
+    std::vector<RlweCt> next;
+    next.reserve((prev.size() + 1) / 2);
+    for (size_t j = 0; 2 * j < prev.size(); ++j) {
+      RlweCt sum = prev[2 * j];
+      if (2 * j + 1 < prev.size()) {
+        ntt_ct_add_inplace(sum, prev[2 * j + 1], runtime_scheme);
+      }
+      next.push_back(std::move(sum));
+    }
+    pyramid.push_back(std::move(next));
+  }
+  require(pyramid.size() == params.shape.alpha_height + 1,
+          "ragged pyramid height does not match the plan");
+  return pyramid;
+}
+
 PyramidCounters ragged_pyramid_counters(size_t N0) {
   PyramidCounters counters;
   for (size_t len : ragged_pyramid_row_lengths(N0)) counters.ciphertexts += len;

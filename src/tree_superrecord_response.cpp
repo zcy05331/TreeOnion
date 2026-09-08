@@ -125,9 +125,8 @@ PathResponse answer_path_m32(const PreprocessedTree &db, ExpandedQuery &query,
   require_m32_scheme(runtime_scheme);
 
   StageClock clock(timing);
-  const AlphaPyramid pyramid =
-      build_ragged_alpha_pyramid(query.alpha, params, runtime_scheme);
-  const AlphaPyramid pyramid_ntt = pyramid_to_ntt(pyramid, runtime_scheme);
+  const AlphaPyramid pyramid_ntt =
+      build_ragged_alpha_pyramid_ntt(query.alpha, params, runtime_scheme);
   const ::AlphaPyramidM32 pyramid_m32 =
       pyramid_to_m32(pyramid_ntt, runtime_scheme);
   clock.lap(&TreeServerTiming::alpha_prepare);
