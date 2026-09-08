@@ -2,13 +2,30 @@ import copy
 import pathlib
 import sys
 import unittest
+import tempfile
+from unittest.mock import patch
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 from benchmark_alpha_ntt_ab import validate_h3_result
+import benchmark_alpha_ntt_ab as ab
 from summarize_cloudlab_profiles import ProfileError
 
 
 class H3ProfileTests(unittest.TestCase):
+    def test_server_memory_budget_reaches_the_benchmark(self):
+        captured = {}
+        def capture(command, **kwargs):
+            captured.update(kwargs['env'])
+            raise RuntimeError('captured benchmark invocation')
+        with tempfile.TemporaryDirectory() as tmp:
+            argv = ['benchmark', '--baseline', '/tmp/old', '--optimized', '/tmp/new',
+                    '--baseline-commit', 'old', '--optimized-commit', 'new',
+                    '--output', tmp, '--leaf-count', '16777216', '--memory-gib', '80']
+            with patch.object(sys, 'argv', argv), patch.object(ab, 'run_measured', capture):
+                with self.assertRaisesRegex(RuntimeError, 'captured'):
+                    ab.main()
+        self.assertEqual(captured['SUPERRECORD_MEMORY_BYTES'], str(80 * 2**30))
+
     def setUp(self):
         sample = {'server_total_ms':10.,'client_query_ms':1.,'client_decode_ms':1.,
                   'response_serialize_ms':1.,'stages_ms':{'prepare':2.,'scan':8.}}

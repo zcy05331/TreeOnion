@@ -42,11 +42,15 @@ def main():
     p.add_argument('--output', type=Path, required=True)
     p.add_argument('--leaf-count', type=int, default=1 << 22)
     p.add_argument('--experiments', type=int, default=100)
+    p.add_argument('--memory-gib', type=int, default=4)
     args = p.parse_args()
+    if args.memory_gib <= 0:
+        p.error('--memory-gib must be positive')
     out = args.output.resolve()
     out.mkdir(parents=True, exist_ok=True)
     manifest = {'state': 'running', 'runs': [], 'leaf_count': args.leaf_count,
-                'samples_per_run': args.experiments, 'warmups_per_run': 3}
+                'samples_per_run': args.experiments, 'warmups_per_run': 3,
+                'memory_gib': args.memory_gib}
     def save():
         (out/'manifest.json').write_text(json.dumps(manifest, indent=2)+'\n')
     if (out/'manifest.json').exists():
@@ -69,7 +73,7 @@ def main():
                     'SUPERRECORD_MAX_FRONTIER':'0', 'SUPERRECORD_H1_FRONTIER':'0',
                     'SUPERRECORD_EXPANSION_HEIGHTS':'9', 'SUPERRECORD_ALPHA_ALIGNMENTS':'16',
                     'SUPERRECORD_MAX_RESPONSES':'1', 'SUPERRECORD_FIXED_KEY_HEIGHT':'11',
-                    'SUPERRECORD_MEMORY_BYTES':str(4*2**30), 'SUPERRECORD_MIN_NOISE_MARGIN':'0',
+                    'SUPERRECORD_MEMORY_BYTES':str(args.memory_gib*2**30), 'SUPERRECORD_MIN_NOISE_MARGIN':'0',
                     'SUPERRECORD_PIN_SHAPE':f'3,64,1,352,{args.leaf_count.bit_length()-1-15}',
                     'SUPERRECORD_OUTPUT_JSON':str(raw), 'SUPERRECORD_COMMIT':commit,
                 })
