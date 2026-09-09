@@ -21,7 +21,5 @@ are diagnostic. A dedicated idle native-node comparison is required for the fina
 performance assessment. Actual local merge counts: M=23,rho=32 -> 24 KS versus
 95 old projection KS. The one-GiB shapes have different H/counts (27 and 79 KS).
 
-Source label records the original feca044 base plus uncommitted MLWE edits; all
-source content will be archived by the subsequent implementation commit. History
-is being rewritten separately to remove private docs; old commit IDs remain
-historical provenance, not public draft links.
+The run label records the original feca044 base plus then-uncommitted MLWE edits.
+The tested source is archived in implementation commit 0ac2393.
