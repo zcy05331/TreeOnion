@@ -30,3 +30,6 @@ claude_resp/
 codex_resp/
 .*
 overleaf/
+
+# Research drafts and paper notes stay local.
+/docs/
