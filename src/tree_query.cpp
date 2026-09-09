@@ -250,7 +250,7 @@ RlweCt make_tree_query(PirClient &client, const PirParams &scheme,
   const size_t ell = scheme.get_l();
   const std::vector<std::vector<uint64_t>> gadget = utils::gsw_gadget(
       ell, scheme.get_base_log2(),
-      std::vector<uint64_t>(qs.begin(), qs.end()));
+      std::vector<uint64_t>(qs.begin(), qs.end()), scheme.get_ep_low_bits());
 
   // 写入一个"1"选择位的整组 ell 行：组 group_index 占用逻辑槽位
   // [N0 + group_index*ell, N0 + (group_index+1)*ell)。第 row 行在 limb k

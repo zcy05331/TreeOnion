@@ -80,7 +80,25 @@ PirParams::PirParams()
 
   // ================== GSW related parameters ==================
   size_t ct_mod_width = get_ct_mod_width();
-  base_log2_ = (ct_mod_width + l_ep_ - 1) / l_ep_;
+  if (l_ep_ == 0 || l_key_ == 0) {
+    throw std::invalid_argument("PirParams: GSW gadget rows must be positive");
+  }
+  if (ep_low_bits_ >= ct_mod_width) {
+    throw std::invalid_argument("PirParams: PIR_EP_LOW_BITS must be smaller than log2(q)");
+  }
+  if (ep_low_bits_ > 0 && K() != 1) {
+    throw std::invalid_argument(
+        "PirParams: approximate data GSW decomposition is only implemented for K=1");
+  }
+  if (ep_low_bits_ > 0 || l_ep_ != DBConsts::DefaultL_EP) {
+    base_log2_ = (ct_mod_width - ep_low_bits_) / l_ep_ + 1;
+  } else {
+    base_log2_ = (ct_mod_width + l_ep_ - 1) / l_ep_;
+  }
+  if (base_log2_ >= 63) {
+    throw std::invalid_argument(
+        "PirParams: data GSW base_log2 exceeds the signed decomposition range");
+  }
   base_log2_key_ = (ct_mod_width + l_key_ - 1) / l_key_;
 
   // =============== Database shape calculation ===============
@@ -198,10 +216,12 @@ PirSchemeIdentity PirParams::scheme_identity() const {
   id.response_modulus_bits = DBConsts::SmallQWidth;
   id.selector_gadget_rows = l_ep_;
   id.selector_base_log2 = base_log2_;
+  id.selector_low_bits = ep_low_bits_;
   id.completion_key_gadget_rows = l_key_;
   id.completion_key_base_log2 = base_log2_key_;
   id.bv_ks_rows = bvks::gadget_rows();
   id.bv_ks_base_log2 = bvks::base_log2_for_scheme(*this);
+  id.bv_ks_low_bits = bvks::low_bits_for_scheme(*this);
   id.r64_mod_q = rns_tables_.r64_mod_q;
   id.q0_inv_mod_q1 = rns_tables_.q0_inv_mod_q1;
   id.composite_first_dim = composite_rns_.enabled;
@@ -251,6 +271,8 @@ void PirParams::print_params() const {
   print_field_num("l_ep (data RGSW)",  l_ep_);
   print_field_num("l_key (key RGSW)",  l_key_);
   print_field_num("l_ks (BV keyswitch)", DBConsts::L_KS);
+  print_field_num("ep low bits", ep_low_bits_);
+  print_field_num("ks low bits", DBConsts::KS_LOW_BITS);
   // print_field_num("base_log2 (data)", base_log2_);
   // print_field_num("base_log2 (key)",  base_log2_key_);
 

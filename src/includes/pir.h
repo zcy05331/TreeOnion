@@ -71,10 +71,12 @@ struct PirSchemeIdentity {
 
   size_t selector_gadget_rows = 0;        // L_EP
   size_t selector_base_log2 = 0;
+  size_t selector_low_bits = 0;
   size_t completion_key_gadget_rows = 0;  // L_KEY
   size_t completion_key_base_log2 = 0;
   size_t bv_ks_rows = 0;                  // L_KS
   size_t bv_ks_base_log2 = 0;
+  size_t bv_ks_low_bits = 0;
 
   std::vector<uint64_t> r64_mod_q;
   uint64_t q0_inv_mod_q1 = 0;
@@ -138,6 +140,7 @@ public:
   inline size_t get_small_q() const { return small_q_; }
   inline size_t get_base_log2() const { return base_log2_; }
   inline size_t get_base_log2_key() const { return base_log2_key_; }
+  inline size_t get_ep_low_bits() const { return ep_low_bits_; }
   inline size_t get_fst_dim_sz() const { return fst_dim_sz_; }
   inline size_t get_other_dim_sz() const { return num_pt_ / fst_dim_sz_; }
   // Number of RNS limbs (matches DBConsts::RnsMods.size()).
@@ -193,6 +196,7 @@ private:
   uint64_t small_q_ = 0;
   size_t base_log2_;
   size_t base_log2_key_;
+  size_t ep_low_bits_ = DBConsts::EP_LOW_BITS;
   size_t target_num_pt_ = 0;
   size_t expansion_height_ = DBConsts::TREE_HEIGHT;
   bool fst_dim_pow2_ = DBConsts::FST_DIM_POW2;

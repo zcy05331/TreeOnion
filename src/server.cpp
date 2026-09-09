@@ -32,7 +32,8 @@ PirServer::PirServer(const PirParams &pir_params)
     : pir_params_(pir_params),
       num_pt_(pir_params.get_num_pt()),
       key_gsw_(pir_params, pir_params.get_l_key(), pir_params.get_base_log2_key()),
-      data_gsw_(pir_params, pir_params.get_l(), pir_params.get_base_log2()) {
+      data_gsw_(pir_params, pir_params.get_l(), pir_params.get_base_log2(),
+                pir_params.get_ep_low_bits()) {
   const size_t db_elem_cnt = num_pt_ * pir_params_.get_coeff_val_cnt();
   if (pir_params_.get_composite_rns().enabled) {
     // Composite path: two u32 arrays (mod q1 and mod q2) with the same
@@ -1161,6 +1162,5 @@ void PirServer::mod_switch_inplace(RlweCt &ciphertext, const uint64_t q) {
     ciphertext.c1.resize(coeff_count);
   }
 }
-
 
 

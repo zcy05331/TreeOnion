@@ -306,7 +306,8 @@ void PirClient::add_gsw_to_query(
   // MP gadget table: gadget[k][p] = B^(l-1-p) mod q_k. MSB-first
   // (p=0 = largest power), matching plain_to_gsw.
   std::vector<std::vector<uint64_t>> gadget =
-      utils::gsw_gadget(l, query_params.get_base_log2(), rns_mods);
+      utils::gsw_gadget(l, query_params.get_base_log2(), rns_mods,
+                        query_params.get_ep_low_bits());
 
   // QueryPack packed slots layout:
   // [0, N0) 是首维 BFV one-hot。代码索引 i=1..query_indices.size()-1 时，

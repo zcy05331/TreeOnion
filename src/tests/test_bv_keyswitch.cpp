@@ -3,6 +3,45 @@
 #include "rlwe.h"
 #include "utils.h"
 #include <random>
+#include <array>
+
+static void test_rounded_bv_digits() {
+  PirParams scheme;
+  const uint64_t q = scheme.get_rns_mods()[0];
+  for (size_t rows : {size_t{2}, size_t{3}}) {
+    for (size_t drop : {size_t{0}, size_t{16}, size_t{24}}) {
+      const size_t bits = (scheme.get_ct_mod_width() - drop) / rows + 1;
+      const uint64_t half = drop ? uint64_t{1} << (drop - 1) : 0;
+      std::mt19937_64 rng(0x627664726f70ULL);
+      for (size_t sample = 0; sample < 2000; ++sample) {
+        const std::array<uint64_t, 8> edges = {
+            0, 1, q - 1, q / 2, q / 2 + 1, half,
+            half ? half - 1 : 0, half ? q - half : q - 1};
+        const uint64_t value = sample < edges.size() ? edges[sample] : rng() % q;
+        uint64_t digits[3] = {};
+        bvks::signed_gadget_decompose(value, bits, q, digits, rows, drop);
+        __int128 reconstructed = 0;
+        for (size_t i = 0; i < rows; ++i) {
+          const int64_t digit = digits[i] > q / 2
+              ? static_cast<int64_t>(digits[i]) - static_cast<int64_t>(q)
+              : static_cast<int64_t>(digits[i]);
+          require_test(digit >= -(int64_t{1} << (bits - 1)) &&
+                           digit < (int64_t{1} << (bits - 1)),
+                       "BV rounded digit exceeds its balanced range");
+          reconstructed += static_cast<__int128>(digit) *
+                           (static_cast<__int128>(1) << (drop + i * bits));
+        }
+        const int64_t centered = value > q / 2
+            ? static_cast<int64_t>(value) - static_cast<int64_t>(q)
+            : static_cast<int64_t>(value);
+        const __int128 residual = static_cast<__int128>(centered) - reconstructed;
+        require_test(residual >= -static_cast<__int128>(half) &&
+                         residual <= static_cast<__int128>(half),
+                     "BV approximate reconstruction exceeds half a rounding step");
+      }
+    }
+  }
+}
 
 // ============================================================================
 // Unit test: signed gadget decomposition
@@ -58,6 +97,7 @@ static void test_signed_decompose() {
 // automorphism applied directly to the plaintext.
 // ============================================================================
 void PirTest::test_bv_keyswitch() {
+  test_rounded_bv_digits();
   test_signed_decompose();
   print_func_name(__FUNCTION__);
 

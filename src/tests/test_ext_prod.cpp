@@ -37,7 +37,8 @@ void PirTest::test_external_product() {
   // ================== Create RGSW(1) ==================
   const size_t gsw_l = pir_params.get_l();
   const size_t base_log2 = pir_params.get_base_log2();
-  GSWEval data_gsw(pir_params, gsw_l, base_log2);
+  GSWEval data_gsw(pir_params, gsw_l, base_log2,
+                   pir_params.get_ep_low_bits());
 
   std::vector<uint64_t> one(coeff_count);
   std::vector<uint64_t> zero(coeff_count);

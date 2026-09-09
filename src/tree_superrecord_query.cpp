@@ -213,7 +213,8 @@ PackedQuery make_query(PirClient &client, const TaggedTreeSessionKeys &session,
   const size_t ell = runtime_scheme.get_l();
   const std::vector<std::vector<uint64_t>> gadget = utils::gsw_gadget(
       ell, runtime_scheme.get_base_log2(),
-      std::vector<uint64_t>(qs.begin(), qs.end()));
+      std::vector<uint64_t>(qs.begin(), qs.end()),
+      runtime_scheme.get_ep_low_bits());
   std::vector<uint64_t> value_per_limb(K);
   for (size_t v = 0; v < shape.selector_bits; ++v) {
     if (coords.sigma_bits_le[v] == 0) continue;

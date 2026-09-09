@@ -34,7 +34,9 @@ void PirTest::test_tree_superrecord_planner() {
                      id.selector_gadget_rows == scheme.get_l() &&
                      id.completion_key_gadget_rows == scheme.get_l_key() &&
                      id.bv_ks_rows == DBConsts::L_KS &&
-                     id.bv_ks_base_log2 == scheme.get_ct_mod_width() / DBConsts::L_KS + 1 &&
+                     id.bv_ks_base_log2 == bvks::base_log2_for_scheme(scheme) &&
+                     id.bv_ks_low_bits == bvks::low_bits_for_scheme(scheme) &&
+                     id.selector_low_bits == scheme.get_ep_low_bits() &&
                      id.response_modulus == scheme.get_small_q() &&
                      id.composite_first_dim == scheme.get_composite_rns().enabled,
                  "identity fields mirror the scheme");

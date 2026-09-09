@@ -509,10 +509,12 @@ void write_identity_json(std::ostream &out, const PirSchemeIdentity &id) {
   json_number_field(out, first, "response_modulus_bits", id.response_modulus_bits);
   json_number_field(out, first, "selector_gadget_rows", id.selector_gadget_rows);
   json_number_field(out, first, "selector_base_log2", id.selector_base_log2);
+  json_number_field(out, first, "selector_low_bits", id.selector_low_bits);
   json_number_field(out, first, "completion_key_gadget_rows", id.completion_key_gadget_rows);
   json_number_field(out, first, "completion_key_base_log2", id.completion_key_base_log2);
   json_number_field(out, first, "bv_ks_rows", id.bv_ks_rows);
   json_number_field(out, first, "bv_ks_base_log2", id.bv_ks_base_log2);
+  json_number_field(out, first, "bv_ks_low_bits", id.bv_ks_low_bits);
   json_number_field(out, first, "r64_mod_q", id.r64_mod_q);
   json_number_field(out, first, "q0_inv_mod_q1", id.q0_inv_mod_q1);
   json_number_field(out, first, "composite_first_dim", id.composite_first_dim);

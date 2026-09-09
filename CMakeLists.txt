@@ -74,6 +74,12 @@ if (DEFINED ACTIVE_CONFIG)
     message(STATUS "ACTIVE_CONFIG = ${ACTIVE_CONFIG}")
     add_compile_definitions(ACTIVE_CONFIG=${ACTIVE_CONFIG})
 endif()
+foreach(PIR_KNOB PIR_EP_ROWS PIR_EP_LOW_BITS PIR_KS_ROWS PIR_KS_LOW_BITS)
+    if (DEFINED ${PIR_KNOB})
+        message(STATUS "${PIR_KNOB} = ${${PIR_KNOB}}")
+        add_compile_definitions(${PIR_KNOB}=${${PIR_KNOB}})
+    endif()
+endforeach()
 
 
 # Automatically find all source files in src/

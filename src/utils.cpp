@@ -204,15 +204,22 @@ std::string utils::uint128_to_string(uint128_t value) {
 
 
 std::vector<std::vector<uint64_t>> utils::gsw_gadget(size_t l, uint64_t base_log2,
-                const std::vector<uint64_t> &rns_mods) {
-  // Create RGSW gadget. Rows are MSB-first: row p is B^(l-1-p).
+                const std::vector<uint64_t> &rns_mods, size_t low_bits) {
+  if (l == 0) {
+    throw std::invalid_argument("gsw_gadget: gadget length must be positive");
+  }
+  // Create RGSW gadget. Rows are MSB-first: row p is
+  // 2^(low_bits + base_log2 * (l-1-p)).
   // QueryPack, RGSW encryption, and external-product decomposition must use
   // this same row order or gadget digits will multiply the wrong powers.
   const size_t K = rns_mods.size();
   std::vector<std::vector<uint64_t>> gadget(K, std::vector<uint64_t>(l));
   for (size_t i = 0; i < K; i++) {
     const uint64_t mod = rns_mods[i];
-    uint64_t pow = 1;
+    uint64_t pow = 1 % mod;
+    for (size_t bit = 0; bit < low_bits; ++bit) {
+      pow = static_cast<uint64_t>((static_cast<uint128_t>(pow) << 1) % mod);
+    }
     for (int j = l - 1; j >= 0; j--) {
       gadget[i][j] = pow;
       pow = static_cast<uint64_t>((static_cast<uint128_t>(pow) << base_log2) % mod);

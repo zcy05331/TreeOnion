@@ -218,7 +218,8 @@ std::string uint128_to_string(uint128_t value);
  */
 std::vector<std::vector<uint64_t>>
 gsw_gadget(size_t l, uint64_t base_log2,
-           const std::vector<uint64_t> &rns_mods);
+           const std::vector<uint64_t> &rns_mods,
+           size_t low_bits = 0);
 
 // Generate a prime that is bit_width long
 std::uint64_t generate_prime(size_t bit_width);

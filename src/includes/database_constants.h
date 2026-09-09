@@ -41,6 +41,13 @@ typedef unsigned __int128 uint128_t;
 #define ACTIVE_CONFIG CONFIG_N2048_K1
 #endif
 
+#ifndef PIR_EP_LOW_BITS
+#define PIR_EP_LOW_BITS 0
+#endif
+#ifndef PIR_KS_LOW_BITS
+#define PIR_KS_LOW_BITS 0
+#endif
+
 namespace DBConsts {
 
   // ==========================================================================
@@ -66,9 +73,19 @@ namespace DBConsts {
   // CONFIG_N2048_K1_COMP path, and PlainMod=14 means log t differs from the
   // 2025 evaluation cell.
   constexpr size_t PolyDegree   = 2048;
-  constexpr size_t L_EP         = 5;
+  constexpr size_t DefaultL_EP = 5;
+#ifdef PIR_EP_ROWS
+  constexpr size_t L_EP         = PIR_EP_ROWS;
+#else
+  constexpr size_t L_EP         = DefaultL_EP;
+#endif
   constexpr size_t L_KEY        = 8;
-  constexpr size_t L_KS         = 8;
+  constexpr size_t DefaultL_KS  = 8;
+#ifdef PIR_KS_ROWS
+  constexpr size_t L_KS         = PIR_KS_ROWS;
+#else
+  constexpr size_t L_KS         = DefaultL_KS;
+#endif
   constexpr size_t TREE_HEIGHT  = 10;
   constexpr size_t PlainMod     = 14;
   constexpr size_t SmallQWidth  = 22;
@@ -82,9 +99,19 @@ namespace DBConsts {
   // first-dimension matmul. This keeps Algorithm 1-4 on the single-mod layout
   // and still lets the hot kernel use 32x32->64 arithmetic.
   constexpr size_t PolyDegree   = 2048;
-  constexpr size_t L_EP         = 6;
+  constexpr size_t DefaultL_EP = 6;
+#ifdef PIR_EP_ROWS
+  constexpr size_t L_EP         = PIR_EP_ROWS;
+#else
+  constexpr size_t L_EP         = DefaultL_EP;
+#endif
   constexpr size_t L_KEY        = 10;
-  constexpr size_t L_KS         = 8;
+  constexpr size_t DefaultL_KS  = 8;
+#ifdef PIR_KS_ROWS
+  constexpr size_t L_KS         = PIR_KS_ROWS;
+#else
+  constexpr size_t L_KS         = DefaultL_KS;
+#endif
   constexpr size_t TREE_HEIGHT  = 10;
   // The t257 comparison changes only plaintext capacity (8-bit digits).
   constexpr size_t PlainMod     = ACTIVE_CONFIG == CONFIG_N2048_K1_COMP_T257 ? 9 : 13;
@@ -101,9 +128,19 @@ namespace DBConsts {
   // and composed only where the MP gadget needs logical-q arithmetic. Unlike
   // CONFIG_N2048_K1_COMP, the whole ciphertext pipeline has two RNS limbs.
   constexpr size_t PolyDegree   = 2048;
-  constexpr size_t L_EP         = 5;
+  constexpr size_t DefaultL_EP = 5;
+#ifdef PIR_EP_ROWS
+  constexpr size_t L_EP         = PIR_EP_ROWS;
+#else
+  constexpr size_t L_EP         = DefaultL_EP;
+#endif
   constexpr size_t L_KEY        = 8;
-  constexpr size_t L_KS         = 8;
+  constexpr size_t DefaultL_KS  = 8;
+#ifdef PIR_KS_ROWS
+  constexpr size_t L_KS         = PIR_KS_ROWS;
+#else
+  constexpr size_t L_KS         = DefaultL_KS;
+#endif
   constexpr size_t TREE_HEIGHT  = 10;
   constexpr size_t PlainMod     = 10;
   constexpr size_t SmallQWidth  = 22;
@@ -116,9 +153,19 @@ namespace DBConsts {
   // max_ct_mod_width = 60 the matmul takes the uint64→uint128 scalar path
   // (AVX-512 fast path requires uint32→uint64).
   constexpr size_t PolyDegree   = 4096;
-  constexpr size_t L_EP         = 5;
+  constexpr size_t DefaultL_EP = 5;
+#ifdef PIR_EP_ROWS
+  constexpr size_t L_EP         = PIR_EP_ROWS;
+#else
+  constexpr size_t L_EP         = DefaultL_EP;
+#endif
   constexpr size_t L_KEY        = 8;
-  constexpr size_t L_KS         = 8;
+  constexpr size_t DefaultL_KS  = 8;
+#ifdef PIR_KS_ROWS
+  constexpr size_t L_KS         = PIR_KS_ROWS;
+#else
+  constexpr size_t L_KS         = DefaultL_KS;
+#endif
   constexpr size_t TREE_HEIGHT  = 10;
   constexpr size_t PlainMod     = 40;
   constexpr size_t SmallQWidth  = 50;
@@ -138,6 +185,9 @@ namespace DBConsts {
       if (RnsMods[i] > w) w = RnsMods[i];
     return w;
   }
+
+  constexpr size_t EP_LOW_BITS = PIR_EP_LOW_BITS;
+  constexpr size_t KS_LOW_BITS = PIR_KS_LOW_BITS;
 
   // The MP gadget path uses 128-bit multi-precision integers per coefficient
   // (compose_rns_to_mp / decompose_mp_to_rns in gsw.cpp). That works for K ≤ 2

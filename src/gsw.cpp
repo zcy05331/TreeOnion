@@ -84,6 +84,20 @@ void decompose_mp_to_rns(uint64_t *buf, size_t N,
   }
 }
 
+int64_t round_shift_ties_up(int64_t value, size_t shift) {
+  if (shift == 0) return value;
+  const int64_t half = int64_t{1} << (shift - 1);
+  return (value + half) >> shift;  // C++20 arithmetic shift rounds toward -inf.
+}
+
+int64_t balanced_low_digit(int64_t value, size_t base_log2) {
+  const uint64_t base = uint64_t{1} << base_log2;
+  const uint64_t low = static_cast<uint64_t>(value) & (base - 1);
+  return low >= base / 2
+      ? static_cast<int64_t>(low) - static_cast<int64_t>(base)
+      : static_cast<int64_t>(low);
+}
+
 } // namespace
 
 // external_product 的数据形状是 Algorithm 3/QueryUnpack 后续 selector
@@ -190,6 +204,10 @@ void GSWEval::decomp_rlwe_mp(RlweCt const &ct, std::vector<std::vector<uint64_t>
   // coeff_val_cnt each; we write digit rows in place (no allocation here).
   assert(output.size() == 2 * l_);
   // Setup parameters
+  if (low_bits_ != 0) {
+    throw std::invalid_argument(
+        "approximate GSW decomposition is only implemented for K=1");
+  }
   const uint64_t base = uint64_t(1) << base_log2_;
   const uint64_t mask = base - 1;
   const auto &rns_mods = pir_params_.get_rns_mods();
@@ -265,7 +283,6 @@ void GSWEval::decomp_rlwe_single_mod(RlweCt const &ct, std::vector<std::vector<u
   const uint64_t q = pir_params_.get_rns_mods()[0];
   const int64_t qi = static_cast<int64_t>(q);
   const uint64_t half_q = q >> 1;
-  const int64_t native = 64 - static_cast<int64_t>(base_log2_);
 
   if (ep_dwork_.size() != N) ep_dwork_.resize(N);
   int64_t *const d = ep_dwork_.data();
@@ -278,6 +295,7 @@ void GSWEval::decomp_rlwe_single_mod(RlweCt const &ct, std::vector<std::vector<u
     for (size_t k = 0; k < N; ++k) {
       const int64_t v = static_cast<int64_t>(poly_ptr[k]);
       d[k] = (poly_ptr[k] > half_q) ? v - qi : v;
+      d[k] = round_shift_ties_up(d[k], low_bits_);
     }
 
     // Digit i is the B^i coefficient (extracted LSB-first); store MSB-first, so
@@ -285,8 +303,8 @@ void GSWEval::decomp_rlwe_single_mod(RlweCt const &ct, std::vector<std::vector<u
     for (size_t i = 0; i < l_; ++i) {
       uint64_t *const outrow = output[base_row + (l_ - 1 - i)].data();
       for (size_t k = 0; k < N; ++k) {
-        const int64_t r = (d[k] << native) >> native;  // balanced low digit
-        d[k] = (d[k] - r) >> static_cast<int64_t>(base_log2_);
+        const int64_t r = balanced_low_digit(d[k], base_log2_);
+        d[k] = (d[k] - r) >> base_log2_;
         outrow[k] = (r >= 0) ? static_cast<uint64_t>(r)
                              : static_cast<uint64_t>(r + qi);
       }
@@ -369,7 +387,7 @@ GSWCt GSWEval::plain_to_gsw(std::vector<uint64_t> const &plaintext,
   // MP gadget table: gadget_table[k][p] = B^(l_-1-p) mod q_k, MSB-first
   // (p=0 = largest power B^(l_-1)).
   std::vector<std::vector<uint64_t>> gadget_table =
-      utils::gsw_gadget(l_, base_log2_, rns_mods_arr);
+      utils::gsw_gadget(l_, base_log2_, rns_mods_arr, low_bits_);
 
   const size_t rows_per_half = l_;
   GSWCt output(2 * rows_per_half, std::vector<uint64_t>(2 * K * N));
