@@ -10,7 +10,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 import benchmark_gadget_configs as gadget
 
 
-def profile(*, n0=352, label="bundle3", samples=2):
+def profile(*, n0=352, label="bundle3", samples=2, packing="projection", include_merge=False):
     sample = {
         "block_id": 0,
         "leaf": 11,
@@ -30,7 +30,11 @@ def profile(*, n0=352, label="bundle3", samples=2):
             "pack": 0.5,
             "switch": 0.25,
         },
+        "response_merge_keyswitches": 0,
     }
+    if include_merge:
+        sample["stages_ms"]["merge"] = 1.5
+        sample["response_merge_keyswitches"] = 4
     rows = [copy.deepcopy(sample) for _ in range(samples)]
     for block_id, row in enumerate(rows):
         row["block_id"] = block_id
@@ -40,6 +44,7 @@ def profile(*, n0=352, label="bundle3", samples=2):
         "entry_bits": 256,
         "measured_trials": samples,
         "warmup_count": 3,
+        "response_packing": packing,
         "candidates": [
             {
                 "label": label,
@@ -82,6 +87,7 @@ def profile(*, n0=352, label="bundle3", samples=2):
                 "target_noise_result": {
                     "decrypts_correctly": True,
                     "observed_key_coverage_matches_tag": True,
+                    "response_packing": packing,
                 },
                 "samples": rows,
             }
@@ -143,7 +149,8 @@ class GadgetConfigTests(unittest.TestCase):
             if label == "flaky" and calls[label] == 2:
                 pathlib.Path(log_path).write_text("failed\n")
                 return {"exit_code": 2, "elapsed_seconds": 0.1, "process_peak_rss_bytes": 10}
-            raw.write_text(json.dumps(profile(label=label)) + "\n")
+            packing = env.get("SUPERRECORD_RESPONSE_PACKING", "projection")
+            raw.write_text(json.dumps(profile(label=label, packing=packing, include_merge=packing == "mlwe")) + "\n")
             pathlib.Path(log_path).write_text("ok\n")
             return {"exit_code": 0, "elapsed_seconds": 0.2, "process_peak_rss_bytes": 20}
 
@@ -162,6 +169,8 @@ class GadgetConfigTests(unittest.TestCase):
                 "2",
                 "--source",
                 "good=abc123",
+                "--packing",
+                "good=mlwe",
             ]
             captured_envs = []
 
@@ -180,6 +189,7 @@ class GadgetConfigTests(unittest.TestCase):
             self.assertNotIn("flaky", comparison["summary"])
             self.assertEqual(comparison["rejected_labels"]["flaky"], "one or more rounds failed")
             self.assertTrue(any(env.get("SUPERRECORD_COMMIT") == "abc123" for env in captured_envs))
+            self.assertTrue(any(env.get("SUPERRECORD_RESPONSE_PACKING") == "mlwe" for env in captured_envs))
             self.assertFalse(any("SUPERRECORD_SOURCE" in env for env in captured_envs))
 
     def test_missing_rotation_or_projection_stage_is_rejected(self):
@@ -200,6 +210,61 @@ class GadgetConfigTests(unittest.TestCase):
         candidate = gadget.validate_profile(data, pathlib.Path("profile.json"), 2, 1 << 22, (3, 64, 1, 352, 7), 9)
         with self.assertRaisesRegex(ValueError, "missing scheme identity"):
             gadget.identity_subset(candidate)
+
+    def test_requested_mlwe_rejects_projection_raw(self):
+        data = profile(packing="projection")
+        with self.assertRaisesRegex(ValueError, "response packing"):
+            gadget.validate_profile(
+                data,
+                pathlib.Path("profile.json"),
+                2,
+                1 << 22,
+                (3, 64, 1, 352, 7),
+                9,
+                "mlwe",
+            )
+
+    def test_missing_merge_time_in_mlwe_is_rejected(self):
+        data = profile(packing="mlwe", include_merge=False)
+        with self.assertRaisesRegex(ValueError, "missing stages_ms.merge"):
+            gadget.validate_profile(
+                data,
+                pathlib.Path("profile.json"),
+                2,
+                1 << 22,
+                (3, 64, 1, 352, 7),
+                9,
+                "mlwe",
+            )
+
+    def test_response_processing_uses_present_merge_time(self):
+        candidate = gadget.validate_profile(
+            profile(packing="projection", include_merge=True),
+            pathlib.Path("profile.json"),
+            2,
+            1 << 22,
+            (3, 64, 1, 352, 7),
+            9,
+            "projection",
+        )
+        summary = gadget.summarize_candidate(candidate, [])
+        self.assertEqual(summary["rotation_projection_ms_mean"], 2.0)
+        self.assertEqual(summary["response_processing_ms_mean"], 4.0)
+        self.assertEqual(summary["counter_metadata"]["response_merge_keyswitches_mean"], 4)
+        self.assertEqual(summary["packing"], "projection")
+
+    def test_response_processing_uses_zero_merge_only_for_old_projection_schema(self):
+        candidate = gadget.validate_profile(
+            profile(packing="projection", include_merge=False),
+            pathlib.Path("profile.json"),
+            2,
+            1 << 22,
+            (3, 64, 1, 352, 7),
+            9,
+            "projection",
+        )
+        summary = gadget.summarize_candidate(candidate, [])
+        self.assertEqual(summary["response_processing_ms_mean"], 2.5)
 
 
 if __name__ == "__main__":

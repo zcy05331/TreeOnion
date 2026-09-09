@@ -1,5 +1,6 @@
 #include "tree_superrecord_noise.h"
 
+#include "tree_response_merge.h"
 #include "tree_project.h"
 #include "tree_rotate.h"
 #include "tree_select.h"
@@ -118,14 +119,26 @@ bool noise_margin_policy_passes(const CandidateNoiseResult &result) {
          result.minimum_margin >= result.min_noise_margin;
 }
 
+void require_mlwe_response_keys(const bvks::BvGaloisKeys &keys,
+                                const TreeParams &params) {
+  for (size_t j = 0; j < params.shape.record_index_bits; ++j) {
+    const uint32_t eta =
+        static_cast<uint32_t>((params.shape.ring_degree >> j) + 1);
+    require(keys.contains(eta),
+            "MLWE response packing requires the full rho-trace BV key family");
+  }
+}
+
 }  // namespace
 
 bool noise_result_unlocks_candidate(const CandidateNoiseResult &result,
                                     const TreeParams &params,
-                                    size_t expected_client_id) {
+                                    size_t expected_client_id,
+                                    ResponsePacking packing) {
   return result.fixture_kind == NoiseFixtureKind::TargetShapeNoiseGate &&
          result.tag == params.tag &&
          result.client_id == expected_client_id &&
+         result.packing == packing &&
          result.eligibility == NoiseEligibility::Passed &&
          result.decrypts_correctly &&
          !result.checkpoints.empty() &&
@@ -136,17 +149,23 @@ bool noise_result_unlocks_candidate(const CandidateNoiseResult &result,
 
 void require_target_noise_gate(const CandidateNoiseResult &result,
                                const TreeParams &params,
-                               size_t expected_client_id) {
-  require_trusted_target_noise_result(result, params);
+                               size_t expected_client_id,
+                               ResponsePacking packing) {
+  require_trusted_target_noise_result(result, params, packing);
   require(result.client_id == expected_client_id,
           "noise result belongs to a different client/key instance");
 }
 
 void require_trusted_target_noise_result(const CandidateNoiseResult &result,
-                                         const TreeParams &params) {
+                                         const TreeParams &params,
+                                         std::optional<ResponsePacking> packing) {
   require(result.fixture_kind == NoiseFixtureKind::TargetShapeNoiseGate,
           "m32 requires a target-shape noise gate");
   require(result.tag == params.tag, "noise result PlanTag mismatch");
+  if (packing) {
+    require(result.packing == *packing,
+            "noise result response packing does not match the request");
+  }
   require(result.eligibility == NoiseEligibility::Passed,
           "target-shape noise gate did not pass");
   require(result.decrypts_correctly,
@@ -165,10 +184,13 @@ CandidateNoiseResult build_target_noise_result(
     const TreeParams &params, const PirParams &runtime_scheme,
     const PirServer &query_eval_server, const TaggedTreeSessionKeys &session,
     bool decrypts_correctly, std::vector<NoiseCheckpoint> checkpoints,
-    double min_noise_margin) {
+    double min_noise_margin, ResponsePacking packing) {
   require_query_server_binding(query_eval_server, params, runtime_scheme);
   require_registered_session_binding(query_eval_server, params, runtime_scheme,
                                      session);
+  if (packing == ResponsePacking::MlweMerge) {
+    require_mlwe_response_keys(session.material->bv_galois_keys, params);
+  }
   require(session.scheme == params.scheme,
           "session fingerprint differs from the plan");
   require(std::isfinite(min_noise_margin) && min_noise_margin >= 0,
@@ -180,6 +202,7 @@ CandidateNoiseResult build_target_noise_result(
   result.fixture_kind = NoiseFixtureKind::TargetShapeNoiseGate;
   result.decrypts_correctly = decrypts_correctly;
   result.min_noise_margin = min_noise_margin;
+  result.packing = packing;
   result.observed_key_coverage =
       inspect_bv_key_coverage(session.material->bv_galois_keys,
                               params.scheme.identity,
@@ -207,13 +230,16 @@ CandidateNoiseResult run_target_shape_noise_gate(
     PirClient &client, PirServer &query_eval_server,
     const TaggedTreeSessionKeys &session, const TreeParams &params,
     const PirParams &runtime_scheme, std::span<const TargetNoiseCase> cases,
-    double min_noise_margin) {
+    double min_noise_margin, ResponsePacking packing) {
   require(!cases.empty(), "target noise gate needs at least one fixture case");
   require(client.get_client_id() == session.client_id,
           "noise fixture client and session belong to different clients");
   require_query_server_binding(query_eval_server, params, runtime_scheme);
   require_registered_session_binding(query_eval_server, params, runtime_scheme,
                                      session);
+  if (packing == ResponsePacking::MlweMerge) {
+    require_mlwe_response_keys(session.material->bv_galois_keys, params);
+  }
 
   std::vector<NoiseCheckpoint> checkpoints;
   bool decrypts_correctly = true;
@@ -243,6 +269,7 @@ CandidateNoiseResult run_target_shape_noise_gate(
     PathResponse response;
     response.tag = params.tag;
     response.client_id = query.client_id;
+    response.packing = packing;
     const size_t width =
         checked_mul(runtime_scheme.K(), runtime_scheme.get_poly_degree(),
                     "response ciphertext width");
@@ -252,6 +279,23 @@ CandidateNoiseResult run_target_shape_noise_gate(
       chunk.c1.assign(width, 0);
       chunk.ntt_form = false;
     }
+    std::vector<RlweCt> merge_inputs;
+    size_t merge_chunk = 0;
+    auto flush_merge = [&] {
+      if (merge_inputs.empty()) return;
+      size_t keyswitches = 0;
+      response.chunks[merge_chunk] =
+          mlwe_merge_residues(std::move(merge_inputs),
+                              params.shape.records_per_plaintext,
+                              session.material->bv_galois_keys,
+                              runtime_scheme, &keyswitches);
+      merge_inputs.clear();
+      checkpoints.push_back(remaining_budget_checkpoint(
+          fixture.label + ": response_merge chunk " +
+              std::to_string(merge_chunk) + " keyswitches " +
+              std::to_string(keyswitches),
+          client, response.chunks[merge_chunk]));
+    };
 
     for (size_t level = 0; level <= params.shape.tree_height; ++level) {
       const LevelPlan &plan = params.level_plans[level];
@@ -288,6 +332,18 @@ CandidateNoiseResult run_target_shape_noise_gate(
                   std::to_string(idx),
               client, ct));
         }
+        if (packing == ResponsePacking::MlweMerge) {
+          const PlanePlacement at = response_placement(level, plane, params);
+          if (!merge_inputs.empty() && at.response_chunk != merge_chunk) {
+            flush_merge();
+          }
+          merge_chunk = at.response_chunk;
+          merge_inputs.push_back(std::move(ct));
+          if (merge_inputs.size() == params.shape.records_per_plaintext) {
+            flush_merge();
+          }
+          continue;
+        }
         const CiphertextDiagnostic projection_checkpoint =
             [&](size_t round, const RlweCt &raw) {
               const size_t remaining =
@@ -323,6 +379,7 @@ CandidateNoiseResult run_target_shape_noise_gate(
             client, chunk));
       }
     }
+    flush_merge();
     for (size_t i = 0; i < response.chunks.size(); ++i) {
       const bool switched =
           query_eval_server.switch_response_to_small_q(response.chunks[i]);
@@ -354,7 +411,8 @@ CandidateNoiseResult run_target_shape_noise_gate(
 
   return build_target_noise_result(params, runtime_scheme, query_eval_server,
                                    session, decrypts_correctly,
-                                   std::move(checkpoints), min_noise_margin);
+                                   std::move(checkpoints), min_noise_margin,
+                                   packing);
 }
 
 }  // namespace tree_superrecord

@@ -1,5 +1,6 @@
 #include "tree_superrecord_response.h"
 
+#include "tree_response_merge.h"
 #include "tree_project.h"
 #include "tree_rotate.h"
 #include "tree_select.h"
@@ -13,13 +14,24 @@ namespace tree_superrecord {
 
 namespace {
 
+void require_mlwe_response_keys(const bvks::BvGaloisKeys &keys,
+                                const TreeParams &params) {
+  const size_t r = params.shape.record_index_bits;
+  for (size_t j = 0; j < r; ++j) {
+    const uint32_t eta =
+        static_cast<uint32_t>((params.shape.ring_degree >> j) + 1);
+    require(keys.contains(eta),
+            "MLWE response packing requires the full rho-trace BV key family");
+  }
+}
+
 // Shared level loop: rotation, projection, and pooled placement around a
 // caller-provided SelectLevel; then the response-wide modulus switch.
 PathResponse pack_path(const std::function<RlweCt(size_t, size_t)> &select,
                        ExpandedQuery &query, PirServer &server,
                        const TaggedTreeSessionKeys &session,
                        const TreeParams &params, const PirParams &scheme,
-                       TreeServerTiming *timing) {
+                       TreeServerTiming *timing, ResponsePacking packing) {
   const CandidateShape &shape = params.shape;
   const bvks::BvGaloisKeys &keys = session.material->bv_galois_keys;
   const size_t width = scheme.K() * scheme.get_poly_degree();
@@ -28,6 +40,7 @@ PathResponse pack_path(const std::function<RlweCt(size_t, size_t)> &select,
   PathResponse response;
   response.tag = params.tag;
   response.client_id = query.client_id;
+  response.packing = packing;
   response.chunks.resize(shape.response_ciphertexts);
   for (RlweCt &chunk : response.chunks) {
     chunk.c0.assign(width, 0);
@@ -35,7 +48,26 @@ PathResponse pack_path(const std::function<RlweCt(size_t, size_t)> &select,
     chunk.ntt_form = false;
   }
 
+  if (packing == ResponsePacking::MlweMerge) {
+    require_mlwe_response_keys(keys, params);
+  }
+
   StageClock clock(timing);
+  std::vector<RlweCt> merge_inputs;
+  size_t merge_chunk = 0;
+  auto flush_merge = [&] {
+    if (merge_inputs.empty()) return;
+    clock.restart();
+    size_t keyswitches = 0;
+    response.chunks[merge_chunk] =
+        mlwe_merge_residues(std::move(merge_inputs),
+                            shape.records_per_plaintext, keys, scheme,
+                            &keyswitches);
+    if (timing) timing->response_merge_keyswitches += keyswitches;
+    merge_inputs.clear();
+    clock.lap(&TreeServerTiming::response_merge);
+  };
+
   for (size_t level = 0; level <= shape.tree_height; ++level) {
     const LevelPlan &plan = params.level_plans[level];
     for (size_t plane = 0; plane < shape.plane_count; ++plane) {
@@ -46,6 +78,18 @@ PathResponse pack_path(const std::function<RlweCt(size_t, size_t)> &select,
         ct = rot_select(ct, sigma[v], size_t{1} << idx, server, scheme);
       }
       clock.lap(&TreeServerTiming::private_rotate);
+      if (packing == ResponsePacking::MlweMerge) {
+        const PlanePlacement at = response_placement(level, plane, params);
+        if (!merge_inputs.empty() && at.response_chunk != merge_chunk) {
+          flush_merge();
+        }
+        merge_chunk = at.response_chunk;
+        merge_inputs.push_back(std::move(ct));
+        if (merge_inputs.size() == shape.records_per_plaintext) {
+          flush_merge();
+        }
+        continue;
+      }
       ct = project_keep_stride(std::move(ct), plan.projection_depth, keys,
                                scheme);
       clock.lap(&TreeServerTiming::projection);
@@ -60,6 +104,7 @@ PathResponse pack_path(const std::function<RlweCt(size_t, size_t)> &select,
       clock.lap(&TreeServerTiming::path_pack);
     }
   }
+  flush_merge();
   clock.restart();
   for (RlweCt &chunk : response.chunks) {
     response.small_q = server.switch_response_to_small_q(chunk);
@@ -86,7 +131,8 @@ PathResponse answer_path_reference(const ReferencePreprocessedTree &db,
                                    const TaggedTreeSessionKeys &session,
                                    const TreeParams &params,
                                    const PirParams &runtime_scheme,
-                                   TreeServerTiming *timing) {
+                                   TreeServerTiming *timing,
+                                   ResponsePacking packing) {
   require_expanded_query(query, session, params);
   require(db.tag == params.tag, "reference database PlanTag mismatch");
   require(db.canonical.size() == params.shape.path_levels,
@@ -106,7 +152,7 @@ PathResponse answer_path_reference(const ReferencePreprocessedTree &db,
             std::span<GSWCt>(query.sigma_selectors), server, params,
             runtime_scheme, timing);
       },
-      query, server, session, params, runtime_scheme, timing);
+      query, server, session, params, runtime_scheme, timing, packing);
 }
 
 PathResponse answer_path_m32(const PreprocessedTree &db, ExpandedQuery &query,
@@ -115,9 +161,10 @@ PathResponse answer_path_m32(const PreprocessedTree &db, ExpandedQuery &query,
                              const TreeParams &params,
                              const PirParams &runtime_scheme,
                              const CandidateNoiseResult &noise_result,
-                             TreeServerTiming *timing) {
+                             TreeServerTiming *timing,
+                             ResponsePacking packing) {
   require_expanded_query(query, session, params);
-  require_target_noise_gate(noise_result, params, session.client_id);
+  require_target_noise_gate(noise_result, params, session.client_id, packing);
   require(db.tag == params.tag, "m32 database PlanTag mismatch");
   require(db.m32.size() == params.shape.path_levels,
           "m32 database is missing levels");
@@ -139,7 +186,7 @@ PathResponse answer_path_m32(const PreprocessedTree &db, ExpandedQuery &query,
                                 std::span<GSWCt>(query.sigma_selectors),
                                 server, params, runtime_scheme, timing);
       },
-      query, server, session, params, runtime_scheme, timing);
+      query, server, session, params, runtime_scheme, timing, packing);
 }
 
 namespace {
@@ -172,14 +219,16 @@ PathResponse serve_request_reference(PackedQuery packed_query,
                                      const TaggedTreeSessionKeys &session,
                                      const TreeParams &params,
                                      const PirParams &runtime_scheme,
-                                     TreeServerTiming *timing) {
+                                     TreeServerTiming *timing,
+                                     ResponsePacking packing) {
   return serve_request(std::move(packed_query), query_eval_server, session,
                        params, runtime_scheme, timing,
                        [&](ExpandedQuery &expanded) {
                          return answer_path_reference(db, expanded,
                                                       query_eval_server,
                                                       session, params,
-                                                      runtime_scheme, timing);
+                                                      runtime_scheme, timing,
+                                                      packing);
                        });
 }
 
@@ -190,8 +239,9 @@ PathResponse serve_request_m32(PackedQuery packed_query,
                                const TreeParams &params,
                                const PirParams &runtime_scheme,
                                const CandidateNoiseResult &noise_result,
-                               TreeServerTiming *timing) {
-  require_target_noise_gate(noise_result, params, session.client_id);
+                               TreeServerTiming *timing,
+                               ResponsePacking packing) {
+  require_target_noise_gate(noise_result, params, session.client_id, packing);
   return serve_request(std::move(packed_query), query_eval_server, session,
                        params, runtime_scheme, timing,
                        [&](ExpandedQuery &expanded) {
@@ -199,7 +249,7 @@ PathResponse serve_request_m32(PackedQuery packed_query,
                                                 query_eval_server, session,
                                                 params, runtime_scheme,
                                                 noise_result,
-                                                timing);
+                                                timing, packing);
                        });
 }
 
@@ -242,7 +292,8 @@ DecryptedChunks decrypt_chunks(const PathResponse &response, PirClient &client,
 }
 
 std::vector<std::vector<EntryBits>> decode_levels(
-    const DecryptedChunks &chunks, const TreeParams &params) {
+    const DecryptedChunks &chunks, const TreeParams &params,
+    ResponsePacking packing) {
   const CandidateShape &shape = params.shape;
   const CodecSpec spec = codec_spec_for(params);
   const size_t rho = shape.records_per_plaintext;
@@ -254,8 +305,10 @@ std::vector<std::vector<EntryBits>> decode_levels(
     for (size_t plane = 0; plane < shape.plane_count; ++plane) {
       const PlanePlacement at = response_placement(level, plane, params);
       const RlwePt &pt = chunks.plaintexts[at.response_chunk];
+      const size_t residue_offset =
+          packed_residue_offset(at.residue_offset, rho, packing);
       for (size_t d = 0; d < shape.record_coeffs; ++d) {
-        encoded[plane][d] = pt.data[at.residue_offset + d * rho];
+        encoded[plane][d] = pt.data[residue_offset + d * rho];
       }
     }
     levels.push_back(decode_super_record(encoded, spec));
@@ -274,7 +327,7 @@ DecodedPath extract_path_measured(const PathResponse &response,
   const DecryptedChunks chunks =
       decrypt_chunks(response, client, params, runtime_scheme);
   const std::vector<std::vector<EntryBits>> levels =
-      decode_levels(chunks, params);
+      decode_levels(chunks, params, response.packing);
   DecodedPath path;
   path.max_noise = chunks.max_noise;
   path.min_budget_bits = chunks.min_budget_bits;
@@ -299,7 +352,7 @@ std::vector<std::vector<EntryBits>> extract_all_lanes_for_test(
     const PathResponse &response, PirClient &client, const TreeParams &params,
     const PirParams &runtime_scheme) {
   return decode_levels(decrypt_chunks(response, client, params, runtime_scheme),
-                       params);
+                       params, response.packing);
 }
 }  // namespace debug
 

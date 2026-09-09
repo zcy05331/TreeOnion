@@ -38,6 +38,13 @@ def parse_label_source(value):
     return label, source
 
 
+def parse_label_packing(value):
+    label, sep, packing = value.partition("=")
+    if not sep or not label or packing not in ("projection", "mlwe"):
+        raise argparse.ArgumentTypeError("expected label=projection or label=mlwe")
+    return label, packing
+
+
 def parse_shape(value):
     try:
         parts = tuple(int(part) for part in value.split(","))
@@ -62,7 +69,29 @@ def finite_stage_sum(sample, keys, path):
     return total
 
 
-def validate_profile(data, path, trials, leaves, shape, expansion_height):
+def response_processing_ms(sample, packing, path):
+    total = finite_stage_sum(sample, ("rotate", "project", "pack"), path)
+    stages = sample.get("stages_ms", {})
+    if "merge" in stages:
+        finite_ms(stages["merge"], path, "stages_ms.merge")
+        total += stages["merge"]
+    elif packing == "mlwe":
+        raise ValueError(f"{path}: sample missing stages_ms.merge")
+    return total
+
+
+def merge_key_count(sample, packing, path):
+    if "response_merge_keyswitches" in sample:
+        value = sample["response_merge_keyswitches"]
+        if not isinstance(value, (int, float)) or value < 0:
+            raise ValueError(f"{path}: invalid response_merge_keyswitches")
+        return value
+    if packing == "mlwe":
+        raise ValueError(f"{path}: sample missing response_merge_keyswitches")
+    return 0
+
+
+def validate_profile(data, path, trials, leaves, shape, expansion_height, requested_packing=None):
     require_leaf_count(data, path, leaves)
     require_count(data.get("measured_trials"), trials, path, "measured trials")
     if data.get("entry_bits") != 256 or data.get("warmup_count") != 3:
@@ -92,10 +121,22 @@ def validate_profile(data, path, trials, leaves, shape, expansion_height):
         raise ValueError(f"{path}: measured candidate decryption failed")
     if gate.get("observed_key_coverage_matches_tag") is not True:
         raise ValueError(f"{path}: measured candidate key coverage failed")
+    actual_packing = data.get("response_packing")
+    if requested_packing is not None:
+        if actual_packing != requested_packing:
+            raise ValueError(f"{path}: response packing {actual_packing!r} does not match requested {requested_packing!r}")
+    if actual_packing is None:
+        actual_packing = requested_packing or "projection"
+    noise_packing = gate.get("response_packing")
+    if noise_packing is not None and noise_packing != actual_packing:
+        raise ValueError(f"{path}: noise result response packing {noise_packing!r} does not match top-level {actual_packing!r}")
     for sample in candidate["samples"]:
         for key in ("server_total_ms", "client_query_ms", "client_decode_ms", "response_serialize_ms"):
             finite_ms(sample.get(key), path, key)
         finite_stage_sum(sample, ("rotate", "project"), path)
+        response_processing_ms(sample, actual_packing, path)
+        merge_key_count(sample, actual_packing, path)
+    candidate["_driver_response_packing"] = actual_packing
     return candidate
 
 
@@ -133,6 +174,7 @@ def candidate_metadata(candidate):
     identity = candidate.get("scheme_fingerprint", {}).get("identity", {})
     return {
         "label": candidate.get("label"),
+        "response_packing": candidate.get("_driver_response_packing", "projection"),
         "gadget_identity": {
             key: identity.get(key)
             for key in (
@@ -163,6 +205,7 @@ def candidate_metadata(candidate):
 
 def summarize_candidate(candidate, processes):
     samples = candidate["samples"]
+    packing = candidate.get("_driver_response_packing", "projection")
     stage_names = sorted({stage for sample in samples for stage in sample.get("stages_ms", {})})
     for idx, sample in enumerate(samples):
         stages = sample.get("stages_ms", {})
@@ -173,7 +216,12 @@ def summarize_candidate(candidate, processes):
         "completed_samples": len(samples),
         "server_total_ms_mean": fmean(sample["server_total_ms"] for sample in samples),
         "rotation_projection_ms_mean": fmean(finite_stage_sum(sample, ("rotate", "project"), "summary") for sample in samples),
+        "response_processing_ms_mean": fmean(response_processing_ms(sample, packing, "summary") for sample in samples),
         "stages_ms_mean": {stage: fmean(sample["stages_ms"][stage] for sample in samples) for stage in stage_names},
+        "packing": packing,
+        "counter_metadata": {
+            "response_merge_keyswitches_mean": fmean(merge_key_count(sample, packing, "summary") for sample in samples),
+        },
         "wire": candidate.get("wire", {}),
         "key_metadata": candidate_metadata(candidate)["key_metadata"],
         "gadget_metadata": candidate_metadata(candidate),
@@ -191,6 +239,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--binary", action="append", type=parse_label_path, required=True)
     parser.add_argument("--source", action="append", type=parse_label_source, default=[])
+    parser.add_argument("--packing", action="append", type=parse_label_packing, default=[])
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--experiments", type=int, default=100)
     parser.add_argument("--rounds", type=int, default=2)
@@ -216,6 +265,12 @@ def main():
     if manifest_path.exists():
         raise ValueError("choose a fresh output directory")
     sources = dict(args.source)
+    packings = dict(args.packing)
+    if len(packings) != len(args.packing):
+        parser.error("--packing labels must be unique")
+    unknown_packings = sorted(label for label in packings if label not in binaries)
+    if unknown_packings:
+        parser.error(f"--packing label has no matching --binary: {unknown_packings}")
     manifest = {
         "state": "running",
         "runs": [],
@@ -263,6 +318,8 @@ def main():
                 )
                 if label in sources:
                     env["SUPERRECORD_COMMIT"] = sources[label]
+                if label in packings:
+                    env["SUPERRECORD_RESPONSE_PACKING"] = packings[label]
                 command = [
                     str(binaries[label].resolve()),
                     "--test",
@@ -299,7 +356,15 @@ def main():
                     continue
                 try:
                     data = json.loads(raw.read_text())
-                    candidate = validate_profile(data, raw, args.experiments, args.leaf_count, args.shape, expansion_height)
+                    candidate = validate_profile(
+                        data,
+                        raw,
+                        args.experiments,
+                        args.leaf_count,
+                        args.shape,
+                        expansion_height,
+                        packings.get(label),
+                    )
                 except Exception as error:
                     row["state"] = "failed"
                     row["error"] = str(error)
@@ -310,6 +375,11 @@ def main():
                 row["state"] = "complete"
                 row["mean_server_ms"] = fmean(sample["server_total_ms"] for sample in candidate["samples"])
                 row["mean_rotation_projection_ms"] = fmean(finite_stage_sum(sample, ("rotate", "project"), raw) for sample in candidate["samples"])
+                row["mean_response_processing_ms"] = fmean(
+                    response_processing_ms(sample, candidate["_driver_response_packing"], raw)
+                    for sample in candidate["samples"]
+                )
+                row["response_packing"] = candidate["_driver_response_packing"]
                 save()
                 print(json.dumps(row), flush=True)
         rejected_labels = dict(label_failures)

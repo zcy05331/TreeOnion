@@ -36,9 +36,9 @@ namespace {
 
 using Clock = std::chrono::steady_clock;
 
-constexpr std::array<const char *, 10> kStageLabels = {
+constexpr std::array<const char *, 11> kStageLabels = {
     "expand", "complete", "prepare", "scan", "finalize",
-    "fold",   "rotate",   "project", "pack", "switch"};
+    "fold",   "rotate",   "project", "pack", "switch", "merge"};
 
 double ms_since(Clock::time_point start) {
   return std::chrono::duration<double, std::milli>(Clock::now() - start).count();
@@ -99,7 +99,8 @@ struct Sample {
   size_t block_id = 0;
   size_t leaf = 0;
   double server_total_ms = 0;
-  std::array<double, 10> stages_ms{};
+  std::array<double, 11> stages_ms{};
+  size_t response_merge_keyswitches = 0;
   double client_query_ms = 0;
   double client_decode_ms = 0;
   double response_serialize_ms = 0;
@@ -184,6 +185,44 @@ bool env_bool(const char *name) {
   const std::string text(value);
   return text != "0" && text != "false" && text != "FALSE" &&
          text != "no" && text != "NO";
+}
+
+ResponsePacking env_response_packing() {
+  const char *value = std::getenv("SUPERRECORD_RESPONSE_PACKING");
+  const std::string mode = value && *value ? std::string(value) : "projection";
+  if (mode == "projection") return ResponsePacking::Projection;
+  if (mode == "mlwe") return ResponsePacking::MlweMerge;
+  throw std::invalid_argument(
+      "SUPERRECORD_RESPONSE_PACKING must be projection or mlwe");
+}
+
+size_t actual_response_merge_keyswitches(const CandidateShape &shape) {
+  size_t total = 0;
+  size_t remaining = checked_mul(shape.path_levels, shape.plane_count,
+                                 "response merge item count");
+  while (remaining > 0) {
+    const size_t group = std::min(remaining, shape.records_per_plaintext);
+    total = checked_add(total,
+                        mlwe_merge_keyswitch_count(group,
+                                                   shape.records_per_plaintext),
+                        "response merge keyswitch count");
+    remaining -= group;
+  }
+  return total;
+}
+
+size_t response_merge_buffer_bytes(const CandidateShape &shape,
+                                   const PirParams &scheme) {
+  const size_t full_ct_bytes =
+      checked_mul(2, checked_mul(shape.ring_degree,
+                                 scheme.get_rns_mods().size() *
+                                     sizeof(uint64_t),
+                                 "full-q response limb bytes"),
+                  "full-q response ciphertext bytes");
+  const size_t item_count = checked_mul(shape.path_levels, shape.plane_count,
+                                        "response merge item count");
+  return checked_mul(std::min(item_count, shape.records_per_plaintext),
+                     full_ct_bytes, "response merge buffer bytes");
 }
 
 bool contains_size(const std::vector<size_t> &values, size_t value) {
@@ -621,6 +660,7 @@ void write_key_coverage_json(std::ostream &out, const KeyCoverageReport &k) {
 void write_run_json(const std::string &path, size_t entry_bits, size_t L,
                     size_t N, size_t warmups, size_t trials,
                     uint64_t trial_seed, uint64_t execution_seed,
+                    ResponsePacking response_packing,
                     bool plan_only, size_t enumerated, size_t h1_enumerated,
                     size_t h1_measured,
                     const std::vector<size_t> &bundle_arities,
@@ -654,6 +694,9 @@ void write_run_json(const std::string &path, size_t entry_bits, size_t L,
       << ",\n  \"measured_trials\": " << trials
       << ",\n  \"trial_seed\": " << trial_seed
       << ",\n  \"execution_seed\": " << execution_seed
+      << ",\n  \"response_packing\": ";
+  json_string(out, response_packing_name(response_packing));
+  out
       << ",\n  \"benchmark_bundle_arities\": ";
   if (bundle_arities.empty()) out << "null";
   else json_size_array(out, bundle_arities);
@@ -801,6 +844,24 @@ void write_run_json(const std::string &path, size_t entry_bits, size_t L,
         << ", \"max_noise\": " << r.max_noise
         << ", \"real_non_target_neighbour_slots_avg\": "
         << r.neighbour_slots_avg << '}';
+    if (r.candidate) {
+      out << ", \"response_packing_metadata\": {\"mode\": ";
+      json_string(out, response_packing_name(response_packing));
+      out << ", \"planner_projection_keyswitch_count\": "
+          << r.candidate->metrics.projection_keyswitch_count
+          << ", \"actual_mlwe_merge_keyswitch_count\": "
+          << (response_packing == ResponsePacking::MlweMerge
+                  ? actual_response_merge_keyswitches(r.candidate->shape)
+                  : size_t{0})
+          << ", \"response_merge_buffer_bytes\": "
+          << (response_packing == ResponsePacking::MlweMerge
+                  ? response_merge_buffer_bytes(r.candidate->shape,
+                                                PirParams())
+                  : size_t{0})
+          << '}';
+    } else {
+      out << ", \"response_packing_metadata\": null";
+    }
     out << ", \"key_coverage\": ";
     write_key_coverage_json(out, r.key_coverage);
     if (r.candidate) {
@@ -840,7 +901,9 @@ void write_run_json(const std::string &path, size_t entry_bits, size_t L,
           << ",\"fixture_kind\":\"TargetShapeNoiseGate\",\"eligibility\":";
       json_string(out, noise.eligibility == NoiseEligibility::Passed ? "Passed" : "Failed");
       out << ",\"decrypts_correctly\":" << (noise.decrypts_correctly ? "true" : "false")
-          << ",\"observed_key_coverage_matches_tag\":" << (noise.observed_key_coverage_matches_tag ? "true" : "false")
+          << ",\"response_packing\":";
+      json_string(out, response_packing_name(noise.packing));
+      out << ",\"observed_key_coverage_matches_tag\":" << (noise.observed_key_coverage_matches_tag ? "true" : "false")
           << ",\"min_noise_margin\":" << noise.min_noise_margin
           << ",\"minimum_margin\":" << noise.minimum_margin << ",\"tag\":";
       write_plan_tag_json(out, noise.tag);
@@ -877,6 +940,8 @@ void write_run_json(const std::string &path, size_t entry_bits, size_t L,
           << ", \"response_serialize_ms\": " << sample.response_serialize_ms
           << ", \"min_budget_bits\": " << sample.min_budget_bits
           << ", \"max_noise\": " << sample.max_noise
+          << ", \"response_merge_keyswitches\": "
+          << sample.response_merge_keyswitches
           << ", \"response_payload_bytes\": "
           << sample.response_payload_bytes
           << ", \"real_non_target_neighbour_slots\": "
@@ -956,6 +1021,7 @@ void PirTest::test_tree_superrecord_benchmark() {
   const uint64_t trial_seed = bench_trial_seed.value_or(0x747265654733325fULL);
   const uint64_t execution_seed =
       env_size("SUPERRECORD_EXECUTION_SEED", 0x535265636f726431ULL);
+  const ResponsePacking response_packing = env_response_packing();
   const bool plan_only = env_bool("SUPERRECORD_PLAN_ONLY");
   const BenchmarkTrialPlan plan =
       make_benchmark_trial_plan(N, kWarmups, kTrials, trial_seed);
@@ -1024,13 +1090,14 @@ void PirTest::test_tree_superrecord_benchmark() {
     const EntrySource pilot_source = [&](size_t level, size_t node) { return benchmark_entry(entry_bits, level, node); };
     const TargetNoiseCase fixture{pilot_leaves - 1, pilot_source, "calibration-control"};
     const auto noise = run_target_shape_noise_gate(client, pilot_server, pilot_session,
-        pilot, scheme, std::span<const TargetNoiseCase>(&fixture, 1), policy.min_noise_margin);
+        pilot, scheme, std::span<const TargetNoiseCase>(&fixture, 1),
+        policy.min_noise_margin, ResponsePacking::Projection);
     require_target_noise_gate(noise, pilot, client.get_client_id());
     const auto db = preprocess_m32(pilot, scheme, noise, pilot_source, false);
     const auto query = make_query(client, pilot_session, scheme, pilot, pilot_leaves - 1);
     (void)serve_request_m32(query, db, pilot_server, pilot_session, pilot, scheme, noise);
     const auto response = serve_request_m32(query, db, pilot_server, pilot_session,
-        pilot, scheme, noise, &calibration_timing);
+        pilot, scheme, noise, &calibration_timing, ResponsePacking::Projection);
     const auto decoded = extract_path_measured(response, client, pilot, scheme, pilot_leaves - 1);
     for (size_t level = 0; level < pilot.shape.path_levels; ++level)
       require_test(decoded.entries[level] == pilot_source(level, (pilot_leaves - 1) >> (pilot.shape.tree_height - level)),
@@ -1129,7 +1196,9 @@ void PirTest::test_tree_superrecord_benchmark() {
               << ": " << all.size() << " candidates (" << h1_enumerated
               << " h=1), Pareto frontier " << frontier.size()
               << ", benchmark rows " << rows.size()
-              << ", execution seed " << execution_seed);
+              << ", execution seed " << execution_seed
+              << ", response packing "
+              << response_packing_name(response_packing));
 
   const EntrySource source = [&](size_t level, size_t node) {
     return benchmark_entry(entry_bits, level, node);
@@ -1295,11 +1364,12 @@ void PirTest::test_tree_superrecord_benchmark() {
             client, server, session, params, scheme,
             std::span<const TargetNoiseCase>(noise_cases.data(),
                                              noise_cases.size()),
-            static_cast<double>(policy.min_noise_margin));
+            static_cast<double>(policy.min_noise_margin), response_packing);
         r.noise_gate_ms = ms_since(noise_start);
         r.noise_result = noise_result;
         if (!noise_result_unlocks_candidate(noise_result, params,
-                                            client.get_client_id())) {
+                                            client.get_client_id(),
+                                            response_packing)) {
           r.reason = "target-shape noise gate failed";
           continue;
         }
@@ -1319,8 +1389,11 @@ void PirTest::test_tree_superrecord_benchmark() {
         auto query = make_query(client, session, scheme, params, leaf);
         sample.client_query_ms = ms_since(start);
         TreeServerTiming timing{};
-        auto response = serve_request_m32(query, *db, *server_ptr, session, params, scheme, noise_result, &timing);
+        auto response = serve_request_m32(query, *db, *server_ptr, session,
+                                          params, scheme, noise_result,
+                                          &timing, response_packing);
         sample.server_total_ms = stage_ms(timing.total);
+        sample.response_merge_keyswitches = timing.response_merge_keyswitches;
         start = Clock::now();
         const auto decoded = extract_path_measured(response, client, params, scheme, leaf);
         sample.client_decode_ms = ms_since(start);
@@ -1349,9 +1422,10 @@ void PirTest::test_tree_superrecord_benchmark() {
                   << " selected_path_correct=true";
           throw std::runtime_error(message.str());
         }
-        const std::array<TreeStageDuration,10> stages = {timing.query_expand,timing.selector_completion,
+        const std::array<TreeStageDuration,11> stages = {timing.query_expand,timing.selector_completion,
             timing.alpha_prepare,timing.alpha_scan,timing.first_dim_finalize,timing.beta_fold,
-            timing.private_rotate,timing.projection,timing.path_pack,timing.modulus_switch};
+            timing.private_rotate,timing.projection,timing.path_pack,
+            timing.modulus_switch,timing.response_merge};
         for (size_t j=0;j<stages.size();++j) sample.stages_ms[j] = stage_ms(stages[j]);
         start = Clock::now();
         sample.response_payload_bytes = serialized_response_payload_bytes(response,*server_ptr,params).value_or(0);
@@ -1408,7 +1482,8 @@ void PirTest::test_tree_superrecord_benchmark() {
       env_string2("SUPERRECORD_OUTPUT_JSON", "OUTPUT_JSON", "");
   if (!json_path.empty()) {
     write_run_json(json_path, entry_bits, L, N, kWarmups, kTrials, trial_seed,
-                   execution_seed, plan_only, enumerated, h1_enumerated,
+                   execution_seed, response_packing, plan_only, enumerated,
+                   h1_enumerated,
                    count_h1(rows), bundle_arities, policy, calibration, calibration_control, calibration_timing,
                    plan.warmup_leaf_indices, plan.measured_leaf_indices,
                    execution_order, block_orders, resident_sum + temporary_peak, rows, peak_rss);

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "client.h"
+#include "tree_response_merge.h"
 #include "tree_profile.h"
 #include "tree_superrecord_query.h"
 #include "tree_superrecord_select.h"
@@ -20,6 +21,8 @@
 // Every chunk is modulus-switched once at the end. The client reconstructs
 // all P planes of the selected super-record, decodes h lanes, and returns
 // lane (leaf >> (L - level)) mod h.
+// MlweMerge replaces per-item projection and placement with a shared reverse
+// trace. Each chunk uses bit-reversed public residues; see tree_response_merge.h.
 
 namespace tree_superrecord {
 
@@ -30,6 +33,7 @@ struct PathResponse {
   size_t client_id = 0;
   std::vector<RlweCt> chunks;  // ceil(P * H / rho) same-ring ciphertexts
   bool small_q = false;        // response-wide modulus state
+  ResponsePacking packing = ResponsePacking::Projection;
 };
 
 PathResponse answer_path_reference(const ReferencePreprocessedTree &db,
@@ -37,14 +41,18 @@ PathResponse answer_path_reference(const ReferencePreprocessedTree &db,
                                    const TaggedTreeSessionKeys &session,
                                    const TreeParams &params,
                                    const PirParams &runtime_scheme,
-                                   TreeServerTiming *timing = nullptr);
+                                   TreeServerTiming *timing = nullptr,
+                                   ResponsePacking packing =
+                                       ResponsePacking::Projection);
 PathResponse answer_path_m32(const PreprocessedTree &db, ExpandedQuery &query,
                              PirServer &server,
                              const TaggedTreeSessionKeys &session,
                              const TreeParams &params,
                              const PirParams &runtime_scheme,
                              const CandidateNoiseResult &noise_result,
-                             TreeServerTiming *timing = nullptr);
+                             TreeServerTiming *timing = nullptr,
+                             ResponsePacking packing =
+                                 ResponsePacking::Projection);
 
 // Full request: bindings, expansion, selector completion, answer path.
 // `total` covers the whole wrapper; the other stages are exclusive.
@@ -54,7 +62,9 @@ PathResponse serve_request_reference(PackedQuery packed_query,
                                      const TaggedTreeSessionKeys &session,
                                      const TreeParams &params,
                                      const PirParams &runtime_scheme,
-                                     TreeServerTiming *timing = nullptr);
+                                     TreeServerTiming *timing = nullptr,
+                                     ResponsePacking packing =
+                                         ResponsePacking::Projection);
 PathResponse serve_request_m32(PackedQuery packed_query,
                                const PreprocessedTree &db,
                                PirServer &query_eval_server,
@@ -62,7 +72,9 @@ PathResponse serve_request_m32(PackedQuery packed_query,
                                const TreeParams &params,
                                const PirParams &runtime_scheme,
                                const CandidateNoiseResult &noise_result,
-                               TreeServerTiming *timing = nullptr);
+                               TreeServerTiming *timing = nullptr,
+                               ResponsePacking packing =
+                                   ResponsePacking::Projection);
 
 struct DecodedPath {
   std::vector<EntryBits> entries;  // root first, H entries of E bits

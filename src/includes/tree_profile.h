@@ -20,8 +20,10 @@ struct TreeServerTiming {
   TreeStageDuration private_rotate{};      // encrypted residue shift
   TreeStageDuration projection{};          // BV substitution rounds
   TreeStageDuration path_pack{};           // public shifts and additions
+  TreeStageDuration response_merge{};      // MLWE response residue merge
   TreeStageDuration modulus_switch{};      // full-q -> small-q
   TreeStageDuration total{};
+  size_t response_merge_keyswitches = 0;
 };
 
 inline double stage_ms(TreeStageDuration duration) {

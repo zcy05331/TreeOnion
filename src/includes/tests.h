@@ -108,6 +108,7 @@ class PirTest {
     void test_tree_rotate();
     // Milestone 3: projection map for every depth plus the rotate+project gate.
     void test_tree_project();
+    void test_tree_response_merge();
     // Milestone 4: full path pipeline, chunk packing, client decode.
     void test_tree_e2e();
     // Milestone 6: scalar vs NTT first-dimension kernels, bit-for-bit.

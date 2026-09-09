@@ -4,6 +4,7 @@
 #include <vector>
 
 void test_approx_gadget();
+void test_tree_response_merge_e2e();
 
 // Correctness suite behind `--test all`: every registered test that asserts
 // its result and finishes in seconds to a few minutes. The timed benchmarks
@@ -23,6 +24,7 @@ static const std::vector<std::string> kRegressionTests = {
     "tree_superrecord_index", "tree_superrecord_e2e",
     "tree_superrecord_noise", "tree_superrecord_kernel", "tree_superrecord_alpha",
     "approx_gadget",
+    "tree_response_merge", "tree_response_merge_e2e",
 };
 
 void PirTest::run_test(const std::string &test_name) {
@@ -85,6 +87,8 @@ void PirTest::run_test(const std::string &test_name) {
   else if (test_name == "tree_superrecord_kernel")  test_tree_superrecord_kernel();
   else if (test_name == "tree_superrecord_alpha")   test_tree_superrecord_alpha();
   else if (test_name == "approx_gadget")            test_approx_gadget();
+  else if (test_name == "tree_response_merge")      test_tree_response_merge();
+  else if (test_name == "tree_response_merge_e2e")  test_tree_response_merge_e2e();
   else if (test_name == "tree_superrecord_noise_probe") test_tree_superrecord_noise_probe();
   else if (test_name == "tree_superrecord_bench")   test_tree_superrecord_benchmark();
   else if (test_name == "decrypt_mod_q")     test_decrypt_mod_q();

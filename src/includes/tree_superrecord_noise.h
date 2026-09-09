@@ -1,8 +1,10 @@
 #pragma once
 
+#include "tree_response_merge.h"
 #include "tree_superrecord_query.h"
 
 #include <functional>
+#include <optional>
 #include <span>
 #include <string>
 #include <vector>
@@ -46,6 +48,7 @@ struct CandidateNoiseResult {
   BvKeyCoverage observed_key_coverage;
   double min_noise_margin = 0;
   double minimum_margin = 0;
+  ResponsePacking packing = ResponsePacking::Projection;
 
   std::vector<NoiseCheckpoint> checkpoints;
 };
@@ -61,12 +64,18 @@ struct TargetNoiseCase {
 
 bool noise_result_unlocks_candidate(const CandidateNoiseResult &result,
                                     const TreeParams &params,
-                                    size_t expected_client_id);
+                                    size_t expected_client_id,
+                                    ResponsePacking packing =
+                                        ResponsePacking::Projection);
 void require_target_noise_gate(const CandidateNoiseResult &result,
                                const TreeParams &params,
-                               size_t expected_client_id);
+                               size_t expected_client_id,
+                               ResponsePacking packing =
+                                   ResponsePacking::Projection);
 void require_trusted_target_noise_result(const CandidateNoiseResult &result,
-                                         const TreeParams &params);
+                                         const TreeParams &params,
+                                         std::optional<ResponsePacking> packing =
+                                             std::nullopt);
 
 CandidateNoiseResult run_target_shape_noise_gate(
     PirClient &client, PirServer &query_eval_server,
@@ -75,6 +84,7 @@ CandidateNoiseResult run_target_shape_noise_gate(
     // Zero means decrypt-correctness admission: keep all diagnostics, but do
     // not reject solely because a checkpoint has no remaining numeric margin.
     // Positive values retain the strict minimum-margin gate.
-    double min_noise_margin = 0);
+    double min_noise_margin = 0,
+    ResponsePacking packing = ResponsePacking::Projection);
 
 }  // namespace tree_superrecord
