@@ -38,3 +38,7 @@ outputs/*
 outputs/merkle_baselines/*
 !outputs/merkle_baselines/.gitkeep
 overleaf/
+
+
+# Research drafts and paper notes stay local.
+/docs/
