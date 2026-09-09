@@ -53,3 +53,6 @@ overleaf/
 *.out
 *.synctex.gz
 *.toc
+
+# Research drafts and paper notes stay local.
+/docs/
