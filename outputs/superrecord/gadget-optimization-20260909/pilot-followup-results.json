@@ -1,0 +1,16 @@
+[
+  {
+    "label": "ep3-s32",
+    "exit_code": 0,
+    "state": "passed_pilot",
+    "raw_directory": "outputs/superrecord/gadget-optimization-20260909/pilots/ep3-s32",
+    "timing_use": "screening only; compiler running concurrently"
+  },
+  {
+    "label": "ep2-s36",
+    "exit_code": 0,
+    "state": "passed_pilot",
+    "raw_directory": "outputs/superrecord/gadget-optimization-20260909/pilots/ep2-s36",
+    "timing_use": "screening only; compiler running concurrently"
+  }
+]

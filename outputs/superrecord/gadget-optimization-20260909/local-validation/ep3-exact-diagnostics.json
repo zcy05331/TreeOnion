@@ -1,0 +1,34 @@
+[
+  {
+    "test": "ext_prod_mux",
+    "exit_code": 0,
+    "tail": [
+      "K=1 mux(RGSW(1)) = b and mux(RGSW(0)) = a on 2048 coefficients",
+      "=============================================================================="
+    ]
+  },
+  {
+    "test": "fast_expand",
+    "exit_code": 0,
+    "tail": [
+      "query 38713: expanded leaf noise budget 23 bits",
+      "=============================================================================="
+    ]
+  },
+  {
+    "test": "tree_rotate",
+    "exit_code": 1,
+    "tail": [
+      "Plaintexts are not equal at coefficient 1",
+      "Error: RotSelect must rotate exactly when the bit is one"
+    ]
+  },
+  {
+    "test": "tree_project",
+    "exit_code": 1,
+    "tail": [
+      "Plaintexts are not equal at coefficient 0",
+      "Error: rotate + project must isolate the target node"
+    ]
+  }
+]

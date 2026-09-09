@@ -1,0 +1,56 @@
+{
+  "state": "complete",
+  "runs": [
+    {
+      "name": "round0-ep3-s32",
+      "label": "ep3-s32",
+      "state": "complete",
+      "command": [
+        "/Users/little_sun/Desktop/little_sun/26Summer/OnionPIRv2/.worktrees/generic-superrecord/build-gadget-configs/ep3-s32/Onion-PIR",
+        "--test",
+        "tree_superrecord_bench",
+        "--leaf-count",
+        "4194304",
+        "--experiments",
+        "1",
+        "--warmup",
+        "3",
+        "--trial-seed",
+        "7"
+      ],
+      "source": "5d5f6c39447fa4b4beeaa136846ba2796e25c70d",
+      "environment": {
+        "SUPERRECORD_ENTRY_BITS": "256",
+        "SUPERRECORD_BUNDLE_ARITIES": "3",
+        "SUPERRECORD_MAX_ARITY": "3",
+        "SUPERRECORD_SKIP_LEGACY": "1",
+        "SUPERRECORD_MAX_FRONTIER": "0",
+        "SUPERRECORD_H1_FRONTIER": "0",
+        "SUPERRECORD_EXPANSION_HEIGHTS": "9",
+        "SUPERRECORD_ALPHA_ALIGNMENTS": "16",
+        "SUPERRECORD_MAX_RESPONSES": "1",
+        "SUPERRECORD_FIXED_KEY_HEIGHT": "11",
+        "SUPERRECORD_MEMORY_BYTES": "4294967296",
+        "SUPERRECORD_MIN_NOISE_MARGIN": "0",
+        "SUPERRECORD_PIN_SHAPE": "3,64,1,352,7",
+        "SUPERRECORD_OUTPUT_JSON": "/Users/little_sun/Desktop/little_sun/26Summer/OnionPIRv2/.worktrees/generic-superrecord/outputs/superrecord/gadget-optimization-20260909/pilots/ep3-s32/round0-ep3-s32.json",
+        "SUPERRECORD_COMMIT": "5d5f6c39447fa4b4beeaa136846ba2796e25c70d"
+      },
+      "mean_server_ms": 885.336834,
+      "mean_rotation_projection_ms": 40.663252
+    }
+  ],
+  "leaf_count": 4194304,
+  "samples_per_run": 1,
+  "warmups_per_run": 3,
+  "rounds": 1,
+  "memory_gib": 4,
+  "shape": {
+    "bundle_arity": 3,
+    "record_coeffs": 64,
+    "plane_count": 1,
+    "N0": 352,
+    "beta_bits": 7
+  },
+  "expansion_height": 9
+}

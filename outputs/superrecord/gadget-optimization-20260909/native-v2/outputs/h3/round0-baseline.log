@@ -1,0 +1,70 @@
+Running test: tree_superrecord_bench
+==============================================================================
+                    test_tree_superrecord_benchmark(Benchmark build)
+==============================================================================
+calibrating first-dimension kernels for 1 candidate shapes
+planner: E=256 c=12 N=2^24: 1 candidates (0 h=1), Pareto frontier 1, benchmark rows 1, execution seed 6003972730984227889
+preparing [bundle3] E=256 N=2^24 h=3 G=64 P=1 rho=32 m=23 b=9 N0=352(align 16) width=490 h_q=9 keys req/reg=9/11 resp=1 scan=5632 MiB folds=1013 rot=105 proj=105 util=1 pred=1160.52 ms
+completed warmup block 0 leaf 3312195
+completed warmup block 1 leaf 8853064
+completed warmup block 2 leaf 1455874
+completed measured block 3 leaf 12995598
+completed measured block 4 leaf 5489546
+completed measured block 5 leaf 14706747
+completed measured block 6 leaf 16120078
+completed measured block 7 leaf 4678171
+completed measured block 8 leaf 6907493
+completed measured block 9 leaf 12526262
+completed measured block 10 leaf 7084011
+completed measured block 11 leaf 12994041
+completed measured block 12 leaf 4549782
+completed measured block 13 leaf 8602984
+completed measured block 14 leaf 4679372
+completed measured block 15 leaf 12164142
+completed measured block 16 leaf 6021447
+completed measured block 17 leaf 8565681
+completed measured block 18 leaf 13252793
+completed measured block 19 leaf 1357525
+completed measured block 20 leaf 15826447
+completed measured block 21 leaf 5290694
+completed measured block 22 leaf 6810917
+completed measured block 23 leaf 7285911
+completed measured block 24 leaf 9294836
+completed measured block 25 leaf 2504129
+completed measured block 26 leaf 3510236
+completed measured block 27 leaf 15473703
+completed measured block 28 leaf 5422815
+completed measured block 29 leaf 2713371
+completed measured block 30 leaf 15202870
+completed measured block 31 leaf 2094080
+completed measured block 32 leaf 13694592
+completed measured block 33 leaf 15157998
+completed measured block 34 leaf 12172905
+completed measured block 35 leaf 3931612
+completed measured block 36 leaf 15791168
+completed measured block 37 leaf 454526
+completed measured block 38 leaf 8708101
+completed measured block 39 leaf 7379419
+completed measured block 40 leaf 7482397
+completed measured block 41 leaf 1639245
+completed measured block 42 leaf 923752
+completed measured block 43 leaf 2354675
+completed measured block 44 leaf 8297162
+completed measured block 45 leaf 9933541
+completed measured block 46 leaf 5527617
+completed measured block 47 leaf 5661364
+completed measured block 48 leaf 15270906
+completed measured block 49 leaf 7810498
+completed measured block 50 leaf 3996018
+completed measured block 51 leaf 2745650
+completed measured block 52 leaf 2466130
+generic super-record JSON: /users/zcy05331/generic-gadgets-v2-20260909/outputs/h3/round0-baseline.json
+
+generic super-record benchmark: N=2^24 leaves, E=256 bits, 50 measured trials after 3 warmup, trial seed 7
+[candidate-0 bundle3] E=256 N=2^24 h=3 G=64 P=1 rho=32 m=23 b=9 N0=352(align 16) width=490 h_q=9 keys req/reg=9/11 resp=1 scan=5632 MiB folds=1013 rot=105 proj=105 util=1 pred=1160.52 ms
+  database 5632.1 MiB (360455 plaintext cells, scan 5632.1 MiB per query), setup 23660.7 ms
+  server total mean 936.784 ms, median 932.691, p95 980.263, stddev 13.1749
+  stages avg (ms): expand 67.956244 complete 39.266133 prepare 26.489527 scan 527.827379 finalize 75.343171 fold 166.521923 rotate 19.201909 project 13.747711 pack 0.161116 switch 0.096118
+  stages sum 936.611 ms; client query 0.101578 ms, client extract 0.346802 ms
+  throughput 6012.17 MiB/s scanned; communication: modeled query 14880 B, actual response payload 11264 B; noise: min budget 1 bits, max residue 172 of decoder bound 508.628; real non-target neighbour slots/trial 46.1
+  samples(server): 935.216165 933.056301 931.881421 935.624709 933.363698 982.364954 980.262670 982.042809 977.379772 930.799868 932.335297 932.478734 930.355406 933.782142 931.528615 931.880687 929.962009 935.578462 932.706873 929.556786 930.936798 936.829129 931.637354 932.066849 935.829985 932.802944 931.208572 931.981380 932.070537 930.993731 931.790190 932.332099 936.399361 935.440165 931.571033 935.208281 932.800829 933.504692 934.448168 936.796247 933.753739 935.345515 931.832404 932.323442 935.802143 931.001880 932.674319 935.759450 931.419154 930.488295

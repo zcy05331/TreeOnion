@@ -1,0 +1,6 @@
+Running test: tree_rotate
+==============================================================================
+                    test_tree_rotate(Benchmark build)
+==============================================================================
+Plaintexts are not equal at coefficient 1
+Error: RotSelect must rotate exactly when the bit is one

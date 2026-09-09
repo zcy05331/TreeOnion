@@ -1,0 +1,89 @@
+{
+  "state": "complete",
+  "completed_labels": [
+    "kernel"
+  ],
+  "failed_runs": [],
+  "rejected_labels": {},
+  "layout": {
+    "entry_bits": 256,
+    "leaf_count": 4194304,
+    "bundle_arity": 3,
+    "record_coeffs": 64,
+    "plane_count": 1,
+    "records_per_plaintext": 32,
+    "N0": 352,
+    "beta_bits": 7,
+    "expansion_height": 9
+  },
+  "summary": {
+    "kernel": {
+      "completed_samples": 1,
+      "server_total_ms_mean": 770.463791,
+      "rotation_projection_ms_mean": 42.930544,
+      "stages_ms_mean": {
+        "complete": 59.437583,
+        "expand": 100.589875,
+        "finalize": 14.045585,
+        "fold": 72.053457,
+        "pack": 0.138249,
+        "prepare": 24.433792,
+        "project": 18.313668,
+        "rotate": 24.616876,
+        "scan": 455.971038,
+        "switch": 0.516083
+      },
+      "wire": {
+        "modeled_seeded_query_bytes": 14880,
+        "actual_query_wire_bytes": null,
+        "actual_response_ciphertext_payload_bytes": 11264
+      },
+      "key_metadata": {
+        "required_key_height": 9,
+        "registered_key_height": 11,
+        "scheme_registered_session_key_height": 11
+      },
+      "gadget_metadata": {
+        "label": "bundle3",
+        "gadget_identity": {
+          "selector_gadget_rows": 6,
+          "selector_base_log2": 10,
+          "selector_low_bits": 0,
+          "completion_key_gadget_rows": 10,
+          "completion_key_base_log2": 6,
+          "bv_ks_rows": 8,
+          "bv_ks_base_log2": 8,
+          "bv_ks_low_bits": 0
+        },
+        "query_width": 478,
+        "eval_key_bytes": {
+          "modeled_per_client_eval_key_bytes": 1607040,
+          "eval_key_coefficient_payload_bytes_estimate": 3538944
+        },
+        "wire": {
+          "modeled_seeded_query_bytes": 14880,
+          "actual_query_wire_bytes": null,
+          "actual_response_ciphertext_payload_bytes": 11264
+        },
+        "key_metadata": {
+          "required_key_height": 9,
+          "registered_key_height": 11,
+          "scheme_registered_session_key_height": 11
+        }
+      },
+      "process_records": [
+        {
+          "exit_code": 0,
+          "elapsed_seconds": 47.54698275,
+          "process_peak_rss_bytes": 1905053696,
+          "ru_maxrss_unit": "bytes",
+          "peak_scope": "single benchmark child process; includes setup, calibration and all candidates",
+          "cgroup_memory_peak_bytes": null,
+          "cgroup_peak_scope": "shared cgroup cumulative peak, when available",
+          "path": "/Users/little_sun/Desktop/little_sun/26Summer/OnionPIRv2/.worktrees/generic-superrecord/outputs/superrecord/gadget-optimization-20260909/pilots/kernel/round0-kernel-process.json",
+          "raw": "/Users/little_sun/Desktop/little_sun/26Summer/OnionPIRv2/.worktrees/generic-superrecord/outputs/superrecord/gadget-optimization-20260909/pilots/kernel/round0-kernel.json"
+        }
+      ]
+    }
+  }
+}

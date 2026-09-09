@@ -1,0 +1,70 @@
+Running test: tree_superrecord_bench
+==============================================================================
+                    test_tree_superrecord_benchmark(Benchmark build)
+==============================================================================
+calibrating first-dimension kernels for 1 candidate shapes
+planner: E=256 c=12 N=2^24: 1 candidates (1 h=1), Pareto frontier 1, benchmark rows 1, execution seed 6003972730984227889
+preparing [generic-h1-mandatory-0] E=256 N=2^24 h=1 G=8 P=3 rho=256 m=24 b=7 N0=512(align 16) width=560 h_q=10 keys req/reg=10/11 resp=1 scan=6144 MiB folds=741 rot=492 proj=492 util=0.888889 pred=977.875 ms
+completed warmup block 0 leaf 3312195
+completed warmup block 1 leaf 8853064
+completed warmup block 2 leaf 1455874
+completed measured block 3 leaf 12995598
+completed measured block 4 leaf 5489546
+completed measured block 5 leaf 14706747
+completed measured block 6 leaf 16120078
+completed measured block 7 leaf 4678171
+completed measured block 8 leaf 6907493
+completed measured block 9 leaf 12526262
+completed measured block 10 leaf 7084011
+completed measured block 11 leaf 12994041
+completed measured block 12 leaf 4549782
+completed measured block 13 leaf 8602984
+completed measured block 14 leaf 4679372
+completed measured block 15 leaf 12164142
+completed measured block 16 leaf 6021447
+completed measured block 17 leaf 8565681
+completed measured block 18 leaf 13252793
+completed measured block 19 leaf 1357525
+completed measured block 20 leaf 15826447
+completed measured block 21 leaf 5290694
+completed measured block 22 leaf 6810917
+completed measured block 23 leaf 7285911
+completed measured block 24 leaf 9294836
+completed measured block 25 leaf 2504129
+completed measured block 26 leaf 3510236
+completed measured block 27 leaf 15473703
+completed measured block 28 leaf 5422815
+completed measured block 29 leaf 2713371
+completed measured block 30 leaf 15202870
+completed measured block 31 leaf 2094080
+completed measured block 32 leaf 13694592
+completed measured block 33 leaf 15157998
+completed measured block 34 leaf 12172905
+completed measured block 35 leaf 3931612
+completed measured block 36 leaf 15791168
+completed measured block 37 leaf 454526
+completed measured block 38 leaf 8708101
+completed measured block 39 leaf 7379419
+completed measured block 40 leaf 7482397
+completed measured block 41 leaf 1639245
+completed measured block 42 leaf 923752
+completed measured block 43 leaf 2354675
+completed measured block 44 leaf 8297162
+completed measured block 45 leaf 9933541
+completed measured block 46 leaf 5527617
+completed measured block 47 leaf 5661364
+completed measured block 48 leaf 15270906
+completed measured block 49 leaf 7810498
+completed measured block 50 leaf 3996018
+completed measured block 51 leaf 2745650
+completed measured block 52 leaf 2466130
+generic super-record JSON: /users/zcy05331/generic-gadgets-v2-20260909/outputs/h1/round0-ep2-s36.json
+
+generic super-record benchmark: N=2^24 leaves, E=256 bits, 50 measured trials after 3 warmup, trial seed 7
+[candidate-0 generic-h1-mandatory-0] E=256 N=2^24 h=1 G=8 P=3 rho=256 m=24 b=7 N0=512(align 16) width=560 h_q=10 keys req/reg=10/11 resp=1 scan=6144 MiB folds=741 rot=492 proj=492 util=0.888889 pred=977.875 ms
+  database 6144.3 MiB (393237 plaintext cells, scan 6144.3 MiB per query), setup 33211.3 ms
+  server total mean 968.141 ms, median 967.756, p95 969.981, stddev 0.945873
+  stages avg (ms): expand 79.721001 complete 14.132266 prepare 39.431594 scan 630.620565 finalize 50.937006 fold 50.529048 rotate 36.530343 project 65.515315 pack 0.393852 switch 0.096132
+  stages sum 967.907 ms; client query 0.102733 ms, client extract 0.192984 ms
+  throughput 6346.52 MiB/s scanned; communication: modeled query 14880 B, actual response payload 11264 B; noise: min budget 0 bits, max residue 421 of decoder bound 508.628; real non-target neighbour slots/trial 0
+  samples(server): 967.728436 967.227590 967.883482 967.590024 967.531141 967.194889 967.510472 967.431649 967.169196 967.665300 967.984318 967.480055 966.964974 967.422364 967.059492 966.885037 967.671263 967.202668 968.388565 967.690199 967.915563 968.399038 968.663145 967.169722 967.411700 969.854335 967.180114 967.851815 969.726579 968.681142 967.755813 969.981183 969.427992 967.280976 967.600945 968.860299 970.095827 969.091628 969.780697 968.748275 967.833519 969.146790 968.712702 967.369992 967.733817 970.032012 969.632279 967.756333 969.293189 968.360899
