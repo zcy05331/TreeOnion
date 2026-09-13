@@ -10,10 +10,16 @@ import unittest
 from pathlib import Path
 
 
-SCRIPT = Path(__file__).with_name("select_cuckoo_layout.py")
+SCRIPT = Path(__file__).resolve().parents[1] / "select_cuckoo_layout.py"
 
 
-def write_pilot(root: Path, height: int, samples: list[float], leaf_offset: int = 0) -> Path:
+def write_pilot(
+    root: Path,
+    height: int,
+    samples: list[float],
+    leaf_offset: int = 0,
+    storage_bytes: int | None = None,
+) -> Path:
     path = root / f"h{height}.json"
     leaves = [leaf_offset + i for i in range(len(samples))]
     path.write_text(
@@ -43,7 +49,7 @@ def write_pilot(root: Path, height: int, samples: list[float], leaf_offset: int 
                 },
                 "storage": {
                     "logical_padded_bytes": 4000 + height,
-                    "estimated_preprocessed_bytes": 3000 + height,
+                    "estimated_preprocessed_bytes": storage_bytes if storage_bytes is not None else 3000 + height,
                 },
                 "samples": [
                     {
@@ -66,6 +72,16 @@ def write_pilot(root: Path, height: int, samples: list[float], leaf_offset: int 
         json.dumps({"exit_code": 0}) + "\n"
     )
     return path
+
+
+def run_select(output: Path, paths: list[Path]) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        ["python3", str(SCRIPT), "--output", str(output), "--expected-trials", "4", *map(str, paths)],
+        check=False,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
 
 
 class SelectCuckooLayoutTest(unittest.TestCase):
@@ -166,6 +182,51 @@ class SelectCuckooLayoutTest(unittest.TestCase):
             )
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("measured leaf schedule does not match", result.stderr)
+
+
+    def test_missing_pilot_file_fails_the_selection_step(self) -> None:
+        # run_cloudlab_profile_matrix.sh keeps looping when a pilot run_case fails and then
+        # hands all four h7..h10 paths to this script: a missing file has to fail the
+        # selection instead of launching cuckoo_tuned on a partial pilot set.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            paths = [write_pilot(root, height, [10.0, 11.0, 12.0, 13.0]) for height in (7, 8, 9)]
+            output = root / "selection.json"
+            result = run_select(output, [*paths, root / "h10.json"])
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("h10.json: missing pilot JSON", result.stderr)
+            self.assertEqual(result.stdout, "")
+            self.assertFalse(output.exists())
+
+    def test_incomplete_height_set_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            paths = [write_pilot(root, height, [10.0, 11.0, 12.0, 13.0]) for height in (7, 8, 9)]
+            output = root / "selection.json"
+            result = run_select(output, paths)
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("pilot heights [7, 8, 9] != expected [7, 8, 9, 10]", result.stderr)
+            self.assertEqual(result.stdout, "")
+            self.assertFalse(output.exists())
+
+    def test_equal_means_break_the_tie_on_physical_db_bytes(self) -> None:
+        # The published decision record declares these tie-breakers; the sort key must
+        # actually apply them in that order.
+        storage = {7: 3010, 8: 3007, 9: 3009, 10: 3008}
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            paths = [write_pilot(root, height, [10.0] * 4, storage_bytes=storage[height]) for height in (7, 8, 9, 10)]
+            output = root / "selection.json"
+            result = run_select(output, paths)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(result.stdout.strip(), "8")
+            selection = json.loads(output.read_text())
+            self.assertEqual(selection["decision"]["chosen_expansion_height"], 8)
+            self.assertEqual(selection["decision"]["chosen_pilot"], str(paths[1]))
+            self.assertEqual(selection["decision"]["tie_breakers"], ["physical_db_bytes", "requested_expansion_height"])
+            self.assertEqual([pilot["requested_expansion_height"] for pilot in selection["pilots"]], [7, 8, 9, 10])
+            self.assertEqual([pilot["physical_db_bytes"] for pilot in selection["pilots"]], [3010.0, 3007.0, 3009.0, 3008.0])
+            self.assertTrue(all(isinstance(pilot["physical_db_bytes"], float) for pilot in selection["pilots"]))
 
 
 if __name__ == "__main__":
