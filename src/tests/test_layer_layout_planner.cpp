@@ -1,6 +1,7 @@
 #include "tests.h"
 #include "layer_layout_planner.h"
 #include "merkle_baseline.h"
+#include "merkle_benchmark.h"
 
 #include <algorithm>
 #include <filesystem>
@@ -10,6 +11,8 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
+
+void test_layer_layout_large_tiers();
 
 namespace {
 
@@ -521,4 +524,79 @@ void PirTest::test_layer_layout_planner() {
                    1074843648ULL,
                "legacy policy keeps the frozen H=24 padded total");
   std::filesystem::remove(path);
+}
+
+// The 4 GB (H=26) and 8 GB (H=27) paper rows. run_merkle_benchmark_suite calls
+// estimate_merkle_benchmark_peak_bytes for every workload above 2^24 leaves
+// before it touches a database, and the estimate plans the layerwise tier
+// under the frozen h=10 reference of that height. The planner checks above
+// stop at H=24 and the peak-bytes check in test_merkle_benchmark_stats
+// compares 2^8 with 2^12, so a with_layout legality change at level 26 or 27
+// would first surface when the CloudLab 8gb job aborts at startup. The byte
+// totals are frozen like the H=24 padded total: the gate compares the estimate
+// against physical memory minus 2 GiB, so any drift changes which machines may
+// run a tier and what the run stores.
+//
+// Where the four numbers come from: all of them are read off this same planner
+// and estimator at the frozen h=10 reference, so they are not independent
+// truth, only a fingerprint of a plan that the published 4 GB and 8 GB rows
+// were produced with. A change in them is a regression unless the planner or
+// the estimator was deliberately changed; if it was, re-derive them from the
+// new code, and check the 2 GiB gate still admits the CloudLab machines the
+// paper rows are measured on before updating the numbers here.
+void test_layer_layout_large_tiers() {
+  require_applicable(paper_config_active(),
+                     paper_config_reason("the layer layout planner"));
+  print_func_name(__FUNCTION__);
+
+  const uint64_t estimate26 = estimate_merkle_benchmark_peak_bytes(size_t{1} << 26);
+  const uint64_t estimate27 = estimate_merkle_benchmark_peak_bytes(size_t{1} << 27);
+  require_test(estimate26 == 22913941504ULL && estimate27 == 45822181376ULL,
+               "frozen 4 GB / 8 GB peak memory estimates drifted");
+
+  const auto check_plan = [](size_t tree_height, uint64_t frozen_padded_bytes) {
+    const MerkleWorkload workload =
+        make_benchmark_workload(size_t{1} << tree_height);
+    const PirParams reference = make_benchmark_reference(workload);
+    require_test(reference.get_expan_height() == 10,
+                 "large-tier reference is not the frozen h=10 layout");
+    const std::vector<LayerLayout> plan =
+        plan_layer_layouts(tree_height, 96, reference);
+    require_test(plan.size() == tree_height, "one layout per level");
+    for (size_t level = 1; level <= tree_height; ++level) {
+      const LayerLayout &layout = plan[level - 1];
+      const PirParams &p = layout.params;
+      const size_t node_count = size_t{1} << level;
+      const std::string where =
+          "H=" + std::to_string(tree_height) + " level " + std::to_string(level);
+      require_test(layout.level == level && layout.node_count == node_count &&
+                       layout.target_num_pt ==
+                           utils::roundup_div(node_count, size_t{96}) &&
+                       p.get_target_num_pt() == layout.target_num_pt,
+                   where + ": level bookkeeping");
+      require_test(layout.direct_return == (level <= 6),
+                   where + ": direct return exactly for levels that fit one "
+                           "plaintext");
+      require_test(reference.scheme_compatible(p),
+                   where + ": layout drifted from the reference scheme");
+      require_test(p.get_num_other_dims() <= reference.get_num_other_dims() &&
+                       p.get_expan_height() <= reference.get_expan_height(),
+                   where + ": layout exceeds the reference's dimension count "
+                           "or expansion height");
+      require_test(p.get_num_pt() >= layout.target_num_pt,
+                   where + ": padded plaintext count below the level's target");
+    }
+    require_test(sum_padded_bytes(plan) == frozen_padded_bytes,
+                 "H=" + std::to_string(tree_height) +
+                     " frozen padded total drifted");
+    return plan;
+  };
+  const std::vector<LayerLayout> plan26 = check_plan(26, 4296364032ULL);
+  const std::vector<LayerLayout> plan27 = check_plan(27, 8591659008ULL);
+  BENCH_PRINT("large tiers: peak estimate 4 GB " << estimate26 << " B, 8 GB "
+              << estimate27 << " B; padded totals " << sum_padded_bytes(plan26)
+              << " / " << sum_padded_bytes(plan27) << " B, level-27 layout h="
+              << plan27.back().params.get_expan_height() << " with "
+              << plan27.back().params.get_num_other_dims()
+              << " remaining dimensions");
 }

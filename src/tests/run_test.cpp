@@ -5,6 +5,14 @@
 
 void test_approx_gadget();
 void test_tree_response_merge_e2e();
+// Merkle baselines: a profiled plan off the legacy heights, the phase
+// clocks, the archived leaf schedule, one-sample statistics, large tiers.
+void test_merkle_profiled_override();
+void test_merkle_server_phases();
+void test_merkle_trial_schedule();
+void test_merkle_single_sample_stats();
+void test_layer_layout_sweep_dominated();
+void test_layer_layout_large_tiers();
 // The complete response plaintext at the paper's first-dimension width.
 void test_tree_noise_envelope();
 // PIR layouts: every row of a ragged and a perfect remaining-dimension
@@ -37,6 +45,9 @@ static const std::vector<std::string> kRegressionTests = {
     "tree_superrecord_noise", "tree_superrecord_kernel", "tree_superrecord_alpha",
     "approx_gadget",
     "tree_response_merge", "tree_response_merge_e2e",
+    "merkle_profiled_override", "merkle_server_phases", "merkle_trial_schedule",
+    "merkle_single_sample_stats", "layer_layout_sweep_dominated",
+    "layer_layout_large_tiers",
     "tree_noise_envelope",
     "pir_row_sweep", "query_shape_exact_fit",
     "bv_ks_reference", "gsw_decomp_shapes", "ntt_primes", "paper_moduli_pin",
@@ -117,10 +128,16 @@ void PirTest::run_test(const std::string &test_name) {
   else if (test_name == "shared_session")      test_shared_session();
   else if (test_name == "merkle_benchmark_stats") test_merkle_benchmark_stats();
   else if (test_name == "merkle_integration")  test_merkle_integration();
+  else if (test_name == "merkle_profiled_override") test_merkle_profiled_override();
+  else if (test_name == "merkle_server_phases") test_merkle_server_phases();
+  else if (test_name == "merkle_trial_schedule") test_merkle_trial_schedule();
+  else if (test_name == "merkle_single_sample_stats") test_merkle_single_sample_stats();
   else if (test_name == "pir_profile")         test_pir_profile();
   else if (test_name == "pir_row_sweep")       test_pir_row_sweep();
   else if (test_name == "query_shape_exact_fit") test_query_shape_exact_fit();
   else if (test_name == "layer_layout_planner") test_layer_layout_planner();
+  else if (test_name == "layer_layout_sweep_dominated") test_layer_layout_sweep_dominated();
+  else if (test_name == "layer_layout_large_tiers") test_layer_layout_large_tiers();
   else if (test_name == "bv_ks")             test_bv_keyswitch();
   else if (test_name == "bv_ks_reference")   test_bv_keyswitch_reference();
   else if (test_name == "cpu_info")          print_cpu_info();
