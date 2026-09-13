@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import collections
 import json
 import os
 import pathlib
+import re
 import stat
 import subprocess
 import tempfile
@@ -12,9 +14,17 @@ import unittest
 
 REPO = pathlib.Path(__file__).resolve().parents[2]
 SCRIPT = REPO / "scripts" / "run_cloudlab_profile_matrix.sh"
+MAIN_CPP = REPO / "src" / "main.cpp"
+# The option loop in main.cpp compares argv against these literals and throws
+# "Unknown option" on anything else; the fake binary derives its vocabulary the same way.
+FLAG_PATTERN = r'std::strcmp\(argv\[i\], "(--[a-z0-9-]+)"\)'
 LEAF_COUNT_1GIB = 1 << 24
 LEAF_COUNT_4GIB = 1 << 26
 SUPERRECORD_MEMORY_110GIB = 110 * 1024**3
+
+
+def main_cpp_flags() -> set[str]:
+    return set(re.findall(FLAG_PATTERN, MAIN_CPP.read_text()))
 
 
 def write_executable(path: pathlib.Path, body: str) -> None:
@@ -126,9 +136,21 @@ class FutureProfileMatrixTests(unittest.TestCase):
             import json
             import os
             import pathlib
+            import re
             import sys
 
             args = sys.argv[1:]
+            run_root = os.environ.get("FAKE_RUN_ROOT")
+            if run_root:
+                with (pathlib.Path(run_root) / "metadata" / "onionpir-argv.jsonl").open("a") as f:
+                    f.write(json.dumps(args) + "\n")
+            # Reject exactly what the real binary rejects, so a flag renamed in main.cpp or
+            # mistyped in the matrix script fails here instead of on the first CloudLab run.
+            known = set(re.findall(FLAG_PATTERN, pathlib.Path(MAIN_CPP).read_text()))
+            unknown = [a for a in args if a.startswith("--") and a not in known]
+            if unknown:
+                print("unknown flag", unknown, file=sys.stderr)
+                sys.exit(3)
 
             def after(flag):
                 return args[args.index(flag) + 1] if flag in args else None
@@ -168,7 +190,7 @@ class FutureProfileMatrixTests(unittest.TestCase):
                     "warmups": warmups,
                     "leaf_count": leaf_count,
                 }) + "\n")
-            """,
+            """.replace("FLAG_PATTERN", json.dumps(FLAG_PATTERN)).replace("MAIN_CPP", json.dumps(str(MAIN_CPP))),
         )
         write_executable(
             self.run_root / "deps" / "TreePIR" / "VBPIR_TreePIR" / "build" / "bin" / "vbpir_treepir",
@@ -230,6 +252,11 @@ class FutureProfileMatrixTests(unittest.TestCase):
         path = self.run_root / "metadata" / "process-invocations.jsonl"
         return [json.loads(line) for line in path.read_text().splitlines()]
 
+    def binary_argv(self) -> list[list[str]]:
+        """Every argv the fake Onion-PIR saw, including the schedule run that bypasses the wrapper."""
+        path = self.run_root / "metadata" / "onionpir-argv.jsonl"
+        return [json.loads(line) for line in path.read_text().splitlines()]
+
     def formal_invocations(self, scale: str = "1gb") -> dict[str, dict[str, object]]:
         formal = {}
         for invocation in self.invocations():
@@ -267,6 +294,18 @@ class FutureProfileMatrixTests(unittest.TestCase):
         self.assertEqual(len(leaves), 19)
         self.assertEqual(leaves[:3], ["1000", "1001", "1002"])
         self.assertEqual(leaves[-1], "2015")
+
+        # Every flag the matrix hands the binary is one main.cpp parses, and every run is
+        # accounted for -- including the schedule run, which never reaches the memory wrapper.
+        # A flag renamed in main.cpp or mistyped here fails this test, not the CloudLab run.
+        argv = self.binary_argv()
+        self.assertEqual(
+            collections.Counter(arg_after(command, "--test") for command in argv),
+            {"tree_superrecord_bench": 2, "layer_layout_sweep": 1, "merkle_benchmarks": 2,
+             "tree_bench_g32": 1, "cuckoo_bench": 5},
+        )
+        passed_flags = {arg for command in argv for arg in command if arg.startswith("--")}
+        self.assertEqual(passed_flags - main_cpp_flags(), set())
 
     def test_refuses_to_overwrite_completed_output_with_mismatched_trial_count(self) -> None:
         folder = self.run_root / "outputs" / "profiling" / "1gb"

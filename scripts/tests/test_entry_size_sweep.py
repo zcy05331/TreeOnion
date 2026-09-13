@@ -1,6 +1,9 @@
+import contextlib
 import importlib.util
+import io
 import json
 import pathlib
+import statistics
 import sys
 import tempfile
 import unittest
@@ -12,6 +15,7 @@ sys.path.insert(0, str(SCRIPTS))
 spec = importlib.util.spec_from_file_location('entry_size_sweep', MODULE)
 sweep = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(sweep)
+import analyze_superrecord_sweep as analyzer  # noqa: E402  (the module sweep.analyze_run lives in)
 
 
 def candidate(label, arity, factor=1.0, *, samples=100):
@@ -39,12 +43,13 @@ def candidate(label, arity, factor=1.0, *, samples=100):
     }
 
 
-def raw_doc(entry_bits=256, leaf_count=1 << 24, measured_trials=100, warmups=3, *, only_h1=False, extra_arity=None, subset=None):
-    candidates = [candidate('h1', 1, 1.2)]
-    if not only_h1:
-        candidates.append(candidate('bundle3', 3, 1.0))
-    if extra_arity is not None:
-        candidates.append(candidate(f'bundle{extra_arity}', extra_arity, 0.8))
+def raw_doc(entry_bits=256, leaf_count=1 << 24, measured_trials=100, warmups=3, *, only_h1=False, extra_arity=None, subset=None, candidates=None):
+    if candidates is None:
+        candidates = [candidate('h1', 1, 1.2)]
+        if not only_h1:
+            candidates.append(candidate('bundle3', 3, 1.0))
+        if extra_arity is not None:
+            candidates.append(candidate(f'bundle{extra_arity}', extra_arity, 0.8))
     data = {
         'schema_version': 'tree_superrecord_benchmark.v1',
         'repository_commit': '22adeee',
@@ -62,6 +67,54 @@ def raw_doc(entry_bits=256, leaf_count=1 << 24, measured_trials=100, warmups=3, 
     if subset is not None:
         data['benchmark_bundle_arities'] = subset
     return data
+
+
+def timed_candidate(label, arity, server_ms):
+    """candidate() with the server times replaced, so the report statistics are exact.
+    A scalar pins every sample; a list is used as given."""
+    row = candidate(label, arity)
+    values = [server_ms] * len(row['samples']) if not isinstance(server_ms, list) else server_ms
+    for sample, value in zip(row['samples'], values):
+        sample['server_total_ms'] = value
+    return row
+
+
+def three_way_candidates():
+    """Two h3 rows and a faster h1. The default fixture has one row per arity and a slower
+    h1, so best_overall == best_h3 and the min over several h3 rows are never exercised.
+    The slower h3 is listed first, so selecting the first h3 row instead of the min-mean one
+    changes the answer. The h1 times are skewed (mean 900.0, median 800.0) so the report's
+    throughput column cannot pass by using the median."""
+    return [timed_candidate('h1', 1, [800.0] * 90 + [1800.0] * 10),
+            timed_candidate('bundle3-slow', 3, 1300.0),
+            timed_candidate('bundle3', 3, 1000.0)]
+
+
+def write_source(tmp, data, exit_code=0):
+    """A reusable 32B source the way the matrix leaves it: generic.json next to generic-process.json."""
+    raw = pathlib.Path(tmp) / 'generic.json'
+    raw.write_text(json.dumps(data) + '\n')
+    raw.with_name('generic-process.json').write_text(json.dumps({'exit_code': exit_code}) + '\n')
+    return raw
+
+
+def report_table(report_text):
+    """The REPORT.md selection table as one dict per data row, keyed by header cell."""
+    lines = [line for line in report_text.splitlines() if line.startswith('| ')]
+    header = [cell.strip() for cell in lines[0].strip('|').split('|')]
+    return [dict(zip(header, (cell.strip() for cell in line.strip('|').split('|')))) for line in lines[2:]]
+
+
+def resolved_comparison(candidate_ms, control_ms, *, seed, resamples=10000):
+    """Stands in for analyze_superrecord_sweep.paired_bootstrap with a degenerate interval.
+    Selection and the report read only the per-row statistics; the real bootstrap is covered
+    by test_analyze_superrecord_sweep and costs about a second per comparison at 100 samples."""
+    ratio = statistics.mean(candidate_ms) / statistics.mean(control_ms)
+    return {'candidate_over_control': ratio, 'ratio_ci95': [ratio, ratio], 'speedup': 1.0 / ratio,
+            'speedup_ci95': [1.0 / ratio, 1.0 / ratio], 'server_time_reduction_percent': (1.0 - ratio) * 100.0,
+            'reduction_percent_ci95': [(1.0 - ratio) * 100.0] * 2, 'statistically_unresolved': ratio == 1.0,
+            'bootstrap_seed': seed, 'bootstrap_resamples': resamples, 'paired_blocks': len(candidate_ms),
+            'estimator': 'test stub: ratio of arithmetic means without resampling'}
 
 
 class EntryPlanTests(unittest.TestCase):
@@ -192,6 +245,101 @@ class ReuseValidationTests(unittest.TestCase):
             raw = self.write_source(tmp, raw_doc(subset=[1, 3, 4]))
             with self.assertRaisesRegex(sweep.EntrySweepError, 'benchmark_bundle_arities'):
                 sweep.reuse_entry(pathlib.Path(tmp) / 'out', raw, sweep.entry_plan(32))
+
+
+class SelectionReportTests(unittest.TestCase):
+    def setUp(self):
+        patcher = patch.object(analyzer, 'paired_bootstrap', resolved_comparison)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def reuse(self, tmp, data, plan):
+        out = pathlib.Path(tmp) / 'out'
+        result = sweep.reuse_entry(out, write_source(tmp, data), plan)
+        raw = json.loads(pathlib.Path(result['raw_file']).read_text())
+        return sweep.mean_first_selection(raw, result['analysis']), (out / 'REPORT.md').read_text()
+
+    def test_selection_is_min_mean_per_arity_and_fastest_row_overall(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            selection, _ = self.reuse(tmp, raw_doc(candidates=three_way_candidates()), sweep.entry_plan(32))
+        # best_overall spans both arities (the h1 here beats every h3); best_h3 is the min-mean h3.
+        self.assertEqual(selection['best_overall'], {'label': 'h1', 'mean_ms': 900.0})
+        self.assertEqual(selection['best_h3'], {'label': 'bundle3', 'mean_ms': 1000.0})
+        self.assertEqual(selection['best_h1'], {'label': 'h1', 'mean_ms': 900.0})
+
+    def test_report_throughput_divides_full_tree_bytes_by_each_rows_mean_server_time(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            _, report = self.reuse(tmp, raw_doc(candidates=three_way_candidates()), sweep.entry_plan(32))
+        self.assertIn('Logical DB throughput uses actual full-tree bytes divided by mean server time.', report)
+        # The two capacities the legend distinguishes: the padded 1 GiB target and the tree
+        # the run actually holds. Three decimals of MiB/s cannot separate them at 2^24 leaves,
+        # so this is the only place the report states which one it means.
+        self.assertIn('Logical DB bytes: 1073741824.', report)
+        self.assertIn('Actual full tree bytes: 1073741792.', report)
+        h3, h1 = report_table(report)
+        self.assertEqual((h3['category'], h3['candidate']), ('best h3', 'bundle3'))
+        self.assertEqual((h1['category'], h1['candidate']), ('best h1', 'h1'))
+        # 1073741792 B, all 2^25 - 1 nodes, over 1.000 s is 1024.000 MiB/s.
+        self.assertEqual((h3['mean ms'], h3['logical DB MiB/s']), ('1000.000', '1024.000'))
+        # Each row divides by its own mean, not by the median (800.000 here) and not by the
+        # winner's: 1073741792 B over 0.900 s is 1137.778 MiB/s.
+        self.assertEqual((h1['mean ms'], h1['median ms']), ('900.000', '800.000'))
+        self.assertEqual(h1['logical DB MiB/s'], '1137.778')
+        # Wire and key columns are taken from the raw row carrying the selected label.
+        self.assertEqual((h3['query modeled B'], h3['response actual B'], h3['once keys modeled B']),
+                         ('14880', '11264', '1607040'))
+
+    def test_48b_report_uses_the_1_5_gib_tree_bytes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            _, report = self.reuse(tmp, raw_doc(entry_bits=384, candidates=three_way_candidates()), sweep.entry_plan(48))
+        h3, _ = report_table(report)
+        # (2 * 2^24 - 1) * 48 B = 1610612688 B over 1.000 s: the 48B plan keeps the 32B leaf
+        # count, so its throughput row must grow with the entry size, not stay at 1 GiB.
+        self.assertEqual(h3['logical DB MiB/s'], '1536.000')
+        self.assertIn('Actual full tree bytes: 1610612688.', report)
+
+
+class MainReuseTests(unittest.TestCase):
+    def setUp(self):
+        patcher = patch.object(analyzer, 'paired_bootstrap', resolved_comparison)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_reuse_32b_completes_without_a_binary_and_records_the_selection(self):
+        # run_entry_size_after_matrix.sh: --reuse-32b <matrix generic.json> with no new 32B run.
+        with tempfile.TemporaryDirectory() as tmp:
+            raw = write_source(tmp, raw_doc())
+            out = pathlib.Path(tmp) / 'out'
+            with contextlib.redirect_stdout(io.StringIO()):
+                code = sweep.main(['--entries', '32', '--reuse-32b', str(raw), '--output-dir', str(out)])
+            # main resolves --output-dir, so the manifest paths are the resolved ones.
+            manifest = json.loads((out / 'manifest.json').read_text())
+            entry_dir = out.resolve() / 'entry_32B'
+            for name in ('raw.json', 'raw-process.json', 'analysis.json', 'REPORT.md'):
+                self.assertTrue((entry_dir / name).exists(), name)
+            # No log next to the source: the entry records where the original log lives instead.
+            self.assertEqual((entry_dir / 'log-source.txt').read_text(), str(raw.resolve().with_suffix('.log')) + '\n')
+        self.assertEqual(code, 0)
+        self.assertEqual(manifest['state'], 'complete')
+        case, = manifest['cases']
+        self.assertEqual(case['state'], 'reused')
+        self.assertEqual(case['source_raw_file'], str(raw.resolve()))
+        self.assertEqual(case['raw_file'], str(entry_dir / 'raw.json'))
+        self.assertIsNone(case['log_file'])
+        self.assertEqual(case['best_overall']['label'], 'bundle3')
+        self.assertEqual(case['best_h1']['label'], 'h1')
+        self.assertEqual(case['best_h3']['label'], 'bundle3')
+        # The analysis body stays in analysis.json; the manifest carries only its path.
+        self.assertNotIn('analysis', case)
+
+    def test_reuse_of_a_failed_source_process_is_rejected_before_copying(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            raw = write_source(tmp, raw_doc(), exit_code=1)
+            out = pathlib.Path(tmp) / 'out'
+            with self.assertRaisesRegex(sweep.EntrySweepError, 'exit_code is not 0'):
+                sweep.reuse_entry(out, raw, sweep.entry_plan(32))
+            self.assertFalse((out / 'raw.json').exists())
+            self.assertFalse((out / 'analysis.json').exists())
 
 
 if __name__ == '__main__':

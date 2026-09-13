@@ -266,6 +266,68 @@ class GadgetConfigTests(unittest.TestCase):
         summary = gadget.summarize_candidate(candidate, [])
         self.assertEqual(summary["response_processing_ms_mean"], 2.5)
 
+    def test_comparability_rejects_schedule_scheme_or_level_plan_drift(self):
+        def validated(data):
+            return gadget.validate_profile(data, pathlib.Path("profile.json"), 2, 1 << 22, (3, 64, 1, 352, 7), 9)
+
+        reference = validated(profile())
+        gadget.check_comparable(reference, validated(profile()), "same")
+        # A binary that ignores --trial-seed measures different leaves: not the same queries.
+        seedless = profile()
+        seedless["candidates"][0]["samples"][0]["leaf"] += 1
+        with self.assertRaisesRegex(ValueError, "query schedules differ"):
+            gadget.check_comparable(reference, validated(seedless), "seedless")
+        # A build that changed q (or t, or N) measures a different scheme, not a different gadget.
+        modulus = profile()
+        modulus["candidates"][0]["scheme_fingerprint"]["identity"]["rns_moduli"] = [1125899906826241, 562949953421313]
+        with self.assertRaisesRegex(ValueError, "scheme fields differ"):
+            gadget.check_comparable(reference, validated(modulus), "modulus")
+        plans = profile()
+        plans["candidates"][0]["level_plans"] = [{"level": 0, "projection_depth": 3}]
+        with self.assertRaisesRegex(ValueError, "level plans changed"):
+            gadget.check_comparable(reference, validated(plans), "plans")
+
+    def test_incomparable_label_is_rejected_after_its_runs_complete(self):
+        # Both binaries run to completion; the scheme mismatch is found only when comparing,
+        # so the label lands in rejected_labels with that message rather than as a run failure.
+        def run_measured(command, *, log_path, env=None, cwd=None):
+            raw = pathlib.Path(env["SUPERRECORD_OUTPUT_JSON"])
+            label = raw.stem.split("-", 1)[1]
+            data = profile(label=label)
+            if label == "b":
+                data["candidates"][0]["scheme_fingerprint"]["identity"]["rns_moduli"] = [1125899906826241, 562949953421313]
+            raw.write_text(json.dumps(data) + "\n")
+            pathlib.Path(log_path).write_text("ok\n")
+            return {"exit_code": 0, "elapsed_seconds": 0.2, "process_peak_rss_bytes": 20}
+
+        with tempfile.TemporaryDirectory() as tmp:
+            argv = [
+                "benchmark",
+                "--binary",
+                "a=/tmp/a",
+                "--binary",
+                "b=/tmp/b",
+                "--output",
+                tmp,
+                "--experiments",
+                "2",
+                "--rounds",
+                "1",
+            ]
+            with patch.object(sys, "argv", argv), patch.object(gadget, "run_measured", run_measured):
+                gadget.main()
+
+            manifest = json.loads((pathlib.Path(tmp) / "manifest.json").read_text())
+            self.assertEqual([run["state"] for run in manifest["runs"]], ["complete", "complete"])
+            self.assertEqual(manifest["state"], "complete_with_failures")
+            comparison = json.loads((pathlib.Path(tmp) / "comparison.json").read_text())
+            self.assertEqual(comparison["state"], "complete_with_failures")
+            self.assertEqual(comparison["completed_labels"], ["a"])
+            self.assertEqual(comparison["failed_runs"], [])
+            self.assertIn("scheme fields differ", comparison["rejected_labels"]["b"])
+            self.assertNotIn("b", comparison["summary"])
+            self.assertEqual(comparison["summary"]["a"]["completed_samples"], 2)
+
 
 if __name__ == "__main__":
     unittest.main()
