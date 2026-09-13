@@ -5,6 +5,12 @@
 
 void test_approx_gadget();
 void test_tree_response_merge_e2e();
+// Crypto primitives: the vectorized loops against the scalar primitives
+// they mirror, and the generated moduli.
+void test_bv_keyswitch_reference();
+void test_gsw_decomp_shapes();
+void test_ntt_friendly_primes();
+void test_paper_moduli_pin();
 
 // Correctness suite behind `--test all`: every registered test that asserts
 // its result and finishes in seconds to a few minutes. The timed benchmarks
@@ -25,6 +31,7 @@ static const std::vector<std::string> kRegressionTests = {
     "tree_superrecord_noise", "tree_superrecord_kernel", "tree_superrecord_alpha",
     "approx_gadget",
     "tree_response_merge", "tree_response_merge_e2e",
+    "bv_ks_reference", "gsw_decomp_shapes", "ntt_primes", "paper_moduli_pin",
 };
 
 void PirTest::run_test(const std::string &test_name) {
@@ -87,6 +94,7 @@ void PirTest::run_test(const std::string &test_name) {
   else if (test_name == "tree_superrecord_kernel")  test_tree_superrecord_kernel();
   else if (test_name == "tree_superrecord_alpha")   test_tree_superrecord_alpha();
   else if (test_name == "approx_gadget")            test_approx_gadget();
+  else if (test_name == "gsw_decomp_shapes")        test_gsw_decomp_shapes();
   else if (test_name == "tree_response_merge")      test_tree_response_merge();
   else if (test_name == "tree_response_merge_e2e")  test_tree_response_merge_e2e();
   else if (test_name == "tree_superrecord_noise_probe") test_tree_superrecord_noise_probe();
@@ -103,9 +111,12 @@ void PirTest::run_test(const std::string &test_name) {
   else if (test_name == "pir_profile")         test_pir_profile();
   else if (test_name == "layer_layout_planner") test_layer_layout_planner();
   else if (test_name == "bv_ks")             test_bv_keyswitch();
+  else if (test_name == "bv_ks_reference")   test_bv_keyswitch_reference();
   else if (test_name == "cpu_info")          print_cpu_info();
   else if (test_name == "hexl_ntt")          test_hexl_ntt();
   else if (test_name == "utils_arith")       test_utils_arith();
+  else if (test_name == "ntt_primes")        test_ntt_friendly_primes();
+  else if (test_name == "paper_moduli_pin")  test_paper_moduli_pin();
   else if (test_name == "noise_sampling")    test_noise_sampling();
   else if (test_name == "rlwe_enc")          test_rlwe_enc();
   else if (test_name == "barrett")           test_barrett();

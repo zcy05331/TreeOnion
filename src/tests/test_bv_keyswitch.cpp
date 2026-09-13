@@ -4,6 +4,10 @@
 #include "utils.h"
 #include <random>
 #include <array>
+#include <string>
+#include <vector>
+
+void test_bv_keyswitch_reference();
 
 static void test_rounded_bv_digits() {
   PirParams scheme;
@@ -158,4 +162,107 @@ void PirTest::test_bv_keyswitch() {
   require_test(diffs == 0,
                "BV key-switch differs from the plaintext automorphism");
   std::cout << "PASS: BV key-switch matches native automorphism of plaintext\n";
+}
+
+// ============================================================================
+// Unit test: the vectorized K=1 key switch is bit-exact against the scalar
+// primitive.
+//
+// bv_apply_galois_inplace_k1 re-implements the digit extraction of
+// bvks::signed_gadget_decompose as one loop per digit over all coefficients
+// (bv_keyswitch.cpp, APPLY_GAL_DECOMP) so the inner loop vectorizes.
+// Decryption cannot tell the two apart: a wrong least-significant digit
+// (~B * sqrt(N) of phase), a dropped +half_step rounding, a flipped tie rule
+// or a reversed row order all stay inside the ordinary key-switch noise and
+// far below q/(2t). This test rebuilds the key switch from the public pieces
+// (automorphism, scalar decomposition, NTT, the KSK rows) and requires the
+// production ciphertext to equal it exactly, for three automorphisms.
+// ============================================================================
+void test_bv_keyswitch_reference() {
+  print_func_name(__FUNCTION__);
+  PirParams params;
+  require_applicable(params.K() == 1,
+                     "the vectorized BV key switch under test is the K=1 body");
+  constexpr size_t N = DBConsts::PolyDegree;
+  const uint64_t q = params.get_rns_mods()[0];
+  const uint64_t t = params.get_plain_mod();
+  const std::vector<uint64_t> qs{q};
+  const size_t base_log2 = bvks::base_log2_for_scheme(params);
+  const size_t low_bits = bvks::low_bits_for_scheme(params);
+  const uint64_t B = uint64_t{1} << base_log2;
+
+  std::mt19937_64 rng(0x62766b73ULL);
+  const RlweSk sk = gen_secret_key_rns(N, qs, rng);
+  std::vector<uint64_t> pt(N);
+  for (size_t i = 0; i < N; ++i) pt[i] = (3 * i + 1) % t;
+
+  // c1 coefficients on the decomposition's decision boundaries: the centering
+  // split at q/2, the balanced-digit tie at B/2 in both signs, and (in a
+  // PIR_KS_LOW_BITS build) a value exactly half a rounding step above a
+  // multiple of 2^low_bits. The remaining coefficients are the encryption's
+  // uniform randomness.
+  const uint64_t probes[8] = {
+      0, 1, q - 1, q / 2, q / 2 + 1, B / 2, q - B / 2,
+      low_bits ? (uint64_t{1} << low_bits) + (uint64_t{1} << (low_bits - 1))
+               : uint64_t{2}};
+
+  auto mul_mod = [q](uint64_t a, uint64_t b) {
+    return static_cast<uint64_t>(static_cast<uint128_t>(a) * b % q);
+  };
+
+  const uint32_t galois_ks[3] = {static_cast<uint32_t>(N + 1),
+                                 static_cast<uint32_t>(N / 2 + 1), 5u};
+  for (const uint32_t galois_k : galois_ks) {
+    const bvks::BvKeySwitchKey ksk =
+        bvks::gen_bv_ks_key(params, sk, galois_k, rng);
+    RlweCt ct;
+    encrypt_bfv_rns(pt, sk, N, qs, t, params.get_noise_std_dev(), rng, ct);
+    for (size_t i = 0; i < 8; ++i) ct.c1[i] = probes[i];
+    const RlweCt ref = ct;
+
+    // Reference: sigma_k on both polynomials; scalar signed decomposition of
+    // sigma_k(c1) with digit i feeding KSK row i (the row encrypting
+    // sigma_k(s) * 2^low_bits * B^i); pointwise MAC in the NTT domain; then
+    // c0' = sigma_k(c0) + sum_i d_i * b_i and c1' = sum_i d_i * a_i.
+    std::vector<uint64_t> c0p(N), c1p(N);
+    utils::automorphism_coeff(ref.c0.data(), N, galois_k, q, c0p.data());
+    utils::automorphism_coeff(ref.c1.data(), N, galois_k, q, c1p.data());
+    std::vector<std::vector<uint64_t>> rows(bvks::L_KS,
+                                            std::vector<uint64_t>(N));
+    uint64_t digits[bvks::L_KS];
+    for (size_t j = 0; j < N; ++j) {
+      bvks::signed_gadget_decompose(c1p[j], base_log2, q, digits, bvks::L_KS,
+                                    low_bits);
+      for (size_t i = 0; i < bvks::L_KS; ++i) rows[i][j] = digits[i];
+    }
+    std::vector<uint64_t> acc_b(N, 0), acc_a(N, 0);
+    for (size_t i = 0; i < bvks::L_KS; ++i) {
+      utils::ntt_fwd(rows[i].data(), N, q);
+      const std::vector<uint64_t> &b = ksk.cts[i].b;
+      const std::vector<uint64_t> &a = ksk.cts[i].a;
+      for (size_t j = 0; j < N; ++j) {
+        acc_b[j] = (acc_b[j] + mul_mod(rows[i][j], b[j])) % q;
+        acc_a[j] = (acc_a[j] + mul_mod(rows[i][j], a[j])) % q;
+      }
+    }
+    utils::ntt_inv(acc_b.data(), N, q);
+    utils::ntt_inv(acc_a.data(), N, q);
+    std::vector<uint64_t> expected_c0(N);
+    for (size_t j = 0; j < N; ++j) expected_c0[j] = (c0p[j] + acc_b[j]) % q;
+
+    bvks::bv_apply_galois_inplace(ct, galois_k, ksk, params);
+    const std::string where = " (galois_k=" + std::to_string(galois_k) + ")";
+    require_test(!ct.ntt_form,
+                 "BV key switch must return a coefficient-form ciphertext" + where);
+    require_test(ct.c0 == expected_c0,
+                 "vectorized BV key switch c0 differs from the scalar-primitive "
+                 "reference" + where);
+    require_test(ct.c1 == acc_a,
+                 "vectorized BV key switch c1 differs from the scalar-primitive "
+                 "reference" + where);
+  }
+  std::cout << "PASS: vectorized BV key switch is bit-exact against the scalar "
+               "reference for galois_k in {" << N + 1 << ", " << N / 2 + 1
+            << ", 5} (L_KS=" << bvks::L_KS << ", base_log2=" << base_log2
+            << ", low_bits=" << low_bits << ")\n";
 }
