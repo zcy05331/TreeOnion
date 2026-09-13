@@ -243,6 +243,58 @@ void PirTest::test_tree_index() {
                                                        scheme);
                }),
                "accepted an expansion height beyond the session keys");
+  // Boundary of that gate (5-argument overload): a registered key height
+  // equal to h_q is accepted, one below it is rejected. test_tree_benchmark_g32
+  // and run_tree_compress_benchmark search a downward with the default key
+  // height and take the first accepted shape, so a gate regressed from '>' to
+  // '>=' would pass every h_q = 7 fixture above and silently pick the next
+  // smaller first dimension for the paper's g = 32 benchmark.
+  // A shape the gate must accept; a rejection is reported as `what`.
+  const auto accepted = [&](size_t L, size_t a, size_t g, size_t key_height,
+                            const char *what) {
+    try {
+      return make_tree_pir_params_for_scheme(L, a, g, scheme, key_height);
+    } catch (const std::invalid_argument &error) {
+      throw std::runtime_error(std::string(what) + ": " + error.what());
+    }
+  };
+  {
+    const TreePirParams exact =
+        accepted(bound.L, 3, 1, bound.h_q,
+                 "rejected a session-key height equal to h_q");
+    require_test(exact.h_q == bound.h_q && exact.N0 == bound.N0 &&
+                     exact.W == bound.W,
+                 "key height equal to h_q must reproduce the default shape");
+    require_test(throws_invalid_argument([&] {
+                   (void)make_tree_pir_params_for_scheme(bound.L, 3, 1, scheme,
+                                                         bound.h_q - 1);
+                 }),
+                 "accepted a session-key height one below h_q");
+  }
+  if (paper_config_active()) {
+    // The production g = 32 shape at 2^22 leaves: under the default key
+    // height (10) a = 9 is the widest accepted first dimension (N0 = 512,
+    // W = 1024, h_q exactly at the gate) and a = 10 is refused by the gate
+    // alone -- registering one more key level admits it (N0 = 1024,
+    // h_q = 11), the fold-halving shape the benchmark comment records.
+    const size_t key_height = scheme.get_expan_height();
+    const TreePirParams g32 =
+        accepted(22, 9, 32, key_height,
+                 "rejected the paper g = 32 shape (L = 22, a = 9)");
+    require_test(g32.N0 == 512 && g32.W == 1024 && g32.h_q == 10 &&
+                     g32.h_q == key_height,
+                 "paper g = 32 shape (L = 22, a = 9) must sit at h_q = 10");
+    require_test(throws_invalid_argument([&] {
+                   (void)make_tree_pir_params_for_scheme(22, 10, 32, scheme,
+                                                         key_height);
+                 }),
+                 "accepted a = 10 at L = 22 under the default key height");
+    const TreePirParams wider =
+        accepted(22, 10, 32, key_height + 1,
+                 "rejected a = 10 at L = 22 one key level higher");
+    require_test(wider.N0 == 1024 && wider.h_q == key_height + 1,
+                 "a = 10 at L = 22 one key level higher must give N0 = 1024");
+  }
   exhaust_config(make_tree_pir_params(13, 1, 2048, scheme.get_l(),
                                       scheme.get_l(), scheme.get_plain_mod(),
                                       {scheme.get_rns_mods()[0]}));

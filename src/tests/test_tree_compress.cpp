@@ -444,6 +444,62 @@ void PirTest::test_tree_compress() {
     }
   }
 
+  // The last legal even-aligned packing, 2L = rho - 2: with g = n/16
+  // (rho = 16) and L = 7 the leaf level lands at big-ring offset 14 (small-
+  // ring offset 7 = rho/2 - 1) and its chunks at 7 + 8j must not collide
+  // with any other level's. The shape above tests the rejection at 2L = rho;
+  // this one catches a guard tightened to 2L >= rho - 2 or a packer that
+  // shifts by 2z + 2, which would still pass the 2L = 28 vs rho = 64 fixture.
+  {
+    const TreePirParams tree =
+        make_tree_pir_params_for_scheme(7, 3, N / 16, scheme);
+    require_test(2 * tree.L + 2 == tree.rho,
+                 "fixture must sit at 2L = rho - 2");
+    const PirParams qparams = tree_query_expansion_params(tree, scheme);
+    PirServer server(qparams);
+    server.set_client_session_keys(client.get_client_id(), keys);
+    const PreprocessedTree db = preprocess_tree_mvp(tree, hash_source, scheme);
+    for (size_t leaf : {size_t{0}, tree.N - 1,
+                        static_cast<size_t>(0x2BADBEEFULL % tree.N)}) {
+      RlweCt query = make_tree_query(client, scheme, tree, leaf);
+      ExpandedTreeQuery unpacked = unpack_tree_query(
+          server, scheme, tree, client.get_client_id(), query);
+      CompressedPathResponse compressed;
+      try {
+        compressed = answer_path_compressed(db, unpacked, server,
+                                            client.get_client_id(), tree,
+                                            scheme, ring.keys);
+      } catch (const std::invalid_argument &error) {
+        require_test(false,
+                     std::string("refused the last legal even-aligned "
+                                 "packing 2L = rho - 2: ") +
+                         error.what());
+      }
+      for (size_t level = 0; level <= tree.L; ++level) {
+        require_test(compressed.level_offsets[level] == level,
+                     "even-aligned level z must map to small-ring offset z");
+      }
+      const std::vector<std::vector<uint64_t>> path = decode_compressed_path(
+          compressed, ring.secret, t, tree.g, tree.rho);
+      require_test(path.size() == tree.L + 1,
+                   "boundary compressed path length");
+      for (size_t level = 0; level <= tree.L; ++level) {
+        const size_t node = leaf >> (tree.L - level);
+        for (size_t j = 0; j < tree.g; ++j) {
+          require_test(path[level][j] == hash_source(level, node, j),
+                       "boundary compressed path chunk mismatch");
+        }
+      }
+      ExpandedTreeQuery again = unpack_tree_query(
+          server, scheme, tree, client.get_client_id(), query);
+      const TreePathResponse plain = answer_path_mvp(
+          db, again, server, client.get_client_id(), tree, scheme);
+      require_test(extract_path_chunks_mvp(plain, client, tree) == path,
+                   "boundary compressed and plain responses must decode "
+                   "identically");
+    }
+  }
+
   // g = 1 scalar shape keeps working through the same pipeline.
   {
     const TreePirParams tree = make_tree_pir_params_for_scheme(tree_height_for(2, 0), 2, scheme);

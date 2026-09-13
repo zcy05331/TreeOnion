@@ -5,6 +5,8 @@
 
 void test_approx_gadget();
 void test_tree_response_merge_e2e();
+// The complete response plaintext at the paper's first-dimension width.
+void test_tree_noise_envelope();
 // PIR layouts: every row of a ragged and a perfect remaining-dimension
 // tree, and a query shape that fills the expansion capacity exactly.
 void test_pir_row_sweep();
@@ -35,6 +37,7 @@ static const std::vector<std::string> kRegressionTests = {
     "tree_superrecord_noise", "tree_superrecord_kernel", "tree_superrecord_alpha",
     "approx_gadget",
     "tree_response_merge", "tree_response_merge_e2e",
+    "tree_noise_envelope",
     "pir_row_sweep", "query_shape_exact_fit",
     "bv_ks_reference", "gsw_decomp_shapes", "ntt_primes", "paper_moduli_pin",
 };
@@ -88,6 +91,7 @@ void PirTest::run_test(const std::string &test_name) {
   else if (test_name == "tree_g32")          test_tree_g32();
   else if (test_name == "tree_bench_g32")    test_tree_benchmark_g32();
   else if (test_name == "tree_compress")     test_tree_compress();
+  else if (test_name == "tree_noise_envelope") test_tree_noise_envelope();
   else if (test_name == "tree_compress_bench") run_tree_compress_benchmark(*this);
   else if (test_name == "cuckoo_batch")      test_cuckoo_batch();
   else if (test_name == "cuckoo_bench")      test_cuckoo_benchmark();
