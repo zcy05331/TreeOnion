@@ -5,6 +5,10 @@
 
 void test_approx_gadget();
 void test_tree_response_merge_e2e();
+// PIR layouts: every row of a ragged and a perfect remaining-dimension
+// tree, and a query shape that fills the expansion capacity exactly.
+void test_pir_row_sweep();
+void test_query_shape_exact_fit();
 // Crypto primitives: the vectorized loops against the scalar primitives
 // they mirror, and the generated moduli.
 void test_bv_keyswitch_reference();
@@ -31,6 +35,7 @@ static const std::vector<std::string> kRegressionTests = {
     "tree_superrecord_noise", "tree_superrecord_kernel", "tree_superrecord_alpha",
     "approx_gadget",
     "tree_response_merge", "tree_response_merge_e2e",
+    "pir_row_sweep", "query_shape_exact_fit",
     "bv_ks_reference", "gsw_decomp_shapes", "ntt_primes", "paper_moduli_pin",
 };
 
@@ -109,6 +114,8 @@ void PirTest::run_test(const std::string &test_name) {
   else if (test_name == "merkle_benchmark_stats") test_merkle_benchmark_stats();
   else if (test_name == "merkle_integration")  test_merkle_integration();
   else if (test_name == "pir_profile")         test_pir_profile();
+  else if (test_name == "pir_row_sweep")       test_pir_row_sweep();
+  else if (test_name == "query_shape_exact_fit") test_query_shape_exact_fit();
   else if (test_name == "layer_layout_planner") test_layer_layout_planner();
   else if (test_name == "bv_ks")             test_bv_keyswitch();
   else if (test_name == "bv_ks_reference")   test_bv_keyswitch_reference();
