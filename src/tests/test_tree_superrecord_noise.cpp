@@ -4,6 +4,9 @@
 #include "tree_superrecord_response.h"
 #include "tree_superrecord_benchmark_data.h"
 
+#include <algorithm>
+#include <limits>
+
 using namespace tree_superrecord;
 using namespace tree_superrecord_test;
 
@@ -72,6 +75,50 @@ void PirTest::test_tree_superrecord_noise() {
       std::span<const TargetNoiseCase>(&target_case, 1), 100.0);
   require_test(impossible_margin.eligibility == NoiseEligibility::Failed,
                "impossible noise margin fails the target fixture");
+  // The Failed verdict must come from the margin policy, not from a decrypt
+  // or key-coverage failure that the eligibility check would also report.
+  require_test(impossible_margin.decrypts_correctly &&
+                   impossible_margin.observed_key_coverage_matches_tag &&
+                   impossible_margin.minimum_margin < 100.0,
+               "the margin-100 failure is a margin failure, not a decrypt failure");
+  // minimum_margin summarises the checkpoints: every target-gate checkpoint
+  // is a remaining-budget measure with threshold 0 and margin == value, and
+  // the summary is their minimum. SUPERRECORD_MIN_NOISE_MARGIN gates on
+  // minimum_margin >= policy, so the boundary is admitted and anything above
+  // the observed minimum is rejected by both the predicate and the trusted
+  // gate.
+  double min_checkpoint_margin = std::numeric_limits<double>::infinity();
+  for (const NoiseCheckpoint &checkpoint : passed.checkpoints) {
+    require_test(checkpoint.kind == NoiseMeasureKind::RemainingBudgetBits &&
+                     checkpoint.decoder_threshold == 0 &&
+                     checkpoint.margin == checkpoint.value,
+                 "target-gate checkpoints are remaining-budget measures with margin == value");
+    min_checkpoint_margin = std::min(min_checkpoint_margin, checkpoint.margin);
+  }
+  require_test(passed.minimum_margin == min_checkpoint_margin &&
+                   passed.minimum_margin >= 1.0,
+               "minimum_margin is the minimum checkpoint margin");
+  CandidateNoiseResult at_boundary = passed;
+  at_boundary.min_noise_margin = passed.minimum_margin;
+  require_test(noise_result_unlocks_candidate(at_boundary, params,
+                                              client.get_client_id()) &&
+                   !throws_invalid([&] {
+                     require_target_noise_gate(at_boundary, params,
+                                               client.get_client_id());
+                   }),
+               "a policy margin equal to the observed minimum is admitted");
+  CandidateNoiseResult above_boundary = passed;
+  above_boundary.min_noise_margin = passed.minimum_margin + 0.5;
+  require_test(!noise_result_unlocks_candidate(above_boundary, params,
+                                               client.get_client_id()) &&
+                   throws_invalid([&] {
+                     require_target_noise_gate(above_boundary, params,
+                                               client.get_client_id());
+                   }),
+               "a policy margin above the observed minimum is rejected");
+  BENCH_PRINT("target noise gate: " << passed.checkpoints.size()
+              << " checkpoints, minimum remaining budget "
+              << passed.minimum_margin << " bits");
   CandidateNoiseResult zero_margin_low_budget = passed;
   zero_margin_low_budget.min_noise_margin = 0.0;
   zero_margin_low_budget.minimum_margin = -2.0;

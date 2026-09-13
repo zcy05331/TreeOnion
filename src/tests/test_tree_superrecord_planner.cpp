@@ -15,9 +15,10 @@ using tree_superrecord_test::throws_invalid;
 
 // Scheme identity, policy validation, the finite (h, G, P, N0, b, h_q)
 // enumeration with its pinned Bundle3 widths, the shared LevelPlan builder,
-// projection-aware key heights, expansion-node counts, memory estimates,
-// Pareto dominance, and candidate freezing (design sections 4, 5, 9, 11,
-// 19-21).
+// projection-aware key heights, expansion-node counts, memory estimates and
+// caps, Pareto dominance, exact-plan deduplication, mandatory controls,
+// measured-stage calibration, candidate freezing, and a whole-enumeration
+// freeze/index sweep (design sections 4, 5, 9, 11, 19-21).
 void PirTest::test_tree_superrecord_planner() {
   print_func_name(__FUNCTION__);
   constexpr size_t n = DBConsts::PolyDegree;
@@ -392,6 +393,30 @@ void PirTest::test_tree_superrecord_planner() {
         deduplicate_exact_plans(equal_metrics, context);
     require_test(deduped.size() == 2,
                  "equal aggregate metrics with different level plans are retained");
+    // Label-only duplicates: with alignments {1, 16} a (h, G, b) whose minimal
+    // N0 is already a multiple of 16 (h=1, G=64, b=10: 2^19 leaf plaintexts
+    // over 2^10 rows = 512) is emitted once per alignment label. The frontier
+    // keeps both (equal on every dimension); the exact-plan deduplication the
+    // benchmark relies on must collapse them so one physical shape is not
+    // measured twice.
+    const std::optional<Candidate> label1 = pick_candidate(all, 1, 64, 10, 1);
+    const std::optional<Candidate> label16 = pick_candidate(all, 1, 64, 10, 16);
+    require_test(label1.has_value() && label16.has_value() &&
+                     label1->shape.N0 == 512 && label16->shape.N0 == 512 &&
+                     label1->shape.alpha_alignment == 1 &&
+                     label16->shape.alpha_alignment == 16,
+                 "h=1, G=64, b=10 is emitted under both alignment labels with N0 = 512");
+    require_test(make_plan_tag(label1->shape, label1->scheme) ==
+                         make_plan_tag(label16->shape, label16->scheme) &&
+                     build_level_plans(label1->shape) ==
+                         build_level_plans(label16->shape),
+                 "the alignment label enters neither the plan tag nor the level plans");
+    require_test(pareto_frontier({*label1, *label16}, policy, context).size() == 2,
+                 "the frontier keeps both label-only duplicates (neither dominates)");
+    require_test(deduplicate_exact_plans({*label1, *label16}, context).size() == 1,
+                 "exact-plan deduplication collapses the label-only pair");
+    require_test(deduplicate_exact_plans(all, context).size() < all.size(),
+                 "the {1, 16} enumeration contains label-only duplicates to collapse");
 
     CostCalibration mandatory_cal = calibrated;
     mandatory_cal.default_scan_bandwidth_bytes_per_ms = 1e12;
@@ -440,6 +465,44 @@ void PirTest::test_tree_superrecord_planner() {
                      stage_cal.alpha_ntt_per_ciphertext_ms == 0.3 &&
                      stage_cal.alpha_split_per_u32_output_ms == 0.4,
                  "measured control timing calibrates separable stages and preserves independent alpha costs");
+    // The remaining stage attributions: fold + rotate calibrate one CMux cost
+    // over both CMux counts (1013 + 105 for Bundle3), projection per key
+    // switch (105), path_pack per (level, plane) item (25), modulus_switch
+    // per response chunk (1). Attributing a stage to the wrong field or
+    // divisor would silently re-rank the benchmark's frontier rows; stages
+    // measured as zero must leave their defaults untouched.
+    const size_t cmux_units =
+        golden.metrics.fold_cmux_count + golden.metrics.rotate_cmux_count;
+    const size_t pack_items = golden.shape.plane_count * golden.shape.path_levels;
+    require_test(cmux_units == 1118 &&
+                     golden.metrics.projection_keyswitch_count == 105 &&
+                     pack_items == 25 && golden.shape.response_ciphertexts == 1,
+                 "Bundle3 stage unit counts");
+    CostCalibration late_cal;
+    TreeServerTiming late{};
+    late.beta_fold = std::chrono::milliseconds(5);
+    late.private_rotate = std::chrono::milliseconds(3);
+    late.projection = std::chrono::milliseconds(21);
+    late.path_pack = std::chrono::milliseconds(5);
+    late.modulus_switch = std::chrono::milliseconds(2);
+    apply_measured_control_timing(late_cal, golden, late);
+    require_test(std::fabs(late_cal.cmux_ms * static_cast<double>(cmux_units) - 8.0) < 1e-9,
+                 "fold + rotate time is spread over both CMux counts");
+    require_test(std::fabs(late_cal.substitution_ms - 21.0 / 105.0) < 1e-12,
+                 "projection time is per projection key switch");
+    require_test(std::fabs(late_cal.path_item_pack_ms - 5.0 / 25.0) < 1e-12,
+                 "path_pack time is per (level, plane) item");
+    require_test(late_cal.modulus_switch_ms == 2.0,
+                 "modulus_switch time is per response chunk");
+    const CostCalibration untouched;
+    require_test(late_cal.expand_intercept_ms == untouched.expand_intercept_ms &&
+                     late_cal.expand_per_populated_node_ms ==
+                         untouched.expand_per_populated_node_ms &&
+                     late_cal.to_rgsw_per_selector_ms ==
+                         untouched.to_rgsw_per_selector_ms &&
+                     late_cal.first_dim_output_ciphertext_ms ==
+                         untouched.first_dim_output_ciphertext_ms,
+                 "stages measured as zero keep their default calibration");
 
     const std::vector<Candidate> small_all = enumerate_candidates(
         make_input(scheme, 256, size_t{1} << 8, test_policy(1, 4)));
@@ -508,6 +571,176 @@ void PirTest::test_tree_superrecord_planner() {
     for (const Candidate &cand : enumerate_candidates(
              make_input(scheme, 256, size_t{1} << 6, capped))) {
       require_test(cand.shape.bundle_arity <= 2, "bundle cap clamps h");
+    }
+  }
+
+  // ---- every emitted candidate freezes and indexes end to end ----
+  {
+    // The benchmark freezes every row the enumerator emits. Sweeping the
+    // whole enumeration (b-loop feasibility filter, alignment-16 rounding at
+    // small N0, response/selector/alpha field derivations) against the index
+    // module's independent recomputation catches planner/index drift at the
+    // shapes no hand-picked fixture reaches.
+    PlannerPolicy policy = test_policy(/*max_responses=*/4, /*max_arity=*/16);
+    policy.alpha_alignments = {1, 16};
+    size_t swept = 0, aligned16 = 0, rounded = 0;
+    for (const size_t E : {size_t{13}, size_t{256}, size_t{4096}}) {
+      for (const size_t N : {size_t{1} << 4, size_t{1} << 8}) {
+        const std::vector<Candidate> all =
+            enumerate_candidates(make_input(scheme, E, N, policy));
+        require_test(!all.empty(), "every (E, N) sweep point has candidates");
+        for (const Candidate &cand : all) {
+          const CandidateShape &s = cand.shape;
+          // Rejects any drift between the shape fields and the index module's
+          // recomputation (minimal P, selector bits, capacity, key heights,
+          // level plans, response count, tag).
+          const TreeParams p = freeze_candidate(cand);
+          (void)codec_spec_for(p);
+          const size_t n0_min =
+              ceil_div(s.leaf_plaintexts, size_t{1} << s.beta_bits);
+          require_test(s.N0 % s.alpha_alignment == 0 && s.N0 >= n0_min &&
+                           s.N0 - n0_min < s.alpha_alignment,
+                       "N0 is the minimal aligned first-dimension width");
+          require_test(s.query_width == s.N0 + scheme.get_l() * s.selector_bits,
+                       "query width is N0 plus l_ep gadget rows per selector bit");
+          // Both ends of the leaf range must decompose: client_index requires
+          // alpha < N0, which is where a too-narrow first dimension shows up.
+          (void)client_index(0, p);
+          (void)client_index(N - 1, p);
+          for (size_t level = 0; level <= s.tree_height; ++level) {
+            require_test(level_oracle_for_test(N - 1, level, p).plaintext_index <
+                             p.level_plans[level].padded_plaintexts_per_plane,
+                         "the last leaf's target lies inside every level matrix");
+          }
+          require_test(response_placement(s.tree_height, s.plane_count - 1, p)
+                               .response_chunk == s.response_ciphertexts - 1,
+                       "the last (level, plane) item lands in the last response chunk");
+          ++swept;
+          aligned16 += s.alpha_alignment == 16;
+          rounded += s.N0 != n0_min;
+        }
+      }
+    }
+    require_test(aligned16 > 0 && rounded > 0,
+                 "the sweep exercises alignment 16 with actual rounding");
+    BENCH_PRINT("enumerator/index sweep: " << swept << " candidates frozen, "
+                << aligned16 << " with alignment 16 (" << rounded << " rounded)");
+  }
+
+  // ---- memory caps drop exactly the candidates above the cap ----
+  {
+    // SUPERRECORD_MEMORY_BYTES feeds both caps; a swapped comparison
+    // (validation vs steady-state) or a > / >= slip would silently change
+    // which shapes a memory-limited campaign run measures.
+    PlannerPolicy base = test_policy(1, 8);
+    base.alpha_alignments = {1, 16};
+    const PlannerInput input = make_input(scheme, 256, size_t{1} << 10, base);
+    const std::vector<Candidate> all = enumerate_candidates(input);
+    require_test(all.size() >= 4, "the cap fixture needs several candidates");
+    const auto same_candidate = [](const Candidate &a, const Candidate &b) {
+      return make_plan_tag(a.shape, a.scheme) == make_plan_tag(b.shape, b.scheme) &&
+             a.shape.alpha_alignment == b.shape.alpha_alignment;
+    };
+    const auto check_cap = [&](size_t CandidateMetrics::*estimate,
+                               size_t PlannerPolicy::*cap_field,
+                               const std::string &what) {
+      std::vector<size_t> ests;
+      for (const Candidate &cand : all) ests.push_back(cand.metrics.*estimate);
+      std::sort(ests.begin(), ests.end());
+      const size_t cap = ests[ests.size() / 2];
+      require_test(ests.front() > 0 && cap < ests.back(),
+                   what + ": the median cap must exclude some candidate");
+      PlannerInput capped = input;
+      capped.policy.*cap_field = cap;
+      const std::vector<Candidate> filtered = enumerate_candidates(capped);
+      std::vector<const Candidate *> expected;
+      for (const Candidate &cand : all) {
+        if (cand.metrics.*estimate <= cap) expected.push_back(&cand);
+      }
+      require_test(!filtered.empty() && filtered.size() < all.size() &&
+                       filtered.size() == expected.size(),
+                   what + ": the cap keeps exactly the candidates at or below it");
+      bool at_cap = false;
+      for (size_t i = 0; i < filtered.size(); ++i) {
+        require_test(same_candidate(filtered[i], *expected[i]) &&
+                         filtered[i].metrics.*estimate <= cap,
+                     what + ": the capped enumeration is the in-order subsequence");
+        at_cap |= filtered[i].metrics.*estimate == cap;
+      }
+      require_test(at_cap, what + ": a candidate exactly at the cap is kept");
+      PlannerInput tiny = input;
+      tiny.policy.*cap_field = ests.front() - 1;
+      require_test(enumerate_candidates(tiny).empty(),
+                   what + ": a cap below every estimate yields no candidates");
+    };
+    check_cap(&CandidateMetrics::optimized_steady_state_bytes_estimate,
+              &PlannerPolicy::max_steady_state_bytes, "steady-state cap");
+    check_cap(&CandidateMetrics::validation_resident_bytes_estimate,
+              &PlannerPolicy::max_validation_resident_bytes,
+              "validation-resident cap");
+  }
+
+  // ---- mandatory controls carry both argmin rows ----
+  {
+    // The benchmark labels these rows minimum-optimized-steady-state /
+    // minimum-response-count by recomputing the argmin by value, and the
+    // sweep analysis keys on those labels; two responses make the response
+    // count non-constant so the second rule has something to choose.
+    const PlannerPolicy policy = test_policy(/*max_responses=*/2, 8);
+    const PlannerInput input = make_input(scheme, 256, size_t{1} << 10, policy);
+    const std::vector<Candidate> all = enumerate_candidates(input);
+    ParetoContext context;
+    context.avx512 = {true, true};
+    size_t min_steady = std::numeric_limits<size_t>::max();
+    size_t min_resp = std::numeric_limits<size_t>::max(), max_resp = 0;
+    for (const Candidate &cand : all) {
+      min_steady = std::min(min_steady,
+                            cand.metrics.optimized_steady_state_bytes_estimate);
+      min_resp = std::min(min_resp, cand.shape.response_ciphertexts);
+      max_resp = std::max(max_resp, cand.shape.response_ciphertexts);
+    }
+    require_test(min_resp == 1 && max_resp == 2,
+                 "the control fixture mixes one- and two-response candidates");
+    // The rule picks the first candidate in predicted order with the minimal
+    // value; the returned control must be exact-plan equal to it.
+    std::vector<Candidate> ranked = all;
+    rank_by_prediction(ranked, CostCalibration{}, context);
+    const auto first_ranked = [&](auto &&is_minimal) -> const Candidate & {
+      for (const Candidate &cand : ranked) {
+        if (is_minimal(cand)) return cand;
+      }
+      throw std::runtime_error("ranked fixture lost its argmin");
+    };
+    const Candidate &expected_steady = first_ranked([&](const Candidate &c) {
+      return c.metrics.optimized_steady_state_bytes_estimate == min_steady;
+    });
+    const Candidate &expected_resp = first_ranked([&](const Candidate &c) {
+      return c.shape.response_ciphertexts == min_resp;
+    });
+    const auto same_exact_plan = [](const Candidate &a, const Candidate &b) {
+      return make_plan_tag(a.shape, a.scheme) == make_plan_tag(b.shape, b.scheme) &&
+             build_level_plans(a.shape) == build_level_plans(b.shape);
+    };
+    const std::vector<Candidate> mandatory =
+        mandatory_controls(all, input, CostCalibration{}, context);
+    require_test(!mandatory.empty() && mandatory.size() <= 4,
+                 "at most one control per rule");
+    bool saw_steady = false, saw_resp = false;
+    for (const Candidate &control : mandatory) {
+      saw_steady |= same_exact_plan(control, expected_steady);
+      saw_resp |= same_exact_plan(control, expected_resp);
+      require_test(std::isfinite(control.metrics.predicted_server_ms),
+                   "controls carry the ranking prediction");
+    }
+    require_test(saw_steady,
+                 "the minimum-optimized-steady-state control is the fastest global argmin");
+    require_test(saw_resp,
+                 "the minimum-response-count control is the fastest minimal-chunk candidate");
+    for (size_t i = 0; i < mandatory.size(); ++i) {
+      for (size_t j = i + 1; j < mandatory.size(); ++j) {
+        require_test(!same_exact_plan(mandatory[i], mandatory[j]),
+                     "controls are exact-plan unique");
+      }
     }
   }
 

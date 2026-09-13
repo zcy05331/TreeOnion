@@ -8,9 +8,12 @@
 using namespace tree_superrecord;
 using namespace tree_superrecord_test;
 
-// Exhaustive bundled-index algebra, the exact first-dimension orientation of
-// the preprocessed databases, pooled response placement, and incremental
-// updates for canonical and m32 views (design sections 8, 10, 14, 15).
+// Exhaustive bundled-index algebra, real bundle slots at every level, the
+// exact first-dimension orientation of the preprocessed databases, pooled
+// response placement, the planner's storage estimates against the bytes the
+// databases actually allocate, the steady-state (canonical released) m32 path
+// against the retained one, and incremental updates for canonical and m32
+// views (design sections 8, 10, 14, 15).
 void PirTest::test_tree_superrecord_index() {
   print_func_name(__FUNCTION__);
   PirParams scheme;
@@ -30,9 +33,15 @@ void PirTest::test_tree_superrecord_index() {
       {30000, 16, 1, 2048, 2, 16, 10},  // one entry above a full plaintext
   };
   for (const Shape &shape : shapes) {
-    const TreeParams params = plan_for(scheme, shape.E, shape.N, shape.h,
-                                       shape.G, shape.b,
-                                       test_policy(shape.max_responses, 128));
+    // The candidate itself is kept so its metrics can be checked against the
+    // databases built from the frozen plan.
+    const std::vector<Candidate> all = enumerate_candidates(make_input(
+        scheme, shape.E, shape.N, test_policy(shape.max_responses, 128)));
+    const std::optional<Candidate> picked =
+        pick_candidate(all, shape.h, shape.G, shape.b);
+    require_test(picked.has_value(), "test shape is not a feasible candidate");
+    const Candidate &cand = *picked;
+    const TreeParams params = freeze_candidate(cand);
     const CandidateShape &s = params.shape;
     const size_t L = s.tree_height;
     const size_t r = s.record_index_bits;
@@ -80,6 +89,16 @@ void PirTest::test_tree_superrecord_index() {
                      "rotation bits [k, k+d) encode the record position");
         require_test(oracle.plaintext_index < plan.padded_plaintexts_per_plane,
                      "target plaintext lies inside the level matrix");
+        // Real slots of the bundle holding this ancestor: the nodes at this
+        // level that share its bundle. Root levels (2^level < h) and interior
+        // tail bundles exercise the min(h, level_nodes - bundle_start) clamp
+        // that feeds the benchmark's real_non_target_neighbour_slots figure.
+        size_t sharing = 0;
+        for (size_t v = 0; v < (size_t{1} << level); ++v) {
+          sharing += (v / shape.h) == (node / shape.h);
+        }
+        require_test(real_bundle_slots(leaf, level, params) == sharing,
+                     "real bundle slots count the nodes sharing the bundle");
       }
     }
 
@@ -137,6 +156,11 @@ void PirTest::test_tree_superrecord_index() {
       require_test(orientation_observable,
                    "the 4 x 3 leaf matrix must expose the orientation");
     }
+    // The planner's canonical storage estimate is the bytes the canonical
+    // database actually allocates.
+    require_test(canonical_database_bytes(reference.canonical) ==
+                     cand.metrics.canonical_bytes,
+                 "planner canonical_bytes equals the allocated canonical database");
     // Tail bundle: the last bundle of a level whose width is not a multiple
     // of h has fewer real slots than h.
     if (shape.h > 1 && shape.h < shape.N) {
@@ -190,6 +214,32 @@ void PirTest::test_tree_superrecord_index() {
                                       source, shape.N - 1);
       PreprocessedTree m32 =
           m32_from_reference(reference, params, scheme, noise, true);
+      // The benchmark reports memory.database_bytes from the steady-state
+      // path (retain_canonical == false) next to the planner's
+      // optimized_bytes; both must be the bytes the m32 limbs allocate, and
+      // the steady-state limbs must equal the retained path's limb for limb.
+      require_test(m32_database_bytes(m32) == cand.metrics.optimized_bytes &&
+                       cand.metrics.optimized_bytes ==
+                           cand.metrics.physical_scan_bytes,
+                   "planner optimized_bytes equals the allocated m32 limbs");
+      const PreprocessedTree steady =
+          preprocess_m32(params, scheme, noise, source, false);
+      require_test(!steady.has_canonical() &&
+                       steady.m32.size() == m32.m32.size() &&
+                       m32_database_bytes(steady) == m32_database_bytes(m32),
+                   "steady-state preprocessing releases canonical and allocates the same limbs");
+      for (size_t level = 0; level <= L; ++level) {
+        require_test(steady.m32[level].size() == s.plane_count,
+                     "steady-state m32 has one view per plane");
+        for (size_t z = 0; z < s.plane_count; ++z) {
+          const LevelPlaneM32 &view = steady.m32[level][z];
+          require_test(view.rows == params.level_plans[level].matrix_rows &&
+                           view.cols == params.level_plans[level].matrix_cols &&
+                           view.lo == m32.m32[level][z].lo &&
+                           view.hi == m32.m32[level][z].hi,
+                       "steady-state limbs equal the retained path limb for limb");
+        }
+      }
       rewrite_preprocessed_superrecord(m32, target_level, target_node / shape.h,
                                        params, scheme, updated);
       const PreprocessedTree fresh =

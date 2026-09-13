@@ -8,11 +8,194 @@
 using namespace tree_superrecord;
 using namespace tree_superrecord_test;
 
+namespace {
+
+// SUPERRECORD_KEY_MODE=candidate: each plan registers exactly what it needs.
+PlannerPolicy candidate_key_policy() {
+  PlannerPolicy policy = test_policy();
+  policy.eval_key_registration =
+      EvalKeyRegistrationPolicy::CandidateSpecificHeight;
+  policy.fixed_session_key_height = 0;
+  return policy;
+}
+
+// Serves every leaf under `packing` with a session that holds exactly
+// registered_key_height BV keys: reference path always, m32 path when the
+// caller built one (the m32 database is packing-agnostic; the gate result is
+// not). A required_key_height that undercounts the family, or a registration
+// that hands out fewer automorphisms than the plan says, surfaces here as a
+// keys.get throw inside project_keep_stride / mlwe_merge_residues or as a
+// wrong decoded entry, exactly where a candidate-mode sweep would hit it.
+void serve_with_exact_keys(PirClient &client, PirServer &server,
+                           const TaggedTreeSessionKeys &session,
+                           const TreeParams &params, const PirParams &scheme,
+                           const ReferencePreprocessedTree &reference,
+                           const PreprocessedTree *m32,
+                           const CandidateNoiseResult *m32_noise,
+                           const EntrySource &source,
+                           const std::set<size_t> &leaves,
+                           ResponsePacking packing) {
+  const CandidateShape &s = params.shape;
+  const size_t L = s.tree_height;
+  const char *label = packing == ResponsePacking::MlweMerge ? "mlwe" : "projection";
+  int min_budget = 1 << 20;
+  for (size_t leaf : leaves) {
+    const PackedQuery query = make_query(client, session, scheme, params, leaf);
+    const PathResponse response = serve_request_reference(
+        query, reference, server, session, params, scheme, nullptr, packing);
+    const DecodedPath decoded =
+        extract_path_measured(response, client, params, scheme, leaf);
+    require_test(decoded.entries.size() == L + 1,
+                 "exact-key path has L + 1 entries");
+    for (size_t level = 0; level <= L; ++level) {
+      const size_t node = leaf >> (L - level);
+      require_test(decoded.entries[level] == source(level, node),
+                   "every level decodes with exactly the registered key family");
+    }
+    require_test(decoded.min_budget_bits >= 1,
+                 "exact-key decryption must keep at least one bit of budget");
+    min_budget = std::min(min_budget, decoded.min_budget_bits);
+    if (m32) {
+      const PathResponse fast =
+          serve_request_m32(query, *m32, server, session, params, scheme,
+                            *m32_noise, nullptr, packing);
+      require_test(fast.chunks.size() == response.chunks.size(),
+                   "exact-key m32 chunk count");
+      for (size_t i = 0; i < fast.chunks.size(); ++i) {
+        require_test(fast.chunks[i].c0 == response.chunks[i].c0 &&
+                         fast.chunks[i].c1 == response.chunks[i].c1,
+                     "exact-key m32 and reference responses are raw-ciphertext equal");
+      }
+    }
+  }
+  BENCH_PRINT("E=" << s.entry_bits << " N=" << s.leaf_count
+              << " h=" << s.bundle_arity << " G=" << s.record_coeffs
+              << " keys req/reg=" << s.required_key_height << "/"
+              << s.registered_key_height << " h_q=" << s.expansion_height
+              << " proj=" << s.projection_depth_max << " r=" << s.record_index_bits
+              << " " << label << (m32 ? " ref+m32" : " ref") << " leaves="
+              << leaves.size() << " min budget " << min_budget << " bits");
+}
+
+// Candidate-specific key registration end to end (design section 9;
+// SUPERRECORD_KEY_MODE=candidate in the sweep). Every other serving test
+// registers test_policy's fixed log2 n family, so the planned
+// required_key_height never decides what the server actually holds. Here each
+// fixture registers exactly required_key_height automorphisms and must still
+// serve and decode every level on both paths.
+//   A: h = 1 with N = rho = n / G, so the leaf level holds one super-record
+//      per record slot and its rotation spans the whole rho-trace:
+//      projection_depth_max == r == log2(n / G), which this shape's one-plane
+//      query never needs in expansion depth. The projection term of the max
+//      therefore decides the family, and that family is exactly what MLWE
+//      merging asks for, so the merge packing is served at its key boundary.
+//   B: E=256, N=256, h=3, G=64 -> the expansion height decides instead (it
+//      ties the projection depth at n = 4096, hence the >= in its check).
+// Fixture A's leaf count is derived from the ring so both facts hold at every
+// ACTIVE_CONFIG, not only at n = 2048.
+void exercise_candidate_specific_keys(PirClient &client,
+                                      const PirParams &scheme) {
+  const bool composite = scheme.get_composite_rns().enabled;
+  const size_t log_n = std::bit_width(DBConsts::PolyDegree) - 1;
+  constexpr size_t kFixtureAG = 4;
+
+  struct Fixture {
+    size_t E, N, h, G, b;
+    bool projection_decides;  // otherwise the expansion height decides
+    bool mlwe;                // additionally serve with MlweMerge
+    bool unique_shape;        // served nowhere else: sample more leaves
+  };
+  const std::vector<Fixture> fixtures = {
+      {13, DBConsts::PolyDegree / kFixtureAG, 1, kFixtureAG, 0, true, true, true},
+      {256, 256, 3, 64, 0, false, false, false},
+  };
+  for (const Fixture &f : fixtures) {
+    const TreeParams params =
+        plan_for(scheme, f.E, f.N, f.h, f.G, f.b, candidate_key_policy());
+    const CandidateShape &s = params.shape;
+    // Fixture premises only: freeze_candidate already ties required_key_height
+    // to max(expansion, projection) and to the fingerprint, but it demands no
+    // more than registered >= required, so nothing outside candidate mode says
+    // the two are equal or that the family is smaller than the fixed one.
+    require_test(s.registered_key_height == s.required_key_height &&
+                     params.scheme.eval_key_registration ==
+                         EvalKeyRegistrationPolicy::CandidateSpecificHeight,
+                 "candidate-specific plans register exactly the required height");
+    require_test(s.registered_key_height < log_n,
+                 "the fixture must register fewer keys than the fixed log2 n family");
+    if (f.projection_decides) {
+      require_test(s.projection_depth_max > s.expansion_height,
+                   "fixture A: the deepest projection, not the expansion height, "
+                   "must decide the family");
+      require_test(s.registered_key_height == s.record_index_bits,
+                   "fixture A: the family must be exactly the rho-trace MLWE merging needs");
+    } else {
+      require_test(s.expansion_height >= s.projection_depth_max,
+                   "fixture B: the expansion height must decide the family");
+    }
+
+    PirServer server(query_expansion_params(params, scheme));
+    const TaggedTreeSessionKeys session =
+        create_tagged_tree_session_keys(client, params, scheme);
+    // Registration itself validates the material against the plan's own
+    // registered height, so a create_session_keys that handed out the fixed
+    // maximum family (or one key short) throws here, before any homomorphic
+    // work; the serves below are what the plan's number has to survive.
+    set_tree_client_session_keys(server, params, scheme, session);
+
+    const EntrySource source = [&](size_t level, size_t node) {
+      return synthetic_entry(f.E, level, node);
+    };
+    const ReferencePreprocessedTree reference =
+        preprocess_reference(params, scheme, source);
+    // Both ends of the leaf range, plus a pseudo-random leaf for fixture A,
+    // whose shape is served nowhere else. Fixture B repeats a shape the
+    // fixed-policy section above already serves over eleven leaves (plaintext
+    // boundaries included); the only thing new here is the key family, and the
+    // family is consumed identically for every leaf, so two leaves carry it.
+    std::set<size_t> leaves = {0, f.N - 1};
+    if (f.unique_shape) leaves.insert(0x2BADBEEFULL % f.N);
+    std::optional<PreprocessedTree> m32;
+    std::optional<CandidateNoiseResult> projection_noise;
+    if (composite) {
+      // The gate re-derives the expected automorphism family from the plan
+      // tag, which in candidate mode says `registered`, not log2 n, and
+      // m32_from_reference refuses a result whose observed coverage does not
+      // match it: a gate that compared against the ring's native height would
+      // reject this session while every fixed-policy fixture kept passing.
+      projection_noise = passing_target_noise_result(
+          client, params, scheme, server, session, source, f.N - 1);
+      m32 = m32_from_reference(reference, params, scheme, *projection_noise,
+                               true);
+    }
+    serve_with_exact_keys(client, server, session, params, scheme, reference,
+                          m32 ? &*m32 : nullptr,
+                          projection_noise ? &*projection_noise : nullptr,
+                          source, leaves, ResponsePacking::Projection);
+    if (f.mlwe) {
+      std::optional<CandidateNoiseResult> merge_noise;
+      if (composite) {
+        // serve_request_m32 rejects a gate result taken under another packing,
+        // so the merge path needs its own run of the gate.
+        merge_noise = passing_target_noise_result(
+            client, params, scheme, server, session, source, f.N - 1, 1.0,
+            ResponsePacking::MlweMerge);
+      }
+      serve_with_exact_keys(client, server, session, params, scheme, reference,
+                            m32 ? &*m32 : nullptr,
+                            merge_noise ? &*merge_noise : nullptr, source,
+                            leaves, ResponsePacking::MlweMerge);
+    }
+  }
+}
+
+}  // namespace
+
 // Full encrypted pipeline on small shapes: packed query, expansion, ragged
 // pyramid, reference and m32 selection, shared-selector fold and rotation,
 // projection, pooled multi-plane responses, and client decode; plus the
-// client/session/tag bindings and the update path (design sections 5, 9,
-// 12-15).
+// client/session/tag bindings, the update path, and serving with a
+// candidate-specific key family (design sections 5, 9, 12-15).
 void PirTest::test_tree_superrecord_e2e() {
   print_func_name(__FUNCTION__);
   PirParams scheme;
@@ -297,4 +480,7 @@ void PirTest::test_tree_superrecord_e2e() {
                      coverage.unexpected.empty() && coverage.malformed_row_shapes.empty(),
                  "the trusted session passes inspection");
   }
+
+  // ---- candidate-specific key registration serves at its key boundary ----
+  exercise_candidate_specific_keys(client, scheme);
 }
