@@ -5,6 +5,8 @@
 
 void test_approx_gadget();
 void test_tree_response_merge_e2e();
+// TimerLogger accumulation, warm-up skipping and cleanup.
+void test_logging();
 // Merkle baselines: a profiled plan off the legacy heights, the phase
 // clocks, the archived leaf schedule, one-sample statistics, large tiers.
 void test_merkle_profiled_override();
@@ -45,6 +47,7 @@ static const std::vector<std::string> kRegressionTests = {
     "tree_superrecord_noise", "tree_superrecord_kernel", "tree_superrecord_alpha",
     "approx_gadget",
     "tree_response_merge", "tree_response_merge_e2e",
+    "logging",
     "merkle_profiled_override", "merkle_server_phases", "merkle_trial_schedule",
     "merkle_single_sample_stats", "layer_layout_sweep_dominated",
     "layer_layout_large_tiers",
@@ -143,6 +146,7 @@ void PirTest::run_test(const std::string &test_name) {
   else if (test_name == "cpu_info")          print_cpu_info();
   else if (test_name == "hexl_ntt")          test_hexl_ntt();
   else if (test_name == "utils_arith")       test_utils_arith();
+  else if (test_name == "logging")           test_logging();
   else if (test_name == "ntt_primes")        test_ntt_friendly_primes();
   else if (test_name == "paper_moduli_pin")  test_paper_moduli_pin();
   else if (test_name == "noise_sampling")    test_noise_sampling();
