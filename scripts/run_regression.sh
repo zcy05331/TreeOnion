@@ -378,9 +378,16 @@ PY
     exit 1
   fi
 
-  step "[$TAG] generic benchmark JSON contract (scripts/tests/test_benchmark_json_contract.py)"
+  # Both binary-backed modules default to the Rosetta build directory, so on a
+  # campaign host that builds into build-native they skip themselves and their
+  # coverage is silently lost. Naming them here points both at the binary under
+  # test; naming the two modules rather than discovering a pattern also keeps
+  # the step independent of whatever else lives under scripts/tests, and shares
+  # one interpreter (10 s, against 13 s for two separate runs).
+  step "[$TAG] benchmark JSON contract and gadget driver against this binary"
   ( cd "$ROOT" && ONIONPIR_BENCH_BIN="$ABS_BIN" \
-      python3 -m unittest discover -s scripts/tests -p test_benchmark_json_contract.py )
+      python3 -m unittest scripts.tests.test_benchmark_json_contract \
+                          scripts.tests.test_gadget_configs_e2e )
 
   step "[$TAG] argument validation"
   if "$BIN" --test merkle_benchmarks --layer-layout-policy profiled \
