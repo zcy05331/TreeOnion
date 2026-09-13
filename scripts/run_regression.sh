@@ -30,7 +30,30 @@ for BIN in "${BINS[@]}"; do
   fi
 done
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/onionpir-regression.XXXXXX")"
-trap 'rm -rf "$WORK"' EXIT
+# Every step sends its command output to a log under $WORK, so a step that dies
+# under set -e would otherwise take its own diagnosis with it: the operator is
+# left with the step banner and an exit code. Show the logs the run touched
+# last before the directory goes away.
+finish() {
+  local code=$?
+  if [[ $code -ne 0 && -d "$WORK" ]]; then
+    local log
+    log="$(find "$WORK" -type f -name '*.log' -exec ls -t {} + 2>/dev/null |
+           head -n 1)"
+    printf '\nregression FAILED (exit %s)\n' "$code" >&2
+    if [[ -n "$log" ]]; then
+      # The failing step is the last one that wrote a log, so this is normally
+      # its output; a step that dies before redirecting anywhere leaves the
+      # previous step's log here instead, hence the wording.
+      printf 'last log written (%s), final 30 lines:\n\n' "$log" >&2
+      tail -n 30 "$log" >&2
+    else
+      printf 'no logs were written under %s\n' "$WORK" >&2
+    fi
+  fi
+  rm -rf "$WORK"
+}
+trap finish EXIT
 
 step() { printf '\n==> %s\n' "$*"; }
 

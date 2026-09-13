@@ -71,6 +71,31 @@ std::string replace_first(std::string text, const std::string &from,
 }  // namespace
 
 void PirTest::test_layer_layout_planner() {
+  // median_server_ms_of is the one arithmetic every measured layout passes
+  // through: the sweep stores its result and the loader recomputes it to
+  // reject a drifted profile (see the round-trip check below). Both calls go
+  // to this function, so a shared error survives the round trip; and every
+  // synthetic measurement in this file carries a single sample, which cannot
+  // tell a median from a mean or from an unsorted middle element. Pin it
+  // directly on inputs where those three answers differ.
+  {
+    // odd, unordered: median 2, mean 31, unsorted middle 1.
+    require_test(median_server_ms_of({90.0, 1.0, 2.0}) == 2.0,
+                 "median of an odd sample count is the sorted middle");
+    // even, unordered: median 2.5, mean 26.5, either middle alone 2 or 3.
+    require_test(median_server_ms_of({100.0, 1.0, 3.0, 2.0}) == 2.5,
+                 "median of an even sample count averages the two middles");
+    require_test(median_server_ms_of({7.5}) == 7.5,
+                 "median of one sample is that sample");
+    bool rejected_empty = false;
+    try {
+      median_server_ms_of({});
+    } catch (const std::invalid_argument &) {
+      rejected_empty = true;
+    }
+    require_test(rejected_empty, "median of an empty sample set is refused");
+  }
+
   require_applicable(paper_config_active(),
                      paper_config_reason("the layer layout planner"));
   print_func_name(__FUNCTION__);

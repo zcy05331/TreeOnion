@@ -287,9 +287,15 @@ if has_mode merkle; then
   ONIONPIR_BENCH_CMAKE="${CMAKE_METADATA}" \
   ONIONPIR_BENCH_HEXL_PATH="${HEXL_CMAKE_DIR}" \
   run_bin "merkle_${SCALE_LIST[0]}.txt" "${MERKLE_ARGS[@]}"
-  command -v python3 >/dev/null && [[ -f "${OUT_DIR}/merkle.json" ]] \
-    && python3 -m json.tool "${OUT_DIR}/merkle.json" >/dev/null \
-    && echo "JSON validated: ${OUT_DIR}/merkle.json"
+  # A malformed merkle.json used to leave no trace: the && chain simply stopped
+  # and the suite still reported every unit green.
+  if command -v python3 >/dev/null && [[ -f "${OUT_DIR}/merkle.json" ]]; then
+    if python3 -m json.tool "${OUT_DIR}/merkle.json" >/dev/null; then
+      echo "JSON validated: ${OUT_DIR}/merkle.json"
+    else
+      record merkle_json fail "merkle.json is not valid JSON"
+    fi
+  fi
   if [[ "${WANT_4GB}" == "1" ]]; then
     if [[ ! -f "${OUT_DIR}/merkle.json" ]]; then
       record merkle_4gb fail "no merkle.json"
