@@ -1,0 +1,981 @@
+Running test: barrett
+==============================================================================
+                    test_barrett(Benchmark build)
+==============================================================================
+Barrett u64 correctness: 240072 cases OK
+Barrett correctness: 49000 random + 10 edge cases OK
+Per-reduction cost (q = 576460752303423619, compute-bound, uint64 input):
+  barrett_reduce_u64  : 0.507876 ns
+  x % q               : 0.508563 ns
+  speedup             : 1.00135x
+Per-reduction cost (q = 576460752303423619, compute-bound, uint128 input):
+  barrett_reduce_u128 : 0.963273 ns
+  x % q               : 74.5411 ns
+  speedup             : 77.3832x
+Running test: utils_arith
+==============================================================================
+                    test_utils_arith(Benchmark build)
+==============================================================================
+--- utils::is_prime ---
+  Primes recognized:     12/12
+  Composites recognized: 14/14
+
+--- utils::try_invert_uint_mod ---
+  Invertible cases:     5/5
+  Non-invertible cases: 3/3
+
+--- Summary ---
+Passed 34/34 cases
+Running test: noise_sampling
+==============================================================================
+                    test_noise_sampling(Benchmark build)
+==============================================================================
+Sigma/width conversion: sigma_std = width / sqrt(2*pi)
+  sqrt(2*pi) = 2.50663
+Reference values from Spiral (core.cpp:183-184):
+  width=6.4  std_dev=2.55323059  check=2.55323
+Common parameter conversions:
+  width=6.4  => sigma_std=2.55323
+  width=6  => sigma_std=2.39365
+  width=8  => sigma_std=3.19154
+  width=8.02121  => sigma_std=3.2
+
+--- Test 1: sample_gaussian statistics (sigma_std parameterization) ---
+sigma_std=1  (equiv. width=2.50663)  measured: mean=0.0038  stddev=1.04899  mean_ok=YES  stddev_ok=YES
+sigma_std=3.2  (equiv. width=8.02121)  measured: mean=0.0317  stddev=3.25218  mean_ok=YES  stddev_ok=YES
+sigma_std=6  (equiv. width=15.0398)  measured: mean=-0.0424  stddev=6.01292  mean_ok=YES  stddev_ok=YES
+
+--- Test 2: sample_uniform_poly ---
+Range check (all < q): OK
+Chi-squared statistic: 12.4144 (pass < 25.0): OK
+
+--- Test 3: sample_ternary ---
+cnt(0)=3340  cnt(1)=3328  cnt(q-1)=3332  cnt(other)=0
+Support only {0,1,q-1}: OK
+Roughly balanced (within 5%): OK
+
+--- Summary ---
+Test 1 sub-checks: 6/6 (mean and stddev for 3 sigma values)
+Running test: rlwe_enc
+==============================================================================
+                    test_rlwe_enc(Benchmark build)
+==============================================================================
+N=2048  q=288135826036838401 (58 bits)  t=4099  sigma=2.55
+Secret key: 2048 NTT-form coefficients
+
+--- Test 1: encrypt_zero (coef) + decrypt → 0 ---
+  nonzero coeffs after decrypt: 0 / 2048  → OK
+
+--- Test 2: encrypt(zero) + delta*m round-trip ---
+  Round-trip on 8 slots: OK
+
+--- Test 3: encrypt_zero (NTT) + decrypt → 0 ---
+  ntt_form flag set: YES  nonzero coeffs: 0  → OK
+
+--- Test 4: fresh-ciphertext noise magnitude ---
+  max |phase| = 9  (~3.16993 bits)
+  noise budget ≈ 53.8296 bits
+  max |phase| < 100: OK
+
+--- Test 5: sigma propagation (larger σ → larger max|e|) ---
+  sigma=1.0   → max|e|=4
+  sigma=3.2   → max|e|=11
+  sigma=30.0  → max|e|=96
+  monotonic in sigma: OK
+
+--- Summary ---
+Passed 5/5 sub-tests
+Running test: hexl_ntt
+==============================================================================
+                    test_hexl_ntt(Benchmark build)
+==============================================================================
+N = 2048, q = 288135826036838401 (58 bits)
+HEXL NTT object created.
+
+--- Test 1: NTT(INTT(x)) == x ---
+Round-trip correct: YES
+
+--- Test 2: Polynomial multiplication via NTT ---
+a(x) = 1 + 2x + 3x^2
+b(x) = 4 + 5x
+c(x) = a*b coeffs: 4, 13, 22, 15, 0
+Multiplication correct: YES
+
+--- Test 3: Polynomial addition (mod q) ---
+x[0]=288135826036838400 + y[0]=2 = 1 (expect 1)
+x[1]=100 + y[1]=288135826036838351 = 50 (expect 50)
+Addition correct: YES
+
+--- Test 4: BFV-like decrypt: phase = c0 + c1*s ---
+t=4099, delta=floor(q/t)=70294175661585
+Encrypted m=7, decrypted m=7
+Decryption correct: YES
+
+--- Test 5: utils::ntt_fwd/inv matches direct HEXL NTT ---
+utils vs direct HEXL: MATCH (fwd diffs=0, inv diffs=0)
+
+--- Test 6: utils::ntt_fwd/inv performance ---
+  utils::ntt_fwd + utils::ntt_inv: 14.3317 us / iter (10000 iters)
+
+--- Summary ---
+Passed 5/5 correctness tests (Test 6 is perf-only)
+Running test: bfv
+==============================================================================
+                    bfv_example(Benchmark build)
+==============================================================================
+N=2048  q=288135826036838401  t=4099
+Noise budget before add: 41 bits
+Noise budget after add: 41 bits
+==============================================================================
+==============================================================================
+Noise budget after scalar mult: 39 bits
+Running test: decrypt_mod_q
+==============================================================================
+                    test_decrypt_mod_q(Benchmark build)
+==============================================================================
+Noise budget after decryption: 3 (max noise: 47)
+Noise budget after decryption: 3 (max noise: 47)
+decoded 2048 coefficients from 11264 wire bytes
+Running test: mod_switch
+==============================================================================
+                    test_mod_switch(Benchmark build)
+==============================================================================
+K=1 new q: 4169729
+Noise budget after decryption: 3 (max noise: 42)
+Client decrypted[0..9]: 4098 3486 1281 2767 2260 930 3138 2661 2336 1611
+all 4096 switched coefficients < small_q
+Running test: bv_ks
+--- test_signed_decompose ---
+PASS: 10000 random values reconstructed correctly
+  base_log2=8, B=256, max digit magnitude=128 (B/2=128)
+==============================================================================
+                    test_bv_keyswitch(Benchmark build)
+==============================================================================
+K=1 N=2048 t=4099
+fresh decrypt[0..2]: 1, 2, 3
+PASS: BV key-switch matches native automorphism of plaintext
+Running test: ext_prod
+==============================================================================
+                    test_external_product(Benchmark build)
+==============================================================================
+BFV(a) * RGSW(1) = 804x^2 + 803x + 802
+Noise budget: 26
+==============================================================================
+BFV(a) * RGSW(0) = 0
+Noise budget: 26
+==============================================================================
+========================== Experiment Timing Results =========================
+Experiment 1:
+    AG sigma: 0.00575 ms
+  External NTT: 7.99108 ms
+    AG NTT inv: 0.016042 ms
+    AG decomp: 0.0335 ms
+    AG NTT fwd: 0.052456 ms
+    AG pointwise: 0.038292 ms
+  Decomp RLWE (including conversion): 2.05149 ms
+  External product mat mult (including conversion): 5.87613 ms
+  External product: 15.6499 ms
+Running test: ext_prod_mux
+==============================================================================
+                    test_ext_prod_mux(Benchmark build)
+==============================================================================
+K=1 mux(RGSW(1)) = b and mux(RGSW(0)) = a on 2048 coefficients
+==============================================================================
+Running test: fst_dim
+==============================================================================
+                    test_fst_dim_mult(Benchmark build)
+==============================================================================
+Correctness check: PASS (full-q random, n=1024, q=288135826036838401)
+Shape: m=86 n=512 p=2 levels=2048 (PIR)
+Matrix size: 688 MB
+Checksum (nochunk): 2754 * 2^64 + 6302855103392284127
+Checksum: 2754 * 2^64 + 6302855103392284127
+==============================================================================
+level_mat_mat (build inter=128-bit) time: 85.8134 ms
+level_mat_mat (build inter=128-bit) throughput: 	8406 MB/s
+level_mat_mat (nochunk uint128 acc) time:  85.601 ms
+level_mat_mat (nochunk uint128 acc) throughput: 	8427 MB/s
+Speedup of nochunk vs build path: 1.00248x
+Skipping 32->64 chunk: max modulus 288135826036838401 does not fit in 32 bits (K=1 60-bit cell).
+Running test: db_shape
+==============================================================================
+                    test_db_shape(Benchmark build)
+==============================================================================
+fst_dim_sz: 256, num_dims: 13
+fst_dim_sz: 128, num_dims: 14
+Running test: runtime_layout
+Running test: fast_expand
+==============================================================================
+                    test_fast_expand_query(Benchmark build)
+==============================================================================
+==============================================================================
+                       PIR PARAMETERS                         
+==============================================================================
+  Database size (MB)                 = 129.000000
+  Physical storage (MB)              = 688.000000
+  Plaintext size (KB)                = 3
+  num_pt                             = 44032
+  fst_dim_sz                         = 512
+  num_dims                           = 8
+  expansion tree height              = 10
+  l_ep (data RGSW)                   = 6
+  l_key (key RGSW)                   = 10
+  l_ks (BV keyswitch)                = 8
+  poly_modulus_degree                = 2048
+  rns_mods (bits)                         = [58] = 58 bits
+  rns_mods                                = [288135826036838401]
+  plain_modulus                           = 4099 (log_2 ≈ 13)
+  small_q (mod-switch)                    = 4169729 (log_2 ≈ 22)
+  composite split q1*q2                   = 536813569 * 536752129
+==============================================================
+fresh zero noise budget: 41 bits
+query 0: expanded leaf noise budget 20 bits
+query 44031: expanded leaf noise budget 22 bits
+query 38713: expanded leaf noise budget 21 bits
+==============================================================================
+Running test: pir
+==============================================================================
+                    test_pir(Benchmark build)
+==============================================================================
+==============================================================================
+                       PIR PARAMETERS                         
+==============================================================================
+  Database size (MB)                 = 129.000000
+  Physical storage (MB)              = 688.000000
+  Plaintext size (KB)                = 3
+  num_pt                             = 44032
+  fst_dim_sz                         = 512
+  num_dims                           = 8
+  expansion tree height              = 10
+  l_ep (data RGSW)                   = 6
+  l_key (key RGSW)                   = 10
+  l_ks (BV keyswitch)                = 8
+  poly_modulus_degree                = 2048
+  rns_mods (bits)                         = [58] = 58 bits
+  rns_mods                                = [288135826036838401]
+  plain_modulus                           = 4099 (log_2 ≈ 13)
+  small_q (mod-switch)                    = 4169729 (log_2 ≈ 22)
+  composite split q1*q2                   = 536813569 * 536752129
+==============================================================
+Initializing server...
+Generating random data for the server database...
+DB gen+NTT+realign: 980 ms
+Server initialized
+======================== Experiment 1 ========================
+Noise budget after decryption: 2 (max noise: 109)
+Success!
+======================== Experiment 2 ========================
+Noise budget after decryption: 1 (max noise: 128)
+Success!
+======================== Experiment 3 ========================
+Noise budget after decryption: 2 (max noise: 111)
+Success!
+======================== Experiment 4 ========================
+Noise budget after decryption: 1 (max noise: 141)
+Success!
+======================== Experiment 5 ========================
+Noise budget after decryption: 1 (max noise: 142)
+Success!
+======================== Experiment 6 ========================
+Noise budget after decryption: 2 (max noise: 115)
+Success!
+======================== Experiment 7 ========================
+Noise budget after decryption: 1 (max noise: 136)
+Success!
+======================== Experiment 8 ========================
+Noise budget after decryption: 1 (max noise: 128)
+Success!
+======================== Experiment 9 ========================
+Noise budget after decryption: 2 (max noise: 127)
+Success!
+======================== Experiment 10 ========================
+Noise budget after decryption: 1 (max noise: 146)
+Success!
+======================== Experiment 11 ========================
+Noise budget after decryption: 2 (max noise: 126)
+Success!
+======================== Experiment 12 ========================
+Noise budget after decryption: 2 (max noise: 127)
+Success!
+======================== Experiment 13 ========================
+Noise budget after decryption: 1 (max noise: 130)
+Success!
+==============================================================================
+                                FINAL RESULTS
+==============================================================================
+Success rate: 13/13
+BV galois key size: 1162.5 KB
+gsw key size: 297600 bytes = 290.625 KB
+total key size: 1453.12KB
+query size: 14880 bytes = 14.5312 KB
+response size: 11264 bytes = 11 KB
+========== Offline Setup ==========
+========== Online Average Results (after first 3 warm-up runs) ==========
+├── Server total: 277 ms
+│   ├── Expand: 85 ms
+│   │   └── Apply Galois: 79 ms
+│   │       ├──   AG sigma: 2 ms
+│   │       ├──   AG decomp: 14 ms
+│   │       ├──   AG NTT fwd: 30 ms
+│   │       ├──   AG NTT inv: 9 ms
+│   │       └──   AG pointwise: 22 ms
+│   ├── Convert: 12 ms
+│   │   └── Convert external product: 11 ms
+│   │       ├── QTG Decomp RLWE: 1 ms
+│   │       ├── QTG ExtNTT: 5 ms
+│   │       └── QTG ExtProdMatMult: 4 ms
+│   ├── First dim: 162 ms
+│   │   ├── Core: 145 ms
+│   │   ├── First dim prep: 5 ms
+│   │   ├── First dim gather+intt: 4 ms
+│   ├── Other dim: 15 ms
+│   │   ├── External product in other dim: 13 ms
+│   │   │   ├── ODM Decomp RLWE: 1 ms
+│   │   │   ├── ODM ExtNTT: 6 ms
+│   │   │   └── ODM ExtProdMatMult: 5 ms
+│   │   ├── Other dim INTT: 1 ms
+│   │   └── Other dim add/sub: 0 ms
+│   └── Modulus switching: 0 ms
+└── Client total: 0 ms
+Server throughput: 465.322 MB/s
+Running test: pir_profile
+==============================================================================
+                    test_pir_profile(Benchmark build)
+==============================================================================
+DB gen+NTT+realign: 0 ms
+Noise budget after decryption: 3 (max noise: 39)
+pir_profile: expand 4.28667 ms, core 0.154792 ms, total 8.98729 ms
+Running test: server_loader
+DB gen+NTT+realign: 0 ms
+Generating random data for the server database...
+DB gen+NTT+realign: 0 ms
+Running test: shared_session
+DB gen+NTT+realign: 0 ms
+Noise budget after decryption: 3 (max noise: 42)
+DB gen+NTT+realign: 0 ms
+Noise budget after decryption: 3 (max noise: 41)
+DB gen+NTT+realign: 2948 ms
+Noise budget after decryption: 2 (max noise: 102)
+Running test: tree_index
+==============================================================================
+                    test_tree_index(Benchmark build)
+==============================================================================
+Running test: tree_query
+==============================================================================
+                    test_tree_query(Benchmark build)
+==============================================================================
+Running test: tree_select
+==============================================================================
+                    test_tree_select(Benchmark build)
+==============================================================================
+Plaintexts are not equal at coefficient 0
+Running test: tree_rotate
+==============================================================================
+                    test_tree_rotate(Benchmark build)
+==============================================================================
+Running test: tree_project
+==============================================================================
+                    test_tree_project(Benchmark build)
+==============================================================================
+projection depth 11 noise budget: 20 bits
+L=16 leaf=0 deepest level noise budget after select/rotate/project: 5 bits
+L=16 leaf=65535 deepest level noise budget after select/rotate/project: 4 bits
+L=16 leaf=48879 deepest level noise budget after select/rotate/project: 5 bits
+L=13 leaf=0 deepest level noise budget after select/rotate/project: 5 bits
+L=13 leaf=8191 deepest level noise budget after select/rotate/project: 7 bits
+L=13 leaf=7919 deepest level noise budget after select/rotate/project: 5 bits
+Running test: tree_kernel
+==============================================================================
+                    test_tree_kernel(Benchmark build)
+==============================================================================
+Running test: tree_e2e
+==============================================================================
+                    test_tree_e2e(Benchmark build)
+==============================================================================
+Noise budget after decryption: 3 (max noise: 52)
+Noise budget after decryption: 3 (max noise: 52)
+L=16 g=1 leaf=0 chunks=1 path server time 43.6977 ms, small_q response: yes
+Noise budget after decryption: 3 (max noise: 53)
+Noise budget after decryption: 3 (max noise: 53)
+L=16 g=1 leaf=65535 chunks=1 path server time 47.1843 ms, small_q response: yes
+Noise budget after decryption: 3 (max noise: 49)
+Noise budget after decryption: 3 (max noise: 49)
+L=16 g=1 leaf=48879 chunks=1 path server time 46.1542 ms, small_q response: yes
+Noise budget after decryption: 3 (max noise: 45)
+Noise budget after decryption: 3 (max noise: 45)
+L=16 g=1 leaf=37 chunks=1 path server time 43.79 ms, small_q response: yes
+Noise budget after decryption: 3 (max noise: 43)
+Noise budget after decryption: 3 (max noise: 48)
+Noise budget after decryption: 3 (max noise: 47)
+Noise budget after decryption: 3 (max noise: 47)
+L=13 g=1 leaf=0 chunks=1 path server time 30.561 ms, small_q response: yes
+Noise budget after decryption: 3 (max noise: 48)
+Noise budget after decryption: 3 (max noise: 48)
+L=13 g=1 leaf=8191 chunks=1 path server time 30.6184 ms, small_q response: yes
+Noise budget after decryption: 3 (max noise: 46)
+Noise budget after decryption: 3 (max noise: 46)
+L=13 g=1 leaf=7919 chunks=1 path server time 30.6719 ms, small_q response: yes
+Noise budget after decryption: 3 (max noise: 45)
+Noise budget after decryption: 3 (max noise: 45)
+L=13 g=1 leaf=5 chunks=1 path server time 31.5941 ms, small_q response: yes
+Noise budget after decryption: 3 (max noise: 42)
+Noise budget after decryption: 3 (max noise: 49)
+Noise budget after decryption: 3 (max noise: 51)
+Noise budget after decryption: 3 (max noise: 61)
+L=16 g=128 leaf=0 chunks=2 path server time 314.455 ms, small_q response: yes
+Noise budget after decryption: 3 (max noise: 61)
+Noise budget after decryption: 3 (max noise: 47)
+L=16 g=128 leaf=65535 chunks=2 path server time 304.692 ms, small_q response: yes
+Noise budget after decryption: 3 (max noise: 55)
+Noise budget after decryption: 3 (max noise: 51)
+L=16 g=128 leaf=48879 chunks=2 path server time 640.728 ms, small_q response: yes
+Noise budget after decryption: 3 (max noise: 55)
+Noise budget after decryption: 3 (max noise: 45)
+L=16 g=128 leaf=4609 chunks=2 path server time 389.88 ms, small_q response: yes
+Noise budget after decryption: 3 (max noise: 63)
+Noise budget after decryption: 3 (max noise: 48)
+Noise budget after decryption: 3 (max noise: 51)
+Noise budget after decryption: 3 (max noise: 45)
+Running test: tree_g32
+==============================================================================
+                    test_tree_g32(Benchmark build)
+==============================================================================
+Noise budget after decryption: 3 (max noise: 41)
+Noise budget after decryption: 3 (max noise: 42)
+Noise budget after decryption: 3 (max noise: 39)
+Noise budget after decryption: 3 (max noise: 56)
+Noise budget after decryption: 3 (max noise: 53)
+Noise budget after decryption: 3 (max noise: 48)
+Noise budget after decryption: 3 (max noise: 36)
+Noise budget after decryption: 3 (max noise: 41)
+Noise budget after decryption: 3 (max noise: 38)
+Running test: tree_compress
+==============================================================================
+                    test_tree_compress(Benchmark build)
+==============================================================================
+Compressed-response noise: max 45 of bound 508
+Noise budget after decryption: 3 (max noise: 58)
+Compressed-response noise: max 46 of bound 508
+Noise budget after decryption: 3 (max noise: 56)
+Compressed-response noise: max 45 of bound 508
+Noise budget after decryption: 3 (max noise: 47)
+response bytes: plain 11264 -> compressed 5632 (payload 480 B)
+Noise budget after decryption: 3 (max noise: 46)
+Compressed-response noise: max 40 of bound 508
+Running test: merkle_baseline
+Running test: merkle_benchmark_stats
+DB gen+NTT+realign: 0 ms
+Noise budget after decryption: 3 (max noise: 35)
+Noise budget after decryption: 3 (max noise: 36)
+DB gen+NTT+realign: 0 ms
+Noise budget after decryption: 3 (max noise: 36)
+Noise budget after decryption: 3 (max noise: 32)
+Noise budget after decryption: 3 (max noise: 38)
+Noise budget after decryption: 3 (max noise: 39)
+Noise budget after decryption: 3 (max noise: 40)
+Noise budget after decryption: 3 (max noise: 36)
+Noise budget after decryption: 3 (max noise: 35)
+Noise budget after decryption: 3 (max noise: 41)
+Noise budget after decryption: 3 (max noise: 51)
+Noise budget after decryption: 3 (max noise: 35)
+Noise budget after decryption: 3 (max noise: 36)
+Noise budget after decryption: 3 (max noise: 36)
+Noise budget after decryption: 3 (max noise: 38)
+Noise budget after decryption: 3 (max noise: 36)
+Noise budget after decryption: 3 (max noise: 39)
+Noise budget after decryption: 3 (max noise: 45)
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 0 ms
+Noise budget after decryption: 3 (max noise: 33)
+Noise budget after decryption: 3 (max noise: 39)
+Noise budget after decryption: 3 (max noise: 39)
+Noise budget after decryption: 3 (max noise: 33)
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 0 ms
+Noise budget after decryption: 3 (max noise: 38)
+Noise budget after decryption: 3 (max noise: 37)
+Noise budget after decryption: 3 (max noise: 35)
+Noise budget after decryption: 3 (max noise: 38)
+x86_64 + Intel HEXL under Rosetta 2 on Apple M4; non-native result
+case,correct,server_ms,paper_MBps,paper_scan_MBps,padded_scan_MBps,online_bytes,first_session_bytes
+merkle_flat,true,250,4096.01,98304.2,98352,26144,1514144
+case,expand_ms,convert_ms,first_dim_ms,other_dim_ms,mod_switch_ms
+merkle_flat,0,0,0,0,0
+This run is not the frozen Apple M4 Rosetta benchmark environment
+case,correct,server_ms,paper_MBps,paper_scan_MBps,padded_scan_MBps,online_bytes,first_session_bytes
+merkle_layerwise,true,1.59058,11.627,11.627,13.4689,56320,711040
+case,expand_ms,convert_ms,first_dim_ms,other_dim_ms,mod_switch_ms
+merkle_layerwise,0.619687,0.000167,0.236853,0.0016255,0.729541
+merkle_layerwise layout policy legacy: 12 padded plaintexts, heights 0 0 0 0 0 0 1 2
+optional 4 GB: not_requested (optional 4 GB run flag was not set)
+Running test: layer_layout_planner
+==============================================================================
+                    test_layer_layout_planner(Benchmark build)
+==============================================================================
+Running test: merkle_integration
+DB gen+NTT+realign: 0 ms
+Noise budget after decryption: 3 (max noise: 39)
+Noise budget after decryption: 3 (max noise: 34)
+Noise budget after decryption: 3 (max noise: 41)
+DB gen+NTT+realign: 0 ms
+Noise budget after decryption: 3 (max noise: 40)
+Noise budget after decryption: 3 (max noise: 39)
+Noise budget after decryption: 3 (max noise: 42)
+Noise budget after decryption: 3 (max noise: 39)
+Noise budget after decryption: 3 (max noise: 35)
+Noise budget after decryption: 3 (max noise: 43)
+Noise budget after decryption: 3 (max noise: 36)
+Noise budget after decryption: 3 (max noise: 38)
+Noise budget after decryption: 3 (max noise: 37)
+Noise budget after decryption: 3 (max noise: 34)
+Noise budget after decryption: 3 (max noise: 37)
+Noise budget after decryption: 3 (max noise: 39)
+Noise budget after decryption: 3 (max noise: 42)
+Noise budget after decryption: 3 (max noise: 35)
+Noise budget after decryption: 3 (max noise: 45)
+Noise budget after decryption: 3 (max noise: 42)
+Noise budget after decryption: 3 (max noise: 42)
+Noise budget after decryption: 3 (max noise: 41)
+Noise budget after decryption: 3 (max noise: 41)
+Noise budget after decryption: 3 (max noise: 47)
+Noise budget after decryption: 3 (max noise: 38)
+Noise budget after decryption: 3 (max noise: 45)
+Noise budget after decryption: 3 (max noise: 36)
+Noise budget after decryption: 3 (max noise: 38)
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 0 ms
+Noise budget after decryption: 3 (max noise: 39)
+Noise budget after decryption: 3 (max noise: 42)
+Noise budget after decryption: 3 (max noise: 39)
+Noise budget after decryption: 3 (max noise: 38)
+Noise budget after decryption: 3 (max noise: 36)
+Noise budget after decryption: 3 (max noise: 37)
+DB gen+NTT+realign: 0 ms
+Noise budget after decryption: 3 (max noise: 38)
+Noise budget after decryption: 3 (max noise: 40)
+Noise budget after decryption: 3 (max noise: 36)
+layer 7 h=1 N0=2 Nrest=1 num_pt=2: median 0.610916 ms
+DB gen+NTT+realign: 0 ms
+Noise budget after decryption: 3 (max noise: 39)
+Noise budget after decryption: 3 (max noise: 41)
+Noise budget after decryption: 3 (max noise: 43)
+layer 8 h=2 N0=4 Nrest=1 num_pt=4: median 0.973563 ms
+layer layout sweep: legacy padded plaintexts 12, selected 12, predicted server ms legacy 1.58448 -> selected 1.58448
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 0 ms
+Noise budget after decryption: 3 (max noise: 42)
+Noise budget after decryption: 3 (max noise: 38)
+Noise budget after decryption: 3 (max noise: 38)
+Noise budget after decryption: 3 (max noise: 33)
+Noise budget after decryption: 3 (max noise: 39)
+Noise budget after decryption: 3 (max noise: 33)
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 0 ms
+Noise budget after decryption: 3 (max noise: 48)
+Noise budget after decryption: 3 (max noise: 37)
+Noise budget after decryption: 3 (max noise: 42)
+Noise budget after decryption: 3 (max noise: 37)
+Noise budget after decryption: 3 (max noise: 42)
+Noise budget after decryption: 3 (max noise: 39)
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 0 ms
+Noise budget after decryption: 3 (max noise: 37)
+Noise budget after decryption: 3 (max noise: 38)
+Noise budget after decryption: 3 (max noise: 37)
+Noise budget after decryption: 3 (max noise: 42)
+Noise budget after decryption: 3 (max noise: 40)
+Noise budget after decryption: 3 (max noise: 33)
+DB gen+NTT+realign: 19 ms
+Noise budget after decryption: 3 (max noise: 54)
+Noise budget after decryption: 3 (max noise: 54)
+Noise budget after decryption: 2 (max noise: 64)
+Noise budget after decryption: 3 (max noise: 58)
+Noise budget after decryption: 3 (max noise: 61)
+Noise budget after decryption: 3 (max noise: 56)
+Noise budget after decryption: 2 (max noise: 65)
+Noise budget after decryption: 3 (max noise: 58)
+Noise budget after decryption: 3 (max noise: 53)
+Noise budget after decryption: 3 (max noise: 53)
+Noise budget after decryption: 2 (max noise: 64)
+Noise budget after decryption: 3 (max noise: 62)
+Noise budget after decryption: 3 (max noise: 62)
+Noise budget after decryption: 3 (max noise: 57)
+Noise budget after decryption: 3 (max noise: 51)
+Noise budget after decryption: 3 (max noise: 63)
+Noise budget after decryption: 2 (max noise: 65)
+Noise budget after decryption: 2 (max noise: 66)
+Noise budget after decryption: 3 (max noise: 51)
+Noise budget after decryption: 3 (max noise: 56)
+Noise budget after decryption: 3 (max noise: 52)
+Noise budget after decryption: 3 (max noise: 55)
+Noise budget after decryption: 2 (max noise: 67)
+Noise budget after decryption: 3 (max noise: 63)
+Noise budget after decryption: 3 (max noise: 52)
+Noise budget after decryption: 3 (max noise: 63)
+Noise budget after decryption: 3 (max noise: 50)
+Noise budget after decryption: 3 (max noise: 55)
+Noise budget after decryption: 3 (max noise: 56)
+Noise budget after decryption: 3 (max noise: 58)
+Noise budget after decryption: 3 (max noise: 58)
+Noise budget after decryption: 3 (max noise: 55)
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 1 ms
+DB gen+NTT+realign: 2 ms
+DB gen+NTT+realign: 4 ms
+DB gen+NTT+realign: 10 ms
+Noise budget after decryption: 3 (max noise: 63)
+Noise budget after decryption: 3 (max noise: 41)
+Noise budget after decryption: 3 (max noise: 38)
+Noise budget after decryption: 3 (max noise: 44)
+Noise budget after decryption: 3 (max noise: 47)
+Noise budget after decryption: 3 (max noise: 44)
+Noise budget after decryption: 3 (max noise: 46)
+Noise budget after decryption: 3 (max noise: 36)
+Noise budget after decryption: 3 (max noise: 36)
+Noise budget after decryption: 3 (max noise: 37)
+Noise budget after decryption: 3 (max noise: 51)
+Noise budget after decryption: 3 (max noise: 45)
+Noise budget after decryption: 3 (max noise: 45)
+Noise budget after decryption: 3 (max noise: 39)
+Noise budget after decryption: 3 (max noise: 46)
+Noise budget after decryption: 3 (max noise: 40)
+Noise budget after decryption: 3 (max noise: 49)
+Noise budget after decryption: 3 (max noise: 43)
+Noise budget after decryption: 3 (max noise: 37)
+Noise budget after decryption: 3 (max noise: 40)
+DB gen+NTT+realign: 0 ms
+Noise budget after decryption: 3 (max noise: 38)
+Noise budget after decryption: 3 (max noise: 40)
+Noise budget after decryption: 3 (max noise: 40)
+layer 7 h=1 N0=2 Nrest=1 num_pt=2: median 0.622792 ms
+DB gen+NTT+realign: 0 ms
+Noise budget after decryption: 3 (max noise: 35)
+Noise budget after decryption: 3 (max noise: 33)
+Noise budget after decryption: 3 (max noise: 34)
+layer 8 h=2 N0=4 Nrest=1 num_pt=4: median 1.02371 ms
+DB gen+NTT+realign: 0 ms
+Noise budget after decryption: 3 (max noise: 36)
+Noise budget after decryption: 3 (max noise: 39)
+Noise budget after decryption: 3 (max noise: 44)
+layer 9 h=3 N0=8 Nrest=1 num_pt=8: median 1.69171 ms
+DB gen+NTT+realign: 0 ms
+Noise budget after decryption: 3 (max noise: 36)
+Noise budget after decryption: 3 (max noise: 41)
+Noise budget after decryption: 3 (max noise: 43)
+layer 10 h=4 N0=16 Nrest=1 num_pt=16: median 2.91592 ms
+DB gen+NTT+realign: 0 ms
+Noise budget after decryption: 3 (max noise: 37)
+Noise budget after decryption: 3 (max noise: 38)
+Noise budget after decryption: 3 (max noise: 36)
+layer 11 h=5 N0=32 Nrest=1 num_pt=32: median 5.70998 ms
+DB gen+NTT+realign: 0 ms
+Noise budget after decryption: 3 (max noise: 38)
+Noise budget after decryption: 3 (max noise: 38)
+Noise budget after decryption: 3 (max noise: 43)
+layer 12 h=5 N0=16 Nrest=3 num_pt=48: median 9.02206 ms
+DB gen+NTT+realign: 0 ms
+Noise budget after decryption: 3 (max noise: 51)
+Noise budget after decryption: 3 (max noise: 42)
+Noise budget after decryption: 3 (max noise: 41)
+layer 12 h=6 N0=64 Nrest=1 num_pt=64: median 11.6754 ms
+DB gen+NTT+realign: 1 ms
+Noise budget after decryption: 3 (max noise: 37)
+Noise budget after decryption: 3 (max noise: 41)
+Noise budget after decryption: 3 (max noise: 46)
+layer 13 h=5 N0=8 Nrest=11 num_pt=88: median 14.8727 ms
+DB gen+NTT+realign: 1 ms
+Noise budget after decryption: 3 (max noise: 48)
+Noise budget after decryption: 3 (max noise: 34)
+Noise budget after decryption: 3 (max noise: 39)
+layer 13 h=6 N0=32 Nrest=3 num_pt=96: median 11.9221 ms
+DB gen+NTT+realign: 2 ms
+Noise budget after decryption: 3 (max noise: 41)
+Noise budget after decryption: 3 (max noise: 42)
+Noise budget after decryption: 3 (max noise: 43)
+layer 14 h=6 N0=32 Nrest=6 num_pt=192: median 15.8327 ms
+DB gen+NTT+realign: 5 ms
+Noise budget after decryption: 3 (max noise: 42)
+Noise budget after decryption: 3 (max noise: 49)
+Noise budget after decryption: 3 (max noise: 48)
+layer 15 h=6 N0=32 Nrest=11 num_pt=352: median 21.6225 ms
+DB gen+NTT+realign: 9 ms
+Noise budget after decryption: 3 (max noise: 40)
+Noise budget after decryption: 3 (max noise: 43)
+Noise budget after decryption: 3 (max noise: 47)
+layer 16 h=6 N0=32 Nrest=22 num_pt=704: median 26.919 ms
+layer layout sweep: legacy padded plaintexts 1452, selected 1460, predicted server ms legacy 100.233 -> selected 97.2825
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 1 ms
+DB gen+NTT+realign: 2 ms
+DB gen+NTT+realign: 4 ms
+DB gen+NTT+realign: 9 ms
+Noise budget after decryption: 3 (max noise: 46)
+Noise budget after decryption: 3 (max noise: 41)
+Noise budget after decryption: 3 (max noise: 44)
+Noise budget after decryption: 3 (max noise: 41)
+Noise budget after decryption: 3 (max noise: 36)
+Noise budget after decryption: 3 (max noise: 36)
+Noise budget after decryption: 3 (max noise: 37)
+Noise budget after decryption: 3 (max noise: 41)
+Noise budget after decryption: 3 (max noise: 40)
+Noise budget after decryption: 3 (max noise: 37)
+Noise budget after decryption: 3 (max noise: 48)
+Noise budget after decryption: 3 (max noise: 45)
+Noise budget after decryption: 3 (max noise: 46)
+Noise budget after decryption: 3 (max noise: 38)
+Noise budget after decryption: 3 (max noise: 36)
+Noise budget after decryption: 3 (max noise: 37)
+Noise budget after decryption: 3 (max noise: 34)
+Noise budget after decryption: 3 (max noise: 42)
+Noise budget after decryption: 3 (max noise: 36)
+Noise budget after decryption: 3 (max noise: 37)
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 1 ms
+DB gen+NTT+realign: 2 ms
+DB gen+NTT+realign: 4 ms
+DB gen+NTT+realign: 9 ms
+Noise budget after decryption: 3 (max noise: 47)
+Noise budget after decryption: 3 (max noise: 48)
+Noise budget after decryption: 3 (max noise: 46)
+Noise budget after decryption: 3 (max noise: 38)
+Noise budget after decryption: 3 (max noise: 38)
+Noise budget after decryption: 3 (max noise: 36)
+Noise budget after decryption: 3 (max noise: 38)
+Noise budget after decryption: 3 (max noise: 46)
+Noise budget after decryption: 3 (max noise: 40)
+Noise budget after decryption: 4 (max noise: 31)
+Noise budget after decryption: 3 (max noise: 53)
+Noise budget after decryption: 3 (max noise: 46)
+Noise budget after decryption: 3 (max noise: 43)
+Noise budget after decryption: 3 (max noise: 40)
+Noise budget after decryption: 3 (max noise: 41)
+Noise budget after decryption: 3 (max noise: 38)
+Noise budget after decryption: 3 (max noise: 36)
+Noise budget after decryption: 3 (max noise: 34)
+Noise budget after decryption: 3 (max noise: 35)
+Noise budget after decryption: 3 (max noise: 39)
+DB gen+NTT+realign: 0 ms
+Noise budget after decryption: 3 (max noise: 35)
+DB gen+NTT+realign: 0 ms
+Noise budget after decryption: 3 (max noise: 36)
+Noise budget after decryption: 3 (max noise: 37)
+Noise budget after decryption: 3 (max noise: 43)
+Noise budget after decryption: 3 (max noise: 40)
+Noise budget after decryption: 3 (max noise: 36)
+Noise budget after decryption: 3 (max noise: 38)
+Noise budget after decryption: 3 (max noise: 44)
+Noise budget after decryption: 3 (max noise: 36)
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 0 ms
+Noise budget after decryption: 3 (max noise: 41)
+Noise budget after decryption: 3 (max noise: 39)
+This run is not the frozen Apple M4 Rosetta benchmark environment
+case,correct,server_ms,paper_MBps,paper_scan_MBps,padded_scan_MBps,online_bytes,first_session_bytes
+standard_onionpir,true,1.69992,10.3406,10.3406,13.7874,26144,680864
+merkle_flat,true,13.1281,1.33897,10.7118,14.2824,209152,863872
+merkle_layerwise,true,1.58696,11.6535,11.6535,13.4996,56320,711040
+case,expand_ms,convert_ms,first_dim_ms,other_dim_ms,mod_switch_ms
+standard_onionpir,1.10117,0.000125,0.227875,0.000916,0.368584
+merkle_flat,8.46646,0.000628,1.71071,0.006958,2.93367
+merkle_layerwise,0.623542,0.000125,0.227999,0.001625,0.731
+merkle_layerwise layout policy profiled: 12 padded plaintexts, heights 0 0 0 0 0 0 1 2
+optional 4 GB: not_requested (optional 4 GB run flag was not set)
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 0 ms
+Noise budget after decryption: 3 (max noise: 36)
+Noise budget after decryption: 3 (max noise: 44)
+Running test: cuckoo_batch
+==============================================================================
+                    test_cuckoo_batch(Benchmark build)
+==============================================================================
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 0 ms
+Noise budget after decryption: 3 (max noise: 37)
+Noise budget after decryption: 3 (max noise: 37)
+Noise budget after decryption: 3 (max noise: 41)
+Noise budget after decryption: 3 (max noise: 41)
+Noise budget after decryption: 3 (max noise: 42)
+Noise budget after decryption: 3 (max noise: 35)
+Noise budget after decryption: 3 (max noise: 40)
+Noise budget after decryption: 3 (max noise: 39)
+Noise budget after decryption: 3 (max noise: 40)
+Noise budget after decryption: 3 (max noise: 36)
+Noise budget after decryption: 3 (max noise: 44)
+Noise budget after decryption: 3 (max noise: 34)
+Noise budget after decryption: 3 (max noise: 42)
+Noise budget after decryption: 3 (max noise: 43)
+Noise budget after decryption: 3 (max noise: 38)
+Noise budget after decryption: 3 (max noise: 40)
+Noise budget after decryption: 3 (max noise: 38)
+Noise budget after decryption: 3 (max noise: 41)
+Noise budget after decryption: 3 (max noise: 46)
+Noise budget after decryption: 3 (max noise: 34)
+Noise budget after decryption: 3 (max noise: 36)
+Noise budget after decryption: 3 (max noise: 41)
+Noise budget after decryption: 3 (max noise: 34)
+Noise budget after decryption: 3 (max noise: 36)
+Noise budget after decryption: 3 (max noise: 35)
+Noise budget after decryption: 3 (max noise: 38)
+Noise budget after decryption: 3 (max noise: 36)
+Noise budget after decryption: 3 (max noise: 39)
+Noise budget after decryption: 3 (max noise: 37)
+Noise budget after decryption: 3 (max noise: 35)
+Noise budget after decryption: 3 (max noise: 41)
+Noise budget after decryption: 3 (max noise: 38)
+Noise budget after decryption: 3 (max noise: 36)
+Noise budget after decryption: 3 (max noise: 36)
+Noise budget after decryption: 3 (max noise: 40)
+Noise budget after decryption: 3 (max noise: 39)
+Noise budget after decryption: 3 (max noise: 39)
+Noise budget after decryption: 3 (max noise: 35)
+Noise budget after decryption: 3 (max noise: 33)
+Noise budget after decryption: 3 (max noise: 42)
+Noise budget after decryption: 3 (max noise: 38)
+Noise budget after decryption: 3 (max noise: 34)
+Noise budget after decryption: 3 (max noise: 33)
+Noise budget after decryption: 3 (max noise: 36)
+Noise budget after decryption: 3 (max noise: 41)
+Noise budget after decryption: 3 (max noise: 39)
+Noise budget after decryption: 3 (max noise: 37)
+Noise budget after decryption: 3 (max noise: 35)
+Noise budget after decryption: 3 (max noise: 36)
+Noise budget after decryption: 3 (max noise: 38)
+Noise budget after decryption: 3 (max noise: 42)
+Noise budget after decryption: 3 (max noise: 37)
+Noise budget after decryption: 3 (max noise: 37)
+Noise budget after decryption: 3 (max noise: 41)
+Noise budget after decryption: 3 (max noise: 39)
+Noise budget after decryption: 3 (max noise: 34)
+Noise budget after decryption: 3 (max noise: 38)
+Noise budget after decryption: 3 (max noise: 36)
+Noise budget after decryption: 3 (max noise: 35)
+Noise budget after decryption: 3 (max noise: 37)
+Noise budget after decryption: 3 (max noise: 46)
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 0 ms
+Noise budget after decryption: 3 (max noise: 40)
+Noise budget after decryption: 3 (max noise: 33)
+Noise budget after decryption: 3 (max noise: 43)
+Noise budget after decryption: 3 (max noise: 40)
+Noise budget after decryption: 3 (max noise: 44)
+Noise budget after decryption: 3 (max noise: 34)
+Noise budget after decryption: 3 (max noise: 38)
+Noise budget after decryption: 3 (max noise: 37)
+Noise budget after decryption: 3 (max noise: 35)
+Noise budget after decryption: 3 (max noise: 37)
+Noise budget after decryption: 3 (max noise: 36)
+Noise budget after decryption: 3 (max noise: 38)
+Noise budget after decryption: 3 (max noise: 36)
+Noise budget after decryption: 3 (max noise: 34)
+Noise budget after decryption: 3 (max noise: 36)
+Noise budget after decryption: 3 (max noise: 40)
+Noise budget after decryption: 3 (max noise: 43)
+Noise budget after decryption: 3 (max noise: 42)
+Noise budget after decryption: 3 (max noise: 35)
+Noise budget after decryption: 3 (max noise: 38)
+Running test: tree_superrecord_codec
+==============================================================================
+                    test_tree_superrecord_codec(Benchmark build)
+==============================================================================
+codec round trips: 48 (E x (h, G) shapes)
+codec oracle boundary cases: 15
+codec repeated encode old_us=7019 public_us=1478 repeats=4096
+Running test: tree_superrecord_planner
+==============================================================================
+                    test_tree_superrecord_planner(Benchmark build)
+==============================================================================
+E=256, N=2^24: 826 candidates, frontier 342, best predicted: E=256 N=2^24 h=3 G=64 P=1 rho=32 m=23 b=8 N0=683(align 1) width=821 h_q=10 keys req/reg=10/11 resp=1 scan=5464 MiB folds=502 rot=105 proj=105 util=1 pred=2026.45 ms
+Running test: tree_superrecord_index
+==============================================================================
+                    test_tree_superrecord_index(Benchmark build)
+==============================================================================
+shape E=13 N=64 h=3 G=2 b=0: E=13 N=2^6 h=3 G=2 P=2 rho=1024 m=5 b=0 N0=1(align 1) width=31 h_q=5 keys req/reg=5/11 resp=1 scan=0 MiB folds=0 rot=0 proj=0 util=0
+shape E=256 N=256 h=3 G=64 b=1: E=256 N=2^8 h=3 G=64 P=1 rho=32 m=7 b=1 N0=2(align 1) width=44 h_q=6 keys req/reg=6/11 resp=1 scan=0 MiB folds=0 rot=0 proj=0 util=0
+shape E=256 N=1024 h=3 G=64 b=2: E=256 N=2^10 h=3 G=64 P=1 rho=32 m=9 b=2 N0=3(align 1) width=57 h_q=6 keys req/reg=6/11 resp=1 scan=0 MiB folds=0 rot=0 proj=0 util=0
+shape E=13 N=8 h=8 G=4 b=0: E=13 N=2^3 h=8 G=4 P=3 rho=512 m=0 b=0 N0=1(align 1) width=1 h_q=5 keys req/reg=5/11 resp=1 scan=0 MiB folds=0 rot=0 proj=0 util=0
+shape E=40 N=128 h=5 G=8 b=0: E=40 N=2^7 h=5 G=8 P=3 rho=256 m=5 b=0 N0=1(align 1) width=31 h_q=5 keys req/reg=5/11 resp=1 scan=0 MiB folds=0 rot=0 proj=0 util=0
+shape E=4096 N=16 h=1 G=256 b=0: E=4096 N=2^4 h=1 G=256 P=2 rho=8 m=4 b=0 N0=2(align 1) width=26 h_q=5 keys req/reg=5/11 resp=2 scan=0 MiB folds=0 rot=0 proj=0 util=0
+shape E=30000 N=16 h=1 G=2048 b=2: E=30000 N=2^4 h=1 G=2048 P=2 rho=1 m=4 b=2 N0=4(align 1) width=28 h_q=5 keys req/reg=5/11 resp=10 scan=0 MiB folds=0 rot=0 proj=0 util=0
+Running test: tree_superrecord_e2e
+==============================================================================
+                    test_tree_superrecord_e2e(Benchmark build)
+==============================================================================
+E=13 N=64 h=3 G=2 b=0 N0=1 m=5 chunks=1 leaves=7 min budget 3 bits
+E=256 N=256 h=3 G=64 b=0 N0=3 m=7 chunks=1 leaves=11 min budget 3 bits
+E=256 N=1024 h=3 G=64 b=2 N0=3 m=9 chunks=1 leaves=11 min budget 3 bits
+E=13 N=8 h=8 G=4 b=0 N0=1 m=0 chunks=1 leaves=2 min budget 3 bits
+E=40 N=128 h=5 G=8 b=0 N0=1 m=5 chunks=1 leaves=7 min budget 3 bits
+E=4096 N=16 h=1 G=256 b=0 N0=2 m=4 chunks=2 leaves=6 min budget 3 bits
+E=30000 N=16 h=1 G=2048 b=2 N0=4 m=4 chunks=10 leaves=4 min budget 3 bits
+Running test: tree_superrecord_noise
+==============================================================================
+                    test_tree_superrecord_noise(Benchmark build)
+==============================================================================
+Running test: tree_superrecord_kernel
+==============================================================================
+                    test_tree_superrecord_kernel(Benchmark build)
+==============================================================================
+super-record reference old_us=725 optimized_us=771 rows=2 cols=6
+bounded-matrix reference old_us=243636 optimized_us=73546 rows=16 cols=342
+Regression suite: 39/39 applicable tests passed

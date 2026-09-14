@@ -1,0 +1,115 @@
+Running test: tree_compress_bench
+==============================================================================
+                    test_tree_compress_benchmark(Benchmark build)
+==============================================================================
+Compressed-response noise: max 160 of bound 508
+Compressed-response noise: max 210 of bound 508
+Compressed-response noise: max 182 of bound 508
+Compressed-response noise: max 165 of bound 508
+Compressed-response noise: max 147 of bound 508
+Compressed-response noise: max 158 of bound 508
+Compressed-response noise: max 128 of bound 508
+Compressed-response noise: max 186 of bound 508
+Compressed-response noise: max 152 of bound 508
+Compressed-response noise: max 152 of bound 508
+Compressed-response noise: max 158 of bound 508
+Compressed-response noise: max 161 of bound 508
+Compressed-response noise: max 141 of bound 508
+Compressed-response noise: max 187 of bound 508
+Compressed-response noise: max 138 of bound 508
+Compressed-response noise: max 152 of bound 508
+Compressed-response noise: max 183 of bound 508
+Compressed-response noise: max 142 of bound 508
+Compressed-response noise: max 162 of bound 508
+Compressed-response noise: max 220 of bound 508
+Compressed-response noise: max 137 of bound 508
+Compressed-response noise: max 188 of bound 508
+Compressed-response noise: max 158 of bound 508
+Compressed-response noise: max 191 of bound 508
+Compressed-response noise: max 149 of bound 508
+Compressed-response noise: max 162 of bound 508
+Compressed-response noise: max 134 of bound 508
+Compressed-response noise: max 168 of bound 508
+Compressed-response noise: max 159 of bound 508
+Compressed-response noise: max 168 of bound 508
+Compressed-response noise: max 152 of bound 508
+Compressed-response noise: max 159 of bound 508
+Compressed-response noise: max 203 of bound 508
+Compressed-response noise: max 157 of bound 508
+Compressed-response noise: max 195 of bound 508
+Compressed-response noise: max 168 of bound 508
+Compressed-response noise: max 148 of bound 508
+Compressed-response noise: max 181 of bound 508
+Compressed-response noise: max 150 of bound 508
+Compressed-response noise: max 157 of bound 508
+Compressed-response noise: max 151 of bound 508
+Compressed-response noise: max 142 of bound 508
+Compressed-response noise: max 188 of bound 508
+Compressed-response noise: max 155 of bound 508
+Compressed-response noise: max 202 of bound 508
+Compressed-response noise: max 167 of bound 508
+Compressed-response noise: max 155 of bound 508
+Compressed-response noise: max 175 of bound 508
+Compressed-response noise: max 167 of bound 508
+Compressed-response noise: max 171 of bound 508
+Compressed-response noise: max 171 of bound 508
+Compressed-response noise: max 154 of bound 508
+Compressed-response noise: max 194 of bound 508
+Compressed-response noise: max 238 of bound 508
+Compressed-response noise: max 173 of bound 508
+Compressed-response noise: max 192 of bound 508
+Compressed-response noise: max 180 of bound 508
+Compressed-response noise: max 183 of bound 508
+Compressed-response noise: max 141 of bound 508
+Compressed-response noise: max 190 of bound 508
+Compressed-response noise: max 138 of bound 508
+Compressed-response noise: max 167 of bound 508
+Compressed-response noise: max 182 of bound 508
+Compressed-response noise: max 168 of bound 508
+Compressed-response noise: max 166 of bound 508
+Compressed-response noise: max 149 of bound 508
+Compressed-response noise: max 174 of bound 508
+Compressed-response noise: max 187 of bound 508
+Compressed-response noise: max 173 of bound 508
+Compressed-response noise: max 170 of bound 508
+Compressed-response noise: max 143 of bound 508
+Compressed-response noise: max 158 of bound 508
+Compressed-response noise: max 121 of bound 508
+Compressed-response noise: max 238 of bound 508
+Compressed-response noise: max 140 of bound 508
+Compressed-response noise: max 175 of bound 508
+Compressed-response noise: max 142 of bound 508
+Compressed-response noise: max 167 of bound 508
+Compressed-response noise: max 152 of bound 508
+Compressed-response noise: max 167 of bound 508
+Compressed-response noise: max 165 of bound 508
+Compressed-response noise: max 130 of bound 508
+Compressed-response noise: max 190 of bound 508
+Compressed-response noise: max 147 of bound 508
+Compressed-response noise: max 169 of bound 508
+Compressed-response noise: max 176 of bound 508
+Compressed-response noise: max 197 of bound 508
+Compressed-response noise: max 159 of bound 508
+Compressed-response noise: max 162 of bound 508
+Compressed-response noise: max 144 of bound 508
+Compressed-response noise: max 168 of bound 508
+Compressed-response noise: max 174 of bound 508
+Compressed-response noise: max 172 of bound 508
+Compressed-response noise: max 209 of bound 508
+Compressed-response noise: max 174 of bound 508
+Compressed-response noise: max 201 of bound 508
+Compressed-response noise: max 145 of bound 508
+Compressed-response noise: max 162 of bound 508
+Compressed-response noise: max 143 of bound 508
+Compressed-response noise: max 141 of bound 508
+Compressed-response noise: max 171 of bound 508
+Compressed-response noise: max 181 of bound 508
+Compressed-response noise: max 169 of bound 508
+tree compressed 32-byte-node benchmark: N=2^27 leaves, g=32, N0=512, b=12, rho=64, h_q=10, setup 1.00643e+06 ms
+trials: 100 measured after 3 warmup
+client query avg 0.21556 ms
+server unpack (expand+convert) avg 236.444 ms
+server compressed path avg 18759.6 ms
+server total avg 18996.1 ms
+client compressed decode avg 1.55206 ms
+communication: compressed response 16656 B (struct wire model)

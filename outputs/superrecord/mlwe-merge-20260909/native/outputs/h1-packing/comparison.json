@@ -1,0 +1,194 @@
+{
+  "state": "complete",
+  "completed_labels": [
+    "projection",
+    "mlwe"
+  ],
+  "failed_runs": [],
+  "rejected_labels": {},
+  "layout": {
+    "entry_bits": 256,
+    "leaf_count": 16777216,
+    "bundle_arity": 1,
+    "record_coeffs": 8,
+    "plane_count": 3,
+    "records_per_plaintext": 256,
+    "N0": 512,
+    "beta_bits": 7,
+    "expansion_height": 10
+  },
+  "summary": {
+    "projection": {
+      "completed_samples": 100,
+      "server_total_ms_mean": 965.70676471,
+      "rotation_projection_ms_mean": 99.78093535,
+      "response_processing_ms_mean": 100.17794158999999,
+      "stages_ms_mean": {
+        "complete": 14.29480876,
+        "expand": 76.28001535,
+        "finalize": 50.40391206,
+        "fold": 50.284782590000006,
+        "merge": 0.0,
+        "pack": 0.39700623999999995,
+        "prepare": 39.82816089,
+        "project": 63.24464425,
+        "rotate": 36.5362911,
+        "scan": 634.10348521,
+        "switch": 0.09601381999999999
+      },
+      "packing": "projection",
+      "counter_metadata": {
+        "response_merge_keyswitches_mean": 0.0
+      },
+      "wire": {
+        "modeled_seeded_query_bytes": 14880,
+        "actual_query_wire_bytes": null,
+        "actual_response_ciphertext_payload_bytes": 11264
+      },
+      "key_metadata": {
+        "required_key_height": 10,
+        "registered_key_height": 11,
+        "scheme_registered_session_key_height": 11
+      },
+      "gadget_metadata": {
+        "label": "generic-h1-mandatory-0",
+        "response_packing": "projection",
+        "gadget_identity": {
+          "selector_gadget_rows": 2,
+          "selector_base_log2": 12,
+          "selector_low_bits": 36,
+          "completion_key_gadget_rows": 10,
+          "completion_key_base_log2": 6,
+          "bv_ks_rows": 8,
+          "bv_ks_base_log2": 8,
+          "bv_ks_low_bits": 0
+        },
+        "query_width": 560,
+        "eval_key_bytes": {
+          "modeled_per_client_eval_key_bytes": 1607040,
+          "eval_key_coefficient_payload_bytes_estimate": 3538944
+        },
+        "wire": {
+          "modeled_seeded_query_bytes": 14880,
+          "actual_query_wire_bytes": null,
+          "actual_response_ciphertext_payload_bytes": 11264
+        },
+        "key_metadata": {
+          "required_key_height": 10,
+          "registered_key_height": 11,
+          "scheme_registered_session_key_height": 11
+        }
+      },
+      "process_records": [
+        {
+          "exit_code": 0,
+          "elapsed_seconds": 163.8215543559927,
+          "process_peak_rss_bytes": 9698181120,
+          "ru_maxrss_unit": "KiB",
+          "peak_scope": "single benchmark child process; includes setup, calibration and all candidates",
+          "cgroup_memory_peak_bytes": null,
+          "cgroup_peak_scope": "shared cgroup cumulative peak, when available",
+          "path": "/users/zcy05331/generic-mlwe-merge-20260909/outputs/h1-packing/round0-projection-process.json",
+          "raw": "/users/zcy05331/generic-mlwe-merge-20260909/outputs/h1-packing/round0-projection.json"
+        },
+        {
+          "exit_code": 0,
+          "elapsed_seconds": 164.0756859429821,
+          "process_peak_rss_bytes": 9698246656,
+          "ru_maxrss_unit": "KiB",
+          "peak_scope": "single benchmark child process; includes setup, calibration and all candidates",
+          "cgroup_memory_peak_bytes": null,
+          "cgroup_peak_scope": "shared cgroup cumulative peak, when available",
+          "path": "/users/zcy05331/generic-mlwe-merge-20260909/outputs/h1-packing/round1-projection-process.json",
+          "raw": "/users/zcy05331/generic-mlwe-merge-20260909/outputs/h1-packing/round1-projection.json"
+        }
+      ]
+    },
+    "mlwe": {
+      "completed_samples": 100,
+      "server_total_ms_mean": 894.7711674300001,
+      "rotation_projection_ms_mean": 36.18797157,
+      "response_processing_ms_mean": 46.92284775,
+      "stages_ms_mean": {
+        "complete": 14.33187216,
+        "expand": 76.41146877999999,
+        "finalize": 51.7963202,
+        "fold": 50.34788724,
+        "merge": 10.73487618,
+        "pack": 0.0,
+        "prepare": 39.49620063,
+        "project": 0.0,
+        "rotate": 36.18797157,
+        "scan": 615.12971051,
+        "switch": 0.09572053
+      },
+      "packing": "mlwe",
+      "counter_metadata": {
+        "response_merge_keyswitches_mean": 79.0
+      },
+      "wire": {
+        "modeled_seeded_query_bytes": 14880,
+        "actual_query_wire_bytes": null,
+        "actual_response_ciphertext_payload_bytes": 11264
+      },
+      "key_metadata": {
+        "required_key_height": 10,
+        "registered_key_height": 11,
+        "scheme_registered_session_key_height": 11
+      },
+      "gadget_metadata": {
+        "label": "generic-h1-mandatory-0",
+        "response_packing": "mlwe",
+        "gadget_identity": {
+          "selector_gadget_rows": 2,
+          "selector_base_log2": 12,
+          "selector_low_bits": 36,
+          "completion_key_gadget_rows": 10,
+          "completion_key_base_log2": 6,
+          "bv_ks_rows": 8,
+          "bv_ks_base_log2": 8,
+          "bv_ks_low_bits": 0
+        },
+        "query_width": 560,
+        "eval_key_bytes": {
+          "modeled_per_client_eval_key_bytes": 1607040,
+          "eval_key_coefficient_payload_bytes_estimate": 3538944
+        },
+        "wire": {
+          "modeled_seeded_query_bytes": 14880,
+          "actual_query_wire_bytes": null,
+          "actual_response_ciphertext_payload_bytes": 11264
+        },
+        "key_metadata": {
+          "required_key_height": 10,
+          "registered_key_height": 11,
+          "scheme_registered_session_key_height": 11
+        }
+      },
+      "process_records": [
+        {
+          "exit_code": 0,
+          "elapsed_seconds": 162.20152243299526,
+          "process_peak_rss_bytes": 9696288768,
+          "ru_maxrss_unit": "KiB",
+          "peak_scope": "single benchmark child process; includes setup, calibration and all candidates",
+          "cgroup_memory_peak_bytes": null,
+          "cgroup_peak_scope": "shared cgroup cumulative peak, when available",
+          "path": "/users/zcy05331/generic-mlwe-merge-20260909/outputs/h1-packing/round0-mlwe-process.json",
+          "raw": "/users/zcy05331/generic-mlwe-merge-20260909/outputs/h1-packing/round0-mlwe.json"
+        },
+        {
+          "exit_code": 0,
+          "elapsed_seconds": 161.94631108100293,
+          "process_peak_rss_bytes": 9696309248,
+          "ru_maxrss_unit": "KiB",
+          "peak_scope": "single benchmark child process; includes setup, calibration and all candidates",
+          "cgroup_memory_peak_bytes": null,
+          "cgroup_peak_scope": "shared cgroup cumulative peak, when available",
+          "path": "/users/zcy05331/generic-mlwe-merge-20260909/outputs/h1-packing/round1-mlwe-process.json",
+          "raw": "/users/zcy05331/generic-mlwe-merge-20260909/outputs/h1-packing/round1-mlwe.json"
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,22 @@
+Running test: tree_bench_g32
+==============================================================================
+                    test_tree_benchmark_g32(Benchmark build)
+==============================================================================
+Noise budget after decryption: 3 (max noise: 44)
+Noise budget after decryption: 3 (max noise: 44)
+Noise budget after decryption: 3 (max noise: 37)
+tree MVP 32-byte-node benchmark: N=2^10 leaves, L=10, g=32 (12-bit chunks), N0=16, b=0, rho=64, r=6, w=52, W=64, h_q=6
+database: 37 packed plaintexts, 32-byte nodes (0 MiB logical payload), setup 6.47568 ms
+trials: 2 measured after 1 warmup
+trial seed: 7
+client query avg 0.187576 ms
+server unpack (expand+convert) avg 32.3105 ms
+server path (select+rotate+project+pack) avg 37.3343 ms
+server total avg 69.6448 ms; samples(path):
+  path 37.3223 ms
+  path 37.3463 ms
+server path breakdown avg (ms): pyramid 3.266662 scan 7.422597 fold 0.000455 rotate 14.061981 project 11.856350 pack 0.071208 switch 0.613278
+  stages sum 37.2925 ms of path avg 37.3343 ms (remainder = glue/alloc)
+client extract avg 0.33345 ms
+communication: query 14880 B (modeled, 1 ciphertext), response 11264 B (actual wire codec), helper keys 1607040 B (modeled)
+payload: 11 x 32-byte path nodes = 352 B useful

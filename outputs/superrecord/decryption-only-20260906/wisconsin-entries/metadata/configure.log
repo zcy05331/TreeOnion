@@ -1,0 +1,26 @@
+-- Could NOT find CpuFeatures (missing: CpuFeatures_DIR)
+CMake Warning at /users/zcy05331/core-pir-20260905/deps/hexl-install/lib64/cmake/hexl-1.2.6/HEXLConfig.cmake:41 (message):
+  Could not find pre-installed CpuFeatures; using CpuFeatures packaged with
+  HEXL
+Call Stack (most recent call first):
+  CMakeLists.txt:46 (find_package)
+
+
+-- Intel HEXL found
+-- HEXL found at: /users/zcy05331/core-pir-20260905/deps/hexl-install/lib64/cmake/hexl-1.2.6
+-- The C compiler identification is GNU 11.4.0
+-- The CXX compiler identification is GNU 11.4.0
+-- Detecting C compiler ABI info
+-- Detecting C compiler ABI info - done
+-- Check for working C compiler: /usr/bin/cc - skipped
+-- Detecting C compile features
+-- Detecting C compile features - done
+-- Detecting CXX compiler ABI info
+-- Detecting CXX compiler ABI info - done
+-- Check for working CXX compiler: /usr/bin/c++ - skipped
+-- Detecting CXX compile features
+-- Detecting CXX compile features - done
+-- ACTIVE_CONFIG = CONFIG_N2048_K1_COMP
+-- Configuring done
+-- Generating done
+-- Build files have been written to: /users/zcy05331/generic-entry-wisconsin-decrypt-20260906/source/build-native

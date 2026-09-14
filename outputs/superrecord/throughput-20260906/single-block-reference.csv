@@ -1,0 +1,5 @@
+host,scale,workload,count,mean_server_ms,logical_MiB_s,returned_block_bytes,query_bytes,response_bytes,helper_key_bytes,source
+Clemson,1gb,single_contiguous_plaintext_block,100,1544.02257577,663.2027381395858,3072,14880,11264,1488000,/Users/little_sun/Desktop/little_sun/26Summer/OnionPIRv2/.worktrees/generic-superrecord/outputs/superrecord/cloudlab-20260904/profiling/1gb/standard.json
+Clemson,8gb,single_contiguous_plaintext_block,100,10518.81123066,778.7952288869049,3072,14880,11264,1488000,/Users/little_sun/Desktop/little_sun/26Summer/OnionPIRv2/.worktrees/generic-superrecord/outputs/superrecord/cloudlab-20260904/profiling/8gb/standard.json
+Wisconsin,1gb,single_contiguous_plaintext_block,100,825.10986563,1241.0468504314156,3072,14880,11264,1488000,/Users/little_sun/Desktop/little_sun/26Summer/OnionPIRv2/.worktrees/generic-superrecord/outputs/superrecord/wisconsin-20260905/profiling/1gb/standard.json
+Wisconsin,4gb,single_contiguous_plaintext_block,100,2919.72813847,1402.8703378343957,3072,14880,11264,1488000,/Users/little_sun/Desktop/little_sun/26Summer/OnionPIRv2/.worktrees/generic-superrecord/outputs/superrecord/wisconsin-20260905/profiling/4gb/standard.json

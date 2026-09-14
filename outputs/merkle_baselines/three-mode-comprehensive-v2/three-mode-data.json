@@ -1,0 +1,211 @@
+{
+  "schema_version": "onionpir-three-mode-synthesis-v2",
+  "generated_at": "2026-08-15T23:45:00-05:00",
+  "scope": {
+    "workload": "H24 Merkle tree with 2^24 leaves and 32-byte nodes",
+    "benchmark_schemas": ["onionpir-merkle-baselines-v1", "onionpir-merkle-baselines-v2"],
+    "config": "CONFIG_N2048_K1_COMP",
+    "architecture": "x86_64",
+    "hexl_version": "1.2.6",
+    "runtime": "Rosetta 2 on Apple M4",
+    "warmups_per_run": 3,
+    "throughput_definition": "paper plaintext database bytes divided by trial-weighted mean server computation time",
+    "throughput_unit": "MiB/s (bytes divided by 2^20)",
+    "latency_unit": "milliseconds"
+  },
+  "included_artifacts": [
+    {
+      "file": "outputs/merkle_baselines/abaca522bc98-m4-rosetta-v2.json",
+      "sha256": "ffbfbeb39ec1905120e102bc4ce5f5153ea1a6a8ad6c697f612098a8ff167269",
+      "schema": "onionpir-merkle-baselines-v1",
+      "measured_trials": 5,
+      "modes": ["standard_onionpir", "merkle_flat", "merkle_layerwise"],
+      "normalization": "server times retained; all headline throughput values recomputed with the v2 database-bytes/server-time definition"
+    },
+    {
+      "file": "outputs/merkle_baselines/be3845bae149-m4-rosetta-v2-schema2.json",
+      "sha256": "ead028cfc52117eeff8788920b4fa3a6d5873815c358803338be9c295773e6da",
+      "measured_trials": 5,
+      "modes": ["standard_onionpir", "merkle_flat", "merkle_layerwise"]
+    },
+    {
+      "file": "outputs/merkle_baselines/fff03386deea-m4-rosetta-v2-unique-queries.json",
+      "sha256": "c41b147c1d2caa432b2cf5e7bc9cc96562fb3df2874b2b1d31eb61f3492ff556",
+      "measured_trials": 5,
+      "modes": ["standard_onionpir", "merkle_flat", "merkle_layerwise"]
+    },
+    {
+      "file": "outputs/merkle_baselines/21ac4a543523-m4-rosetta-v2-unique-queries-rerun.json",
+      "sha256": "d83713ebbbcbc8beab48152e6a6975a4376ab98be91b15eeb53c8e9fd0e9ba79",
+      "measured_trials": 5,
+      "modes": ["standard_onionpir", "merkle_flat", "merkle_layerwise"]
+    },
+    {
+      "file": "outputs/merkle_baselines/4f6499894f13-m4-rosetta-v2-standard-32-trials.json",
+      "sha256": "77d8b1353f87fbd4e4dedde9462bb7c1c7cfacf42d942b4cfbf7ca094df891aa",
+      "measured_trials": 32,
+      "modes": ["standard_onionpir"]
+    },
+    {
+      "file": "outputs/merkle_baselines/7eb7a735fff5-m4-rosetta-v2-merkle-paths-16-trials.json",
+      "sha256": "a42575c3762a1a6db5bb93539091423bffad6f7f40144fecb7a28e86bde2255c",
+      "measured_trials": 16,
+      "modes": ["merkle_flat", "merkle_layerwise"]
+    }
+  ],
+  "excluded_artifacts": [
+    {
+      "file": "outputs/merkle_baselines/smoke-task8.json",
+      "reason": "smoke workload is not the frozen 1 GB H24 benchmark"
+    }
+  ],
+  "aggregate_modes": [
+    {
+      "mode": "Standard OnionPIR",
+      "mode_id": "standard_onionpir",
+      "runs": 5,
+      "measured_trials": 52,
+      "pir_calls_per_trial": 1,
+      "server_compute_ms": 1628.906535,
+      "local_online_pipeline_ms": 1629.322745,
+      "client_query_ms": 0.087739,
+      "response_serialize_ms": 0.078590,
+      "response_load_decrypt_extract_ms": 0.249881,
+      "nonserver_online_ms": 0.416210,
+      "per_call_server_ms": 1628.906535,
+      "session_setup_mean_ms": 5818.834933,
+      "session_setup_min_ms": 5673.237458,
+      "session_setup_max_ms": 6101.455292,
+      "run_mean_server_min_ms": 1373.952541,
+      "run_mean_server_max_ms": 2452.228283,
+      "paper_database_throughput_mib_s": 628.643775,
+      "paper_scan_throughput_mib_s": 628.643775,
+      "padded_scan_throughput_mib_s": 628.949530,
+      "online_query_bytes": 14880,
+      "online_response_bytes": 11264,
+      "online_total_bytes": 26144,
+      "helper_key_bytes": 1488000,
+      "first_session_total_bytes": 1514144,
+      "paper_plaintext_database_bytes": 1073743872,
+      "paper_plaintext_scan_bytes": 1073743872,
+      "raw_sample_statistics_available": false
+    },
+    {
+      "mode": "Naive Flat",
+      "mode_id": "merkle_flat",
+      "runs": 5,
+      "measured_trials": 36,
+      "pir_calls_per_trial": 24,
+      "server_compute_ms": 36121.247914,
+      "local_online_pipeline_ms": 36131.749070,
+      "client_query_ms": 2.095012,
+      "response_serialize_ms": 2.479377,
+      "response_load_decrypt_extract_ms": 5.926768,
+      "nonserver_online_ms": 10.501156,
+      "per_call_server_ms": 1505.051996,
+      "session_setup_mean_ms": 6239.234683,
+      "session_setup_min_ms": 5815.468000,
+      "session_setup_max_ms": 6859.236708,
+      "run_mean_server_min_ms": 34840.405241,
+      "run_mean_server_max_ms": 40687.264992,
+      "paper_database_throughput_mib_s": 28.349019,
+      "paper_scan_throughput_mib_s": 680.376462,
+      "padded_scan_throughput_mib_s": 680.707379,
+      "online_query_bytes": 357120,
+      "online_response_bytes": 270336,
+      "online_total_bytes": 627456,
+      "helper_key_bytes": 1488000,
+      "first_session_total_bytes": 2115456,
+      "paper_plaintext_database_bytes": 1073743872,
+      "paper_plaintext_scan_bytes": 25769852928,
+      "raw_sample_statistics_available": true
+    },
+    {
+      "mode": "Naive Layerwise",
+      "mode_id": "merkle_layerwise",
+      "runs": 5,
+      "measured_trials": 36,
+      "pir_calls_per_trial": 24,
+      "server_compute_ms": 2151.138035,
+      "local_online_pipeline_ms": 2159.885939,
+      "client_query_ms": 2.014842,
+      "response_serialize_ms": 1.318031,
+      "response_load_decrypt_extract_ms": 5.415031,
+      "nonserver_online_ms": 8.747904,
+      "per_call_server_ms": 89.630751,
+      "session_setup_mean_ms": 5855.918784,
+      "session_setup_min_ms": 5664.378167,
+      "session_setup_max_ms": 6207.687625,
+      "run_mean_server_min_ms": 1990.783874,
+      "run_mean_server_max_ms": 2434.073241,
+      "paper_database_throughput_mib_s": 476.045713,
+      "paper_scan_throughput_mib_s": 476.045713,
+      "padded_scan_throughput_mib_s": 476.515577,
+      "online_query_bytes": 357120,
+      "online_response_bytes": 270336,
+      "online_total_bytes": 627456,
+      "helper_key_bytes": 1488000,
+      "first_session_total_bytes": 2115456,
+      "paper_plaintext_database_bytes": 1073783808,
+      "paper_plaintext_scan_bytes": 1073783808,
+      "raw_sample_statistics_available": true
+    }
+  ],
+  "comparisons": [
+    {
+      "layerwise_vs_flat_speedup": 16.791692,
+      "layerwise_vs_flat_latency_reduction_pct": 94.044674,
+      "layerwise_vs_flat_database_throughput_ratio": 16.792317,
+      "flat_scan_throughput_vs_standard_pct": 108.229253,
+      "layerwise_latency_vs_standard_ratio": 1.320602,
+      "layerwise_database_throughput_vs_standard_pct": 75.725829
+    }
+  ],
+  "run_points": [
+    {"run": "earliest v1", "artifact": "abaca522bc98", "trials": 5, "mode": "Standard OnionPIR", "server_compute_ms": 1373.952541, "local_online_pipeline_ms": 1374.394407, "database_throughput_mib_s": 745.296451, "scan_throughput_mib_s": 745.296451, "setup_ms": 5673.237458, "throughput_normalization": "v2 formula"},
+    {"run": "earliest v1", "artifact": "abaca522bc98", "trials": 5, "mode": "Naive Flat", "server_compute_ms": 34840.405241, "local_online_pipeline_ms": 34851.460127, "database_throughput_mib_s": 29.391218, "scan_throughput_mib_s": 705.389237, "setup_ms": 5815.468000, "throughput_normalization": "v2 formula; v1 stored headline 705.389237 MiB/s was scan throughput"},
+    {"run": "earliest v1", "artifact": "abaca522bc98", "trials": 5, "mode": "Naive Layerwise", "server_compute_ms": 2009.909550, "local_online_pipeline_ms": 2018.703183, "database_throughput_mib_s": 509.495584, "scan_throughput_mib_s": 509.495584, "setup_ms": 5732.566708, "throughput_normalization": "v2 formula"},
+    {"run": "v2 schema2", "artifact": "be3845bae149", "trials": 5, "mode": "Standard OnionPIR", "server_compute_ms": 2452.228283, "local_online_pipeline_ms": 2452.857915, "database_throughput_mib_s": 417.580190, "scan_throughput_mib_s": 417.580190, "setup_ms": 6101.455292},
+    {"run": "v2 schema2", "artifact": "be3845bae149", "trials": 5, "mode": "Naive Flat", "server_compute_ms": 40687.264992, "local_online_pipeline_ms": 40697.510850, "database_throughput_mib_s": 25.167628, "scan_throughput_mib_s": 604.023074, "setup_ms": 6859.236708},
+    {"run": "v2 schema2", "artifact": "be3845bae149", "trials": 5, "mode": "Naive Layerwise", "server_compute_ms": 2434.073241, "local_online_pipeline_ms": 2443.228559, "database_throughput_mib_s": 420.710446, "scan_throughput_mib_s": 420.710446, "setup_ms": 6207.687625},
+    {"run": "unique queries", "artifact": "fff03386deea", "trials": 5, "mode": "Standard OnionPIR", "server_compute_ms": 2397.799725, "local_online_pipeline_ms": 2398.212465, "database_throughput_mib_s": 427.059000, "scan_throughput_mib_s": 427.059000, "setup_ms": 5842.000083},
+    {"run": "unique queries", "artifact": "fff03386deea", "trials": 5, "mode": "Naive Flat", "server_compute_ms": 35265.343458, "local_online_pipeline_ms": 35276.072367, "database_throughput_mib_s": 29.037062, "scan_throughput_mib_s": 696.889480, "setup_ms": 6082.373000},
+    {"run": "unique queries", "artifact": "fff03386deea", "trials": 5, "mode": "Naive Layerwise", "server_compute_ms": 1990.783874, "local_online_pipeline_ms": 1999.278025, "database_throughput_mib_s": 514.390363, "scan_throughput_mib_s": 514.390363, "setup_ms": 5664.378167},
+    {"run": "unique rerun", "artifact": "21ac4a543523", "trials": 5, "mode": "Standard OnionPIR", "server_compute_ms": 1473.732483, "local_online_pipeline_ms": 1474.108339, "database_throughput_mib_s": 694.835708, "scan_throughput_mib_s": 694.835708, "setup_ms": 5679.268000},
+    {"run": "unique rerun", "artifact": "21ac4a543523", "trials": 5, "mode": "Naive Flat", "server_compute_ms": 35420.045675, "local_online_pipeline_ms": 35429.785183, "database_throughput_mib_s": 28.910238, "scan_throughput_mib_s": 693.845714, "setup_ms": 5873.488166},
+    {"run": "unique rerun", "artifact": "21ac4a543523", "trials": 5, "mode": "Naive Layerwise", "server_compute_ms": 2107.126842, "local_online_pipeline_ms": 2115.862349, "database_throughput_mib_s": 485.988797, "scan_throughput_mib_s": 485.988797, "setup_ms": 5833.116834},
+    {"run": "Standard 32", "artifact": "4f6499894f13", "trials": 32, "mode": "Standard OnionPIR", "server_compute_ms": 1444.205458, "local_online_pipeline_ms": 1444.591160, "database_throughput_mib_s": 709.041742, "scan_throughput_mib_s": 709.041742, "setup_ms": 5798.213833},
+    {"run": "Merkle paths 16", "artifact": "7eb7a735fff5", "trials": 16, "mode": "Naive Flat", "server_compute_ms": 35581.226754, "local_online_pipeline_ms": 35591.801493, "database_throughput_mib_s": 28.779276, "scan_throughput_mib_s": 690.702629, "setup_ms": 6565.607541},
+    {"run": "Merkle paths 16", "artifact": "7eb7a735fff5", "trials": 16, "mode": "Naive Layerwise", "server_compute_ms": 2170.718858, "local_online_pipeline_ms": 2179.408327, "database_throughput_mib_s": 471.751575, "scan_throughput_mib_s": 471.751575, "setup_ms": 5841.844584}
+  ],
+  "latest_path_sample_statistics": [
+    {"mode": "Naive Flat", "trials": 16, "server_mean_ms": 35581.226755, "server_median_ms": 35226.234708, "server_min_ms": 33906.329289, "server_p95_ms": 37526.438750, "server_max_ms": 39751.678622, "server_sample_variance_ms2": 2040827.224250, "server_sample_sd_ms": 1428.575243, "server_cv_pct": 4.014969, "headline_database_throughput_mib_s": 28.779276, "mean_per_trial_throughput_mib_s": 28.820510, "throughput_sample_variance": 1.203783, "throughput_sample_sd": 1.097170, "throughput_cv_pct": 3.806908},
+    {"mode": "Naive Layerwise", "trials": 16, "server_mean_ms": 2170.718859, "server_median_ms": 2044.487666, "server_min_ms": 2007.539292, "server_p95_ms": 2632.732820, "server_max_ms": 3351.835791, "server_sample_variance_ms2": 113693.167486, "server_sample_sd_ms": 337.184174, "server_cv_pct": 15.533295, "headline_database_throughput_mib_s": 471.751575, "mean_per_trial_throughput_mib_s": 479.399701, "throughput_sample_variance": 2816.329527, "throughput_sample_sd": 53.069101, "throughput_cv_pct": 11.069907}
+  ],
+  "latest_path_samples": [
+    {"trial": 1, "query_id": 2419157, "flat_server_ms": 33906.329289, "flat_throughput_mib_s": 30.200909, "layerwise_server_ms": 2016.294705, "layerwise_throughput_mib_s": 507.882125},
+    {"trial": 2, "query_id": 294839, "flat_server_ms": 35805.843752, "flat_throughput_mib_s": 28.598738, "layerwise_server_ms": 2079.561583, "layerwise_throughput_mib_s": 492.430735},
+    {"trial": 3, "query_id": 4718255, "flat_server_ms": 36760.343330, "flat_throughput_mib_s": 27.856159, "layerwise_server_ms": 2365.478166, "layerwise_throughput_mib_s": 432.910375},
+    {"trial": 4, "query_id": 7699409, "flat_server_ms": 39751.678622, "flat_throughput_mib_s": 25.759968, "layerwise_server_ms": 2393.031830, "layerwise_throughput_mib_s": 427.925791},
+    {"trial": 5, "query_id": 9435589, "flat_server_ms": 35531.086709, "flat_throughput_mib_s": 28.819888, "layerwise_server_ms": 3351.835791, "layerwise_throughput_mib_s": 305.516172},
+    {"trial": 6, "query_id": 1298722, "flat_server_ms": 36784.692126, "flat_throughput_mib_s": 27.837720, "layerwise_server_ms": 2089.335416, "layerwise_throughput_mib_s": 490.127163},
+    {"trial": 7, "query_id": 15165185, "flat_server_ms": 34973.600082, "flat_throughput_mib_s": 29.279284, "layerwise_server_ms": 2035.117540, "layerwise_throughput_mib_s": 503.184715},
+    {"trial": 8, "query_id": 2726882, "flat_server_ms": 35043.645999, "flat_throughput_mib_s": 29.220760, "layerwise_server_ms": 2013.265625, "layerwise_throughput_mib_s": 508.646264},
+    {"trial": 9, "query_id": 2567763, "flat_server_ms": 35179.425833, "flat_throughput_mib_s": 29.107978, "layerwise_server_ms": 2015.085127, "layerwise_throughput_mib_s": 508.186987},
+    {"trial": 10, "query_id": 13314512, "flat_server_ms": 35061.729667, "flat_throughput_mib_s": 29.205688, "layerwise_server_ms": 2015.257832, "layerwise_throughput_mib_s": 508.143436},
+    {"trial": 11, "query_id": 13202926, "flat_server_ms": 34179.789793, "flat_throughput_mib_s": 29.959282, "layerwise_server_ms": 2053.857791, "layerwise_throughput_mib_s": 498.593449},
+    {"trial": 12, "query_id": 16052204, "flat_server_ms": 35780.262125, "flat_throughput_mib_s": 28.619185, "layerwise_server_ms": 2015.029791, "layerwise_throughput_mib_s": 508.200943},
+    {"trial": 13, "query_id": 10960092, "flat_server_ms": 35273.043584, "flat_throughput_mib_s": 29.030723, "layerwise_server_ms": 2013.571166, "layerwise_throughput_mib_s": 508.569082},
+    {"trial": 14, "query_id": 107107, "flat_server_ms": 34459.852083, "flat_throughput_mib_s": 29.715797, "layerwise_server_ms": 2115.101251, "layerwise_throughput_mib_s": 484.156510},
+    {"trial": 15, "query_id": 326845, "flat_server_ms": 36631.856249, "flat_throughput_mib_s": 27.953865, "layerwise_server_ms": 2007.539292, "layerwise_throughput_mib_s": 510.097134},
+    {"trial": 16, "query_id": 14861253, "flat_server_ms": 34176.448833, "flat_throughput_mib_s": 29.962210, "layerwise_server_ms": 2152.138832, "layerwise_throughput_mib_s": 475.824340}
+  ],
+  "standard_32_trial_query_ids": [11520127, 380408, 15992773, 4244969, 931588, 2861177, 9018575, 15302479, 3437706, 11541114, 13744052, 14370217, 11391876, 6368000, 4447648, 8801783, 13353877, 3229988, 1559226, 165428, 3690667, 12785443, 4607009, 13040878, 7638677, 12079759, 11893160, 7645130, 6782132, 13702342, 15274381, 10507727],
+  "limitations": [
+    "The earliest v1 artifact, the three five-trial v2 artifacts, and the Standard 32-trial artifact retain only grouped means, not per-trial server-time samples.",
+    "The earliest v1 Flat headline used 24x scan bytes; its comparable database throughput is recomputed as 29.391218 MiB/s from database bytes and server time.",
+    "The aggregate means are trial-weighted across compatible v2 runs; pooled variance, median, and p95 cannot be reconstructed across all trials.",
+    "Standard OnionPIR performs one PIR call, whereas both Merkle baselines perform 24 PIR calls to return a full H24 path, so latency and useful-output units differ.",
+    "All measurements are x86_64 Intel HEXL under Rosetta 2 on Apple M4 and are not native ARM64 results."
+  ]
+}

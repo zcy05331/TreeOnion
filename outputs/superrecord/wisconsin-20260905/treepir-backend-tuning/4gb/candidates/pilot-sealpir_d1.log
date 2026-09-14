@@ -1,0 +1,1 @@
+treepir_sealpir_adapter error: SealPIR expand_query cannot handle nvec dimension > poly degree; use --pir-d 2 or larger --poly-degree

@@ -1,0 +1,11 @@
+Running test: tree_project
+==============================================================================
+                    test_tree_project(Benchmark build)
+==============================================================================
+projection depth 11 noise budget: 21 bits
+L=16 leaf=0 deepest level noise budget after select/rotate/project: 5 bits
+L=16 leaf=65535 deepest level noise budget after select/rotate/project: 3 bits
+L=16 leaf=48879 deepest level noise budget after select/rotate/project: 4 bits
+L=13 leaf=0 deepest level noise budget after select/rotate/project: 5 bits
+L=13 leaf=8191 deepest level noise budget after select/rotate/project: 6 bits
+L=13 leaf=7919 deepest level noise budget after select/rotate/project: 4 bits

@@ -1,0 +1,5 @@
+Running test: layer_layout_planner
+==============================================================================
+                    test_layer_layout_planner(Benchmark build)
+==============================================================================
+Error: maximum throughput chooses the lower mean, not the lower median

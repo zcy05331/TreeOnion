@@ -1,0 +1,21 @@
+Running test: tree_superrecord_bench
+==============================================================================
+                    test_tree_superrecord_benchmark(Benchmark build)
+==============================================================================
+calibrating first-dimension kernels for 1 candidate shapes
+planner: E=256 c=12 N=2^22: 1 candidates (0 h=1), Pareto frontier 1, benchmark rows 1, execution seed 6003972730984227889
+preparing [bundle3] E=256 N=2^22 h=3 G=64 P=1 rho=32 m=21 b=7 N0=352(align 16) width=478 h_q=9 keys req/reg=9/11 resp=1 scan=1408 MiB folds=247 rot=95 proj=95 util=1 pred=605.419 ms
+completed warmup block 0 leaf 58551
+completed warmup block 1 leaf 2373836
+completed warmup block 2 leaf 104049
+completed measured block 3 leaf 4073931
+generic super-record JSON: /Users/little_sun/Desktop/little_sun/26Summer/OnionPIRv2/.worktrees/generic-superrecord/outputs/superrecord/gadget-optimization-20260909/pilots/baseline/round0-baseline.json
+
+generic super-record benchmark: N=2^22 leaves, E=256 bits, 1 measured trials after 3 warmup, trial seed 7
+[candidate-0 bundle3] E=256 N=2^22 h=3 G=64 P=1 rho=32 m=21 b=7 N0=352(align 16) width=478 h_q=9 keys req/reg=9/11 resp=1 scan=1408 MiB folds=247 rot=95 proj=95 util=1 pred=605.419 ms
+  database 1408.1 MiB (90119 plaintext cells, scan 1408.1 MiB per query), setup 9335.09 ms
+  server total mean 802.566 ms, median 802.566, p95 802.566, stddev 0
+  stages avg (ms): expand 104.433500 complete 62.476417 prepare 19.179791 scan 482.111294 finalize 15.013542 fold 72.765248 rotate 24.531543 project 21.068415 pack 0.152130 switch 0.477833
+  stages sum 802.21 ms; client query 0.107709 ms, client extract 0.434625 ms
+  throughput 1754.51 MiB/s scanned; communication: modeled query 14880 B, actual response payload 11264 B; noise: min budget 2 bits, max residue 87 of decoder bound 508.628; real non-target neighbour slots/trial 37
+  samples(server): 802.566000

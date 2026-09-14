@@ -42,7 +42,8 @@ def build(build_type: str, jobs: int, active_config: str):
     subprocess.run(make_cmd, cwd=BUILD_DIR, check=True)
 
 
-def main():
+def argument_parser():
+    """Define the build and benchmark CLI in one place."""
     parser = argparse.ArgumentParser(description="Build & run OnionPIR")
     parser.add_argument(
         "-v", "--verbose", action="store_true",
@@ -106,23 +107,11 @@ def main():
               + ", ".join(sorted(CONFIG_ALIASES))
               + ". See src/includes/database_constants.h for per-config meanings."),
     )
-    args = parser.parse_args()
+    return parser
 
-    key = args.config.lower()
-    if key not in CONFIG_ALIASES:
-        parser.error(f"unknown config alias '{args.config}'. "
-                     f"Choices: {', '.join(sorted(CONFIG_ALIASES))}")
-    active_config = CONFIG_ALIASES[key]
 
-    # --- Build ---
-    build_type = "Debug" if args.verbose else "Benchmark"
-    print(f"Build: ACTIVE_CONFIG={active_config} TYPE={build_type}")
-    build(build_type, args.jobs, active_config)
-
-    if args.build_only:
-        return
-
-    # --- Prepare runtime args ---
+def runtime_command(args, parser):
+    """Validate runtime flags after the build, then prepare the binary argv."""
     run_cmd = [BINARY, "--test", args.test,
                "--experiments", str(args.experiments),
                "--warmup", str(args.warmup)]
@@ -149,10 +138,14 @@ def main():
         if args.run_optional_4gb:
             run_cmd.append("--run-optional-4gb")
 
-    # --- Output redirection ---
+    return run_cmd
+
+
+def run_binary(run_cmd, output):
+    """Run in the build directory and close any redirected output."""
     output_file = None
-    if args.output:
-        path = args.output
+    if output:
+        path = output
         if "/" not in path:
             os.makedirs(OUTPUT_DIR, exist_ok=True)
             path = os.path.join(OUTPUT_DIR, path)
@@ -167,6 +160,28 @@ def main():
     finally:
         if output_file:
             output_file.close()
+
+
+def main():
+    parser = argument_parser()
+    args = parser.parse_args()
+
+    key = args.config.lower()
+    if key not in CONFIG_ALIASES:
+        parser.error(f"unknown config alias '{args.config}'. "
+                     f"Choices: {', '.join(sorted(CONFIG_ALIASES))}")
+    active_config = CONFIG_ALIASES[key]
+
+    # --- Build ---
+    build_type = "Debug" if args.verbose else "Benchmark"
+    print(f"Build: ACTIVE_CONFIG={active_config} TYPE={build_type}")
+    build(build_type, args.jobs, active_config)
+
+    if args.build_only:
+        return
+
+    run_cmd = runtime_command(args, parser)
+    run_binary(run_cmd, args.output)
 
 
 if __name__ == "__main__":

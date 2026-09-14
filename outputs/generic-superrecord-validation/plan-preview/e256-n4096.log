@@ -1,0 +1,24 @@
+Running test: tree_superrecord_bench
+==============================================================================
+                    test_tree_superrecord_benchmark(Benchmark build)
+==============================================================================
+planner: E=256 c=12 N=2^12: 1722 candidates (338 h=1), Pareto frontier 235, benchmark rows 8, execution seed 20260904
+generic super-record JSON: /Users/little_sun/Desktop/little_sun/26Summer/OnionPIRv2/.worktrees/generic-superrecord/outputs/generic-superrecord-validation/plan-preview/e256-n4096.json
+
+generic super-record benchmark: N=2^12 leaves, E=256 bits, 16 measured trials after 3 warmup, trial seed 7 (plan-only)
+[candidate-0 bundle3] E=256 N=2^12 h=3 G=64 P=1 rho=32 m=11 b=3 N0=6(align 1) width=72 h_q=7 keys req/reg=7/11 resp=1 scan=1 MiB folds=11 rot=45 proj=45 util=1 pred=87.2858 ms
+  ineligible/unmeasured: plan-only
+[candidate-1 generic-h1-mandatory-1] E=256 N=2^12 h=1 G=32 P=1 rho=64 m=12 b=3 N0=8(align 1) width=80 h_q=7 keys req/reg=7/11 resp=1 scan=2 MiB folds=11 rot=57 proj=57 util=0.666667 pred=98.0534 ms
+  ineligible/unmeasured: plan-only
+[candidate-2 minimum-optimized-steady-state] E=256 N=2^12 h=6 G=128 P=1 rho=16 m=10 b=4 N0=3(align 1) width=63 h_q=6 keys req/reg=6/11 resp=1 scan=1 MiB folds=26 rot=34 proj=34 util=1 pred=79.6378 ms
+  ineligible/unmeasured: plan-only
+[candidate-3 minimum-response-count] E=256 N=2^12 h=6 G=128 P=1 rho=16 m=10 b=2 N0=11(align 1) width=71 h_q=7 keys req/reg=7/11 resp=1 scan=1 MiB folds=4 rot=34 proj=34 util=1 pred=77.5936 ms
+  ineligible/unmeasured: plan-only
+[candidate-4 generic-h1-frontier-1] E=256 N=2^12 h=1 G=64 P=1 rho=32 m=12 b=3 N0=16(align 1) width=88 h_q=7 keys req/reg=7/11 resp=1 scan=4 MiB folds=11 rot=50 proj=50 util=0.333333 pred=98.619 ms
+  ineligible/unmeasured: plan-only
+[candidate-5 generic-h1-frontier-2] E=256 N=2^12 h=1 G=32 P=1 rho=64 m=12 b=2 N0=16(align 1) width=88 h_q=7 keys req/reg=7/11 resp=1 scan=2 MiB folds=4 rot=57 proj=57 util=0.666667 pred=98.9814 ms
+  ineligible/unmeasured: plan-only
+[candidate-6 frontier-1] E=256 N=2^12 h=6 G=128 P=1 rho=16 m=10 b=3 N0=6(align 1) width=66 h_q=7 keys req/reg=7/11 resp=1 scan=1 MiB folds=11 rot=34 proj=34 util=1 pred=77.8158 ms
+  ineligible/unmeasured: plan-only
+[candidate-7 legacy-g32] 
+  ineligible/unmeasured: plan-only

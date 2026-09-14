@@ -47,12 +47,14 @@ void PirTest::test_tree_query() {
   const std::vector<uint64_t> qs(scheme.get_rns_mods().begin(),
                                  scheme.get_rns_mods().end());
   const std::vector<std::vector<uint64_t>> gadget =
-      utils::gsw_gadget(ell, scheme.get_base_log2(), qs);
+      utils::gsw_gadget(ell, scheme.get_base_log2(), qs,
+                        scheme.get_ep_low_bits());
   // The phase-scale gate below only fires for gadget rows above 2^29. Under a
   // single-limb config the top row must clear that floor, or the scale/order
   // check would silently become vacuous; multi-limb configs skip it
   // (phase_limb0 is a single-limb decryption) and rely on the CMux gate.
-  require_test(qs.size() > 1 || gadget[0][0] >= (uint64_t{1} << 29),
+  require_test(qs.size() > 1 || scheme.get_ep_low_bits() > 0 ||
+                   gadget[0][0] >= (uint64_t{1} << 29),
                "phase-scale gate is vacuous under this config");
 
   // Phase of a coefficient-form ciphertext under the first limb:

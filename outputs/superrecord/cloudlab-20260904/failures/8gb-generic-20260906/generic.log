@@ -1,0 +1,13 @@
+Running test: tree_superrecord_bench
+==============================================================================
+                    test_tree_superrecord_benchmark(Benchmark build)
+==============================================================================
+calibrating first-dimension kernels for 936 candidate shapes
+planner: E=256 c=12 N=2^27: 936 candidates (292 h=1), Pareto frontier 340, benchmark rows 8, execution seed 6003972730984227889
+preparing [generic-h1-mandatory-1] E=256 N=2^27 h=1 G=8 P=3 rho=256 m=27 b=10 N0=512(align 1) width=674 h_q=10 keys req/reg=10/11 resp=1 scan=49152 MiB folds=6108 rot=564 proj=564 util=0.888889 pred=11417.6 ms
+preparing [minimum-response-count] E=256 N=2^27 h=2 G=16 P=3 rho=128 m=26 b=10 N0=512(align 1) width=668 h_q=10 keys req/reg=10/11 resp=1 scan=49152 MiB folds=6108 rot=483 proj=483 util=0.888889 pred=11365.2 ms
+preparing [bundle3] E=256 N=2^27 h=3 G=64 P=1 rho=32 m=26 b=12 N0=352(align 16) width=508 h_q=9 keys req/reg=9/11 resp=1 scan=45056 MiB folds=8178 rot=120 proj=120 util=1 pred=11470.5 ms
+preparing [bundle3-variant-2] E=256 N=2^27 h=3 G=64 P=1 rho=32 m=26 b=11 N0=683(align 1) width=839 h_q=10 keys req/reg=10/11 resp=1 scan=43712 MiB folds=4083 rot=120 proj=120 util=1 pred=21910.2 ms
+preparing [frontier-1] E=256 N=2^27 h=2 G=8 P=6 rho=256 m=26 b=9 N0=512(align 1) width=668 h_q=10 keys req/reg=10/11 resp=1 scan=49152 MiB folds=6078 rot=1080 proj=1080 util=0.888889 pred=11628.4 ms
+preparing [frontier-2] E=256 N=2^27 h=3 G=32 P=2 rho=64 m=26 b=11 N0=352(align 16) width=508 h_q=9 keys req/reg=9/11 resp=1 scan=45056 MiB folds=8166 rot=282 proj=282 util=1 pred=11641.9 ms
+Error: measured noise margin failed

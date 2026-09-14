@@ -52,6 +52,50 @@ struct PirQueryShapeConfig {
   size_t expansion_height;
 };
 
+// [Generic tree PIR] Structural identity of one HE scheme instance: every
+// quantity that the packed-query scale, the gadget rows, the composite
+// first-dimension split, and the small-q response codec depend on. It is the
+// single source of truth for scheme_compatible() and for the planner's frozen
+// SchemeFingerprint; layout fields (num_pt, fst_dim_sz, expansion height) are
+// deliberately absent so one identity covers every query shape.
+struct PirSchemeIdentity {
+  uint32_t schema_version = 1;
+
+  size_t ring_degree = 0;
+  uint64_t plaintext_modulus = 0;
+  std::vector<size_t> rns_modulus_bits;
+  std::vector<uint64_t> rns_moduli;
+
+  uint64_t response_modulus = 0;      // small q
+  size_t response_modulus_bits = 0;   // SmallQWidth
+
+  size_t selector_gadget_rows = 0;        // L_EP
+  size_t selector_base_log2 = 0;
+  size_t selector_low_bits = 0;
+  size_t completion_key_gadget_rows = 0;  // L_KEY
+  size_t completion_key_base_log2 = 0;
+  size_t bv_ks_rows = 0;                  // L_KS
+  size_t bv_ks_base_log2 = 0;
+  size_t bv_ks_low_bits = 0;
+
+  std::vector<uint64_t> r64_mod_q;
+  uint64_t q0_inv_mod_q1 = 0;
+
+  bool composite_first_dim = false;
+  uint64_t composite_q1 = 0;
+  uint64_t composite_q2 = 0;
+  uint64_t composite_w1 = 0;
+  uint64_t composite_w2 = 0;
+  uint64_t composite_w_crt = 0;
+  uint64_t composite_q1_inv_mod_q2 = 0;
+
+  // std::bit_cast of the Gaussian standard deviation: exact equality instead
+  // of an approximate floating-point comparison.
+  uint64_t noise_std_dev_ieee754 = 0;
+
+  bool operator==(const PirSchemeIdentity &) const = default;
+};
+
 // ================== CLASS DEFINITIONS ==================
 class PirParams {
 public:
@@ -65,7 +109,10 @@ public:
   // fast_expand_qry 与会话密钥校验，不可用于装载数据库或回答 make_query。
   // 详细机制见 pir.cpp 实现处注释。
   PirParams with_query_shape(const PirQueryShapeConfig &shape) const;
+  // Two parameter sets are scheme-compatible exactly when their structural
+  // identities are equal; database layout may differ.
   bool scheme_compatible(const PirParams &other) const;
+  PirSchemeIdentity scheme_identity() const;
 
   // ================== getters ==================
   // Getter group exposes derived runtime parameters. Treat get_DBSize_MB() as
@@ -93,6 +140,7 @@ public:
   inline size_t get_small_q() const { return small_q_; }
   inline size_t get_base_log2() const { return base_log2_; }
   inline size_t get_base_log2_key() const { return base_log2_key_; }
+  inline size_t get_ep_low_bits() const { return ep_low_bits_; }
   inline size_t get_fst_dim_sz() const { return fst_dim_sz_; }
   inline size_t get_other_dim_sz() const { return num_pt_ / fst_dim_sz_; }
   // Number of RNS limbs (matches DBConsts::RnsMods.size()).
@@ -148,6 +196,7 @@ private:
   uint64_t small_q_ = 0;
   size_t base_log2_;
   size_t base_log2_key_;
+  size_t ep_low_bits_ = DBConsts::EP_LOW_BITS;
   size_t target_num_pt_ = 0;
   size_t expansion_height_ = DBConsts::TREE_HEIGHT;
   bool fst_dim_pow2_ = DBConsts::FST_DIM_POW2;

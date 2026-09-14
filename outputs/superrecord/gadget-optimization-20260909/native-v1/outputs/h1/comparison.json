@@ -1,0 +1,338 @@
+{
+  "state": "complete",
+  "completed_labels": [
+    "baseline",
+    "kernel",
+    "ep3-s32",
+    "ep2-s36"
+  ],
+  "failed_runs": [],
+  "rejected_labels": {},
+  "layout": {
+    "entry_bits": 256,
+    "leaf_count": 16777216,
+    "bundle_arity": 1,
+    "record_coeffs": 8,
+    "plane_count": 3,
+    "records_per_plaintext": 256,
+    "N0": 512,
+    "beta_bits": 7,
+    "expansion_height": 10
+  },
+  "summary": {
+    "baseline": {
+      "completed_samples": 100,
+      "server_total_ms_mean": 1123.48369534,
+      "rotation_projection_ms_mean": 152.10461184,
+      "stages_ms_mean": {
+        "complete": 40.95608969,
+        "expand": 91.75023819,
+        "finalize": 49.935059970000005,
+        "fold": 122.59467097999999,
+        "pack": 0.48458053999999995,
+        "prepare": 39.53204033,
+        "project": 64.3044553,
+        "rotate": 87.80015654,
+        "scan": 625.77673339,
+        "switch": 0.09620463000000001
+      },
+      "wire": {
+        "modeled_seeded_query_bytes": 14880,
+        "actual_query_wire_bytes": null,
+        "actual_response_ciphertext_payload_bytes": 11264
+      },
+      "key_metadata": {
+        "required_key_height": 10,
+        "registered_key_height": 11,
+        "scheme_registered_session_key_height": 11
+      },
+      "gadget_metadata": {
+        "label": "generic-h1-mandatory-0",
+        "gadget_identity": {
+          "selector_gadget_rows": 6,
+          "selector_base_log2": 10,
+          "completion_key_gadget_rows": 10,
+          "completion_key_base_log2": 6,
+          "bv_ks_rows": 8,
+          "bv_ks_base_log2": 8
+        },
+        "query_width": 656,
+        "eval_key_bytes": {
+          "modeled_per_client_eval_key_bytes": 1607040,
+          "eval_key_coefficient_payload_bytes_estimate": 3538944
+        },
+        "wire": {
+          "modeled_seeded_query_bytes": 14880,
+          "actual_query_wire_bytes": null,
+          "actual_response_ciphertext_payload_bytes": 11264
+        },
+        "key_metadata": {
+          "required_key_height": 10,
+          "registered_key_height": 11,
+          "scheme_registered_session_key_height": 11
+        }
+      },
+      "process_records": [
+        {
+          "exit_code": 0,
+          "elapsed_seconds": 171.1512999709812,
+          "process_peak_rss_bytes": 9698344960,
+          "ru_maxrss_unit": "KiB",
+          "peak_scope": "single benchmark child process; includes setup, calibration and all candidates",
+          "cgroup_memory_peak_bytes": null,
+          "cgroup_peak_scope": "shared cgroup cumulative peak, when available",
+          "path": "/users/zcy05331/generic-gadgets-20260909/outputs/h1/round0-baseline-process.json",
+          "raw": "/users/zcy05331/generic-gadgets-20260909/outputs/h1/round0-baseline.json"
+        },
+        {
+          "exit_code": 0,
+          "elapsed_seconds": 170.90605440500076,
+          "process_peak_rss_bytes": 9698197504,
+          "ru_maxrss_unit": "KiB",
+          "peak_scope": "single benchmark child process; includes setup, calibration and all candidates",
+          "cgroup_memory_peak_bytes": null,
+          "cgroup_peak_scope": "shared cgroup cumulative peak, when available",
+          "path": "/users/zcy05331/generic-gadgets-20260909/outputs/h1/round1-baseline-process.json",
+          "raw": "/users/zcy05331/generic-gadgets-20260909/outputs/h1/round1-baseline.json"
+        }
+      ]
+    },
+    "kernel": {
+      "completed_samples": 100,
+      "server_total_ms_mean": 1277.53550455,
+      "rotation_projection_ms_mean": 209.55355713,
+      "stages_ms_mean": {
+        "complete": 68.34279400999999,
+        "expand": 92.86050224,
+        "finalize": 50.680055689999996,
+        "fold": 206.36970383,
+        "pack": 0.39895438,
+        "prepare": 39.68111486,
+        "project": 65.78888590000001,
+        "rotate": 143.76467123,
+        "scan": 609.30997286,
+        "switch": 0.09640842
+      },
+      "wire": {
+        "modeled_seeded_query_bytes": 14880,
+        "actual_query_wire_bytes": null,
+        "actual_response_ciphertext_payload_bytes": 11264
+      },
+      "key_metadata": {
+        "required_key_height": 10,
+        "registered_key_height": 11,
+        "scheme_registered_session_key_height": 11
+      },
+      "gadget_metadata": {
+        "label": "generic-h1-mandatory-0",
+        "gadget_identity": {
+          "selector_gadget_rows": 6,
+          "selector_base_log2": 10,
+          "selector_low_bits": 0,
+          "completion_key_gadget_rows": 10,
+          "completion_key_base_log2": 6,
+          "bv_ks_rows": 8,
+          "bv_ks_base_log2": 8,
+          "bv_ks_low_bits": 0
+        },
+        "query_width": 656,
+        "eval_key_bytes": {
+          "modeled_per_client_eval_key_bytes": 1607040,
+          "eval_key_coefficient_payload_bytes_estimate": 3538944
+        },
+        "wire": {
+          "modeled_seeded_query_bytes": 14880,
+          "actual_query_wire_bytes": null,
+          "actual_response_ciphertext_payload_bytes": 11264
+        },
+        "key_metadata": {
+          "required_key_height": 10,
+          "registered_key_height": 11,
+          "scheme_registered_session_key_height": 11
+        }
+      },
+      "process_records": [
+        {
+          "exit_code": 0,
+          "elapsed_seconds": 181.21830113901524,
+          "process_peak_rss_bytes": 9698181120,
+          "ru_maxrss_unit": "KiB",
+          "peak_scope": "single benchmark child process; includes setup, calibration and all candidates",
+          "cgroup_memory_peak_bytes": null,
+          "cgroup_peak_scope": "shared cgroup cumulative peak, when available",
+          "path": "/users/zcy05331/generic-gadgets-20260909/outputs/h1/round0-kernel-process.json",
+          "raw": "/users/zcy05331/generic-gadgets-20260909/outputs/h1/round0-kernel.json"
+        },
+        {
+          "exit_code": 0,
+          "elapsed_seconds": 180.55644643798587,
+          "process_peak_rss_bytes": 9698144256,
+          "ru_maxrss_unit": "KiB",
+          "peak_scope": "single benchmark child process; includes setup, calibration and all candidates",
+          "cgroup_memory_peak_bytes": null,
+          "cgroup_peak_scope": "shared cgroup cumulative peak, when available",
+          "path": "/users/zcy05331/generic-gadgets-20260909/outputs/h1/round1-kernel-process.json",
+          "raw": "/users/zcy05331/generic-gadgets-20260909/outputs/h1/round1-kernel.json"
+        }
+      ]
+    },
+    "ep3-s32": {
+      "completed_samples": 100,
+      "server_total_ms_mean": 1102.04319565,
+      "rotation_projection_ms_mean": 144.80934041,
+      "stages_ms_mean": {
+        "complete": 34.24115371,
+        "expand": 83.47365192,
+        "finalize": 50.821174199999994,
+        "fold": 112.29346568000001,
+        "pack": 0.48842314000000003,
+        "prepare": 39.47277333,
+        "project": 65.60008928,
+        "rotate": 79.20925113,
+        "scan": 636.10963476,
+        "switch": 0.09667086
+      },
+      "wire": {
+        "modeled_seeded_query_bytes": 14880,
+        "actual_query_wire_bytes": null,
+        "actual_response_ciphertext_payload_bytes": 11264
+      },
+      "key_metadata": {
+        "required_key_height": 10,
+        "registered_key_height": 11,
+        "scheme_registered_session_key_height": 11
+      },
+      "gadget_metadata": {
+        "label": "generic-h1-mandatory-0",
+        "gadget_identity": {
+          "selector_gadget_rows": 3,
+          "selector_base_log2": 9,
+          "selector_low_bits": 32,
+          "completion_key_gadget_rows": 10,
+          "completion_key_base_log2": 6,
+          "bv_ks_rows": 8,
+          "bv_ks_base_log2": 8,
+          "bv_ks_low_bits": 0
+        },
+        "query_width": 584,
+        "eval_key_bytes": {
+          "modeled_per_client_eval_key_bytes": 1607040,
+          "eval_key_coefficient_payload_bytes_estimate": 3538944
+        },
+        "wire": {
+          "modeled_seeded_query_bytes": 14880,
+          "actual_query_wire_bytes": null,
+          "actual_response_ciphertext_payload_bytes": 11264
+        },
+        "key_metadata": {
+          "required_key_height": 10,
+          "registered_key_height": 11,
+          "scheme_registered_session_key_height": 11
+        }
+      },
+      "process_records": [
+        {
+          "exit_code": 0,
+          "elapsed_seconds": 171.57883915599086,
+          "process_peak_rss_bytes": 9698156544,
+          "ru_maxrss_unit": "KiB",
+          "peak_scope": "single benchmark child process; includes setup, calibration and all candidates",
+          "cgroup_memory_peak_bytes": null,
+          "cgroup_peak_scope": "shared cgroup cumulative peak, when available",
+          "path": "/users/zcy05331/generic-gadgets-20260909/outputs/h1/round0-ep3-s32-process.json",
+          "raw": "/users/zcy05331/generic-gadgets-20260909/outputs/h1/round0-ep3-s32.json"
+        },
+        {
+          "exit_code": 0,
+          "elapsed_seconds": 170.97226858901558,
+          "process_peak_rss_bytes": 9698164736,
+          "ru_maxrss_unit": "KiB",
+          "peak_scope": "single benchmark child process; includes setup, calibration and all candidates",
+          "cgroup_memory_peak_bytes": null,
+          "cgroup_peak_scope": "shared cgroup cumulative peak, when available",
+          "path": "/users/zcy05331/generic-gadgets-20260909/outputs/h1/round1-ep3-s32-process.json",
+          "raw": "/users/zcy05331/generic-gadgets-20260909/outputs/h1/round1-ep3-s32.json"
+        }
+      ]
+    },
+    "ep2-s36": {
+      "completed_samples": 100,
+      "server_total_ms_mean": 1028.928016,
+      "rotation_projection_ms_mean": 121.62504515,
+      "stages_ms_mean": {
+        "complete": 23.273379509999998,
+        "expand": 79.73329015,
+        "finalize": 50.619355240000004,
+        "fold": 80.16585328000001,
+        "pack": 0.39637005999999997,
+        "prepare": 39.469582169999995,
+        "project": 65.37754291,
+        "rotate": 56.24750224,
+        "scan": 633.31334559,
+        "switch": 0.09645922000000001
+      },
+      "wire": {
+        "modeled_seeded_query_bytes": 14880,
+        "actual_query_wire_bytes": null,
+        "actual_response_ciphertext_payload_bytes": 11264
+      },
+      "key_metadata": {
+        "required_key_height": 10,
+        "registered_key_height": 11,
+        "scheme_registered_session_key_height": 11
+      },
+      "gadget_metadata": {
+        "label": "generic-h1-mandatory-0",
+        "gadget_identity": {
+          "selector_gadget_rows": 2,
+          "selector_base_log2": 12,
+          "selector_low_bits": 36,
+          "completion_key_gadget_rows": 10,
+          "completion_key_base_log2": 6,
+          "bv_ks_rows": 8,
+          "bv_ks_base_log2": 8,
+          "bv_ks_low_bits": 0
+        },
+        "query_width": 560,
+        "eval_key_bytes": {
+          "modeled_per_client_eval_key_bytes": 1607040,
+          "eval_key_coefficient_payload_bytes_estimate": 3538944
+        },
+        "wire": {
+          "modeled_seeded_query_bytes": 14880,
+          "actual_query_wire_bytes": null,
+          "actual_response_ciphertext_payload_bytes": 11264
+        },
+        "key_metadata": {
+          "required_key_height": 10,
+          "registered_key_height": 11,
+          "scheme_registered_session_key_height": 11
+        }
+      },
+      "process_records": [
+        {
+          "exit_code": 0,
+          "elapsed_seconds": 166.92502031600452,
+          "process_peak_rss_bytes": 9697894400,
+          "ru_maxrss_unit": "KiB",
+          "peak_scope": "single benchmark child process; includes setup, calibration and all candidates",
+          "cgroup_memory_peak_bytes": null,
+          "cgroup_peak_scope": "shared cgroup cumulative peak, when available",
+          "path": "/users/zcy05331/generic-gadgets-20260909/outputs/h1/round0-ep2-s36-process.json",
+          "raw": "/users/zcy05331/generic-gadgets-20260909/outputs/h1/round0-ep2-s36.json"
+        },
+        {
+          "exit_code": 0,
+          "elapsed_seconds": 166.41392910399009,
+          "process_peak_rss_bytes": 9697951744,
+          "ru_maxrss_unit": "KiB",
+          "peak_scope": "single benchmark child process; includes setup, calibration and all candidates",
+          "cgroup_memory_peak_bytes": null,
+          "cgroup_peak_scope": "shared cgroup cumulative peak, when available",
+          "path": "/users/zcy05331/generic-gadgets-20260909/outputs/h1/round1-ep2-s36-process.json",
+          "raw": "/users/zcy05331/generic-gadgets-20260909/outputs/h1/round1-ep2-s36.json"
+        }
+      ]
+    }
+  }
+}

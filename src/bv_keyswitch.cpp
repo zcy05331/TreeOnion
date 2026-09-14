@@ -18,20 +18,28 @@ namespace bvks {
 // Digits are in [-B/2, B/2), stored mod q. Reconstruction: Σ out[i]·B^i ≡ val (mod q).
 // out[0] = least significant digit (B^0), out[num_digits-1] = most significant.
 void signed_gadget_decompose(uint64_t val, size_t base_log2,
-                             uint64_t q, uint64_t *out, size_t num_digits) {
+                             uint64_t q, uint64_t *out, size_t num_digits,
+                             size_t low_bits) {
   const uint64_t half_q = q >> 1;
-  const int64_t nativeSubgBits = 64 - static_cast<int64_t>(base_log2);
+  const uint64_t base = uint64_t{1} << base_log2;
+  const uint64_t mask = base - 1;
 
   // Center: [0, q) -> (-q/2, q/2]
   int64_t d = (val > half_q)
       ? static_cast<int64_t>(val) - static_cast<int64_t>(q)
       : static_cast<int64_t>(val);
+  // Integer rounding, including negative coefficients; ties go upward.
+  // The matching key weights include 2^low_bits. Modular division would not
+  // implement approximate decomposition and would not have a bounded residue.
+  if (low_bits) d = (d + (int64_t{1} << (low_bits - 1))) >> low_bits;
 
   // The goal here: d = r_0 B^0 + r_1 B^1 + r_2 B^2 + ... with r_i in [-B/2, B/2).
 
   for (size_t i = 0; i < num_digits; ++i) {
-    // Extract signed digit: sign-extend the lowest base_log2 bits
-    int64_t r = (d << nativeSubgBits) >> nativeSubgBits;
+    const uint64_t low = static_cast<uint64_t>(d) & mask;
+    const int64_t r = low >= base / 2
+        ? static_cast<int64_t>(low) - static_cast<int64_t>(base)
+        : static_cast<int64_t>(low);
     d -= r;
     d >>= base_log2;
     out[i] = (r >= 0) ? static_cast<uint64_t>(r)
@@ -71,8 +79,37 @@ void signed_gadget_decompose_mp(uint128_t val, uint128_t Q, size_t base_log2,
 // uncompensated sigma_k(s) * (B^L_KS mod q) term into the keyswitch noise.
 // Matches Spiral's convention (spiral/include/util.h:get_bits_per).
 static inline size_t bv_base_log2(const PirParams &pir_params) {
+  static_assert(L_KS > 0 && L_KS <= 16, "BV gadget rows must be in [1,16]");
   const size_t q_bits = pir_params.get_ct_mod_width();
-  return q_bits / L_KS + 1;
+  const size_t bits = (q_bits - low_bits_for_scheme(pir_params)) / L_KS + 1;
+  if (bits >= 63) throw std::invalid_argument("BV gadget base exceeds signed digit range");
+  return bits;
+}
+
+size_t gadget_rows() { return L_KS; }
+
+size_t base_log2_for_scheme(const PirParams &pir_params) {
+  return bv_base_log2(pir_params);
+}
+
+size_t low_bits_for_scheme(const PirParams &pir_params) {
+#ifdef PIR_KS_LOW_BITS
+  constexpr size_t low_bits = PIR_KS_LOW_BITS;
+#else
+  constexpr size_t low_bits = 0;
+#endif
+  if (low_bits >= pir_params.get_ct_mod_width() ||
+      (low_bits && pir_params.K() != 1)) {
+    throw std::invalid_argument("BV low-bit rounding requires K=1 and fewer than q bits");
+  }
+  return low_bits;
+}
+
+bool BvGaloisKeys::contains(uint32_t galois_k) const noexcept {
+  for (const BvKeySwitchKey &k : keys) {
+    if (k.galois_k == galois_k) return true;
+  }
+  return false;
 }
 
 // Compute (1 << (i * base_log2)) mod q, safely.
@@ -243,12 +280,13 @@ BvKeySwitchKey gen_bv_ks_key(const PirParams &pir_params,
   // rows 是 NTT-form、limb-major；后续 BV apply 把 row.b MAC 到 RlweCt.c0，
   // 把 row.a MAC 到 RlweCt.c1，匹配主路径的 (c0,c1) 命名。
   const size_t base_log2 = bv_base_log2(pir_params);
+  const size_t low_bits = low_bits_for_scheme(pir_params);
   ksk.cts.resize(L_KS);
   std::vector<uint64_t> msg(N * K);
   for (size_t i = 0; i < L_KS; ++i) {
     for (size_t k = 0; k < K; ++k) {
       const uint64_t qk = qs[k];
-      const uint64_t Bi = power_of_two_mod(i * base_log2, qk);
+      const uint64_t Bi = power_of_two_mod(low_bits + i * base_log2, qk);
       intel::hexl::EltwiseFMAMod(msg.data() + k * N, sigma_s.data() + k * N,
                                  Bi, nullptr, N, qk, 1);
     }
@@ -284,6 +322,7 @@ namespace {
 struct GaloisScratch {
   std::vector<uint64_t> c0_perm, c1_perm, delta_a, delta_b, tmp;
   std::vector<uint64_t> digits;  // L_KS contiguous N-blocks (row-major)
+  std::vector<int64_t> work;
 };
 static GaloisScratch g_scratch;
 }  // namespace
@@ -299,6 +338,7 @@ static void bv_apply_galois_inplace_k1(RlweCt &ct, uint32_t galois_k,
   constexpr size_t N = DBConsts::PolyDegree;
   const uint64_t q_val = pir_params.get_rns_mods()[0];
   const size_t base_log2 = bv_base_log2(pir_params);
+  const size_t low_bits = low_bits_for_scheme(pir_params);
 
   GaloisScratch &s = g_scratch;
   if (s.c0_perm.size() != N) {
@@ -308,6 +348,7 @@ static void bv_apply_galois_inplace_k1(RlweCt &ct, uint32_t galois_k,
     s.delta_b.resize(N);
     s.tmp.resize(N);
     s.digits.resize(L_KS * N);
+    s.work.resize(N);
   }
   uint64_t *const c0_perm = s.c0_perm.data();
   uint64_t *const c1_perm = s.c1_perm.data();
@@ -322,11 +363,31 @@ static void bv_apply_galois_inplace_k1(RlweCt &ct, uint32_t galois_k,
   TIME_END(APPLY_GAL_SIGMA);
 
   TIME_START(APPLY_GAL_DECOMP);
+  const int64_t qi = static_cast<int64_t>(q_val);
+  const uint64_t base = uint64_t{1} << base_log2;
+  const uint64_t mask = base - 1;
+  int64_t *const work = s.work.data();
   for (size_t k = 0; k < N; ++k) {
-    uint64_t digit_vals[L_KS];
-    signed_gadget_decompose(c1_perm[k], base_log2, q_val, digit_vals, L_KS);
-    for (size_t i = 0; i < L_KS; ++i) {
-      digits[i * N + k] = digit_vals[i];
+    work[k] = c1_perm[k] > q_val / 2
+        ? static_cast<int64_t>(c1_perm[k]) - qi
+        : static_cast<int64_t>(c1_perm[k]);
+  }
+  if (low_bits) {
+    const int64_t half_step = int64_t{1} << (low_bits - 1);
+    for (size_t k = 0; k < N; ++k) work[k] = (work[k] + half_step) >> low_bits;
+  }
+  // Extract one digit across all coefficients. The independent inner loop
+  // permits SIMD, unlike a complete carry chain for each individual coefficient.
+  for (size_t i = 0; i < L_KS; ++i) {
+    uint64_t *const row = digits + i * N;
+    for (size_t k = 0; k < N; ++k) {
+      const uint64_t low = static_cast<uint64_t>(work[k]) & mask;
+      const int64_t digit = low >= base / 2
+          ? static_cast<int64_t>(low) - static_cast<int64_t>(base)
+          : static_cast<int64_t>(low);
+      work[k] = (work[k] - digit) >> base_log2;
+      row[k] = digit < 0 ? static_cast<uint64_t>(digit + qi)
+                         : static_cast<uint64_t>(digit);
     }
   }
   TIME_END(APPLY_GAL_DECOMP);

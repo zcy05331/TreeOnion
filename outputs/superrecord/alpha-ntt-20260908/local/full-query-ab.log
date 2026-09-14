@@ -1,0 +1,10 @@
+Traceback (most recent call last):
+  File "/Users/little_sun/Desktop/little_sun/26Summer/OnionPIRv2/.worktrees/generic-superrecord/scripts/benchmark_alpha_ntt_ab.py", line 104, in <module>
+    main()
+  File "/Users/little_sun/Desktop/little_sun/26Summer/OnionPIRv2/.worktrees/generic-superrecord/scripts/benchmark_alpha_ntt_ab.py", line 63, in main
+    validate_profile(data, raw, args.experiments, args.leaf_count)
+  File "/Users/little_sun/Desktop/little_sun/26Summer/OnionPIRv2/.worktrees/generic-superrecord/scripts/summarize_cloudlab_profiles.py", line 308, in validate_profile
+    validate_generic(data, path, trials, leaf_count)
+  File "/Users/little_sun/Desktop/little_sun/26Summer/OnionPIRv2/.worktrees/generic-superrecord/scripts/summarize_cloudlab_profiles.py", line 263, in validate_generic
+    raise ProfileError(f"{path}: missing measured h1 candidate")
+summarize_cloudlab_profiles.ProfileError: /Users/little_sun/Desktop/little_sun/26Summer/OnionPIRv2/.worktrees/generic-superrecord/outputs/superrecord/alpha-ntt-20260908/local/full-query-ab/round0-old.json: missing measured h1 candidate

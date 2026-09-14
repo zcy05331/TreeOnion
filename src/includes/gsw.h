@@ -21,6 +21,7 @@ class GSWEval {
     PirParams pir_params_;
     size_t l_;
     size_t base_log2_;
+    size_t low_bits_;
 
     // Reusable scratch for external_product, sized once then reused across the
     // many calls (avoids per-call heap churn). ep_decomp_: 2*l_ decomposed rows,
@@ -33,8 +34,10 @@ class GSWEval {
     std::vector<int64_t> ep_dwork_;  // centered working values for vectorized decomp
 
   public:
-    GSWEval(const PirParams &pir_params, const size_t l, const size_t base_log2)
-        : pir_params_(pir_params), l_(l), base_log2_(base_log2) {}
+    GSWEval(const PirParams &pir_params, const size_t l, const size_t base_log2,
+            const size_t low_bits = 0)
+        : pir_params_(pir_params), l_(l), base_log2_(base_log2),
+          low_bits_(low_bits) {}
     ~GSWEval() = default;
     GSWEval(const GSWEval &gsw_eval) = default;
 

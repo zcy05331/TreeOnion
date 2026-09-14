@@ -63,7 +63,16 @@ public:
   std::vector<BvKeySwitchKey> keys;
 
   const BvKeySwitchKey &get(uint32_t galois_k) const;
+  // Non-throwing membership test used by the generic tree path to inspect the
+  // actual automorphism family instead of trusting a claimed height.
+  bool contains(uint32_t galois_k) const noexcept;
 };
+
+// Read-only views of the key-switch gadget shape, so scheme identities never
+// re-derive the base rule that gen_bv_ks_key uses.
+size_t gadget_rows();                                    // L_KS
+size_t base_log2_for_scheme(const PirParams &pir_params); // floor(log2 q / L_KS) + 1
+size_t low_bits_for_scheme(const PirParams &pir_params);
 
 // ============================================================================
 // Key generation (client side)
@@ -91,7 +100,8 @@ BvGaloisKeys gen_bv_galois_keys(const PirParams &pir_params,
 //         each stored mod q, representing a signed digit in [-B/2, B/2).
 // Reconstruction: Σ out[i] · B^i ≡ val (mod q).
 void signed_gadget_decompose(uint64_t val, size_t base_log2,
-                             uint64_t q, uint64_t *out, size_t num_digits);
+                             uint64_t q, uint64_t *out, size_t num_digits,
+                             size_t low_bits = 0);
 
 // Multi-precision variant for K=2 (uint128 modulus Q = q0·q1). Centers `val`
 // in (-Q/2, Q/2] then emits num_digits signed digits in [-B/2, B/2) as int64_t.

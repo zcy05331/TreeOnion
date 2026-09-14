@@ -6,7 +6,14 @@
 
 #include <array>
 #include <filesystem>
+#include <fstream>
+#include <sstream>
+#include <string>
+#include <utility>
 #include <vector>
+
+void test_merkle_profiled_override();
+void test_layer_layout_sweep_dominated();
 
 namespace {
 
@@ -37,21 +44,55 @@ bool throws_invalid_argument(Fn &&fn) {
   return false;
 }
 
-}  // namespace
+// A synthetic profile that measures exactly one candidate per listed PIR
+// level. With a single measured option per level the selector can only pick
+// it (the sample value is irrelevant), so the profiled planner is forced off
+// the legacy heights deterministically instead of following this machine's
+// timings.
+std::shared_ptr<LayerLayoutProfile> forced_height_profile(
+    const PirParams &reference, size_t tree_height,
+    const std::vector<std::pair<size_t, size_t>> &level_heights) {
+  auto profile = std::make_shared<LayerLayoutProfile>();
+  profile->environment = detect_layer_layout_environment(
+      reference, "test-commit", "Benchmark", "CONFIG_N2048_K1_COMP");
+  profile->tree_height = tree_height;
+  profile->nodes_per_plaintext = 96;
+  profile->measured_trials = 1;
+  for (const auto &[level, height] : level_heights) {
+    bool found = false;
+    for (const LayerLayoutCandidate &c :
+         enumerate_layer_layout_candidates(level, 96, reference)) {
+      if (c.features.expansion_height != height) continue;
+      LayerLayoutMeasurement m;
+      m.level = level;
+      m.features = c.features;
+      m.server_samples_ms = {1.0};
+      m.median_server_ms = 1.0;
+      profile->measurements.push_back(std::move(m));
+      found = true;
+    }
+    require_test(found, "fixture: level " + std::to_string(level) +
+                            " has no candidate with expansion height " +
+                            std::to_string(height));
+  }
+  return profile;
+}
 
-void PirTest::test_merkle_integration() {
-  require_applicable(paper_config_active(),
-                     paper_config_reason("the Merkle benchmark suite"));
-  // H=8 cheaply covers first, last, and interior leaves through codec, query,
-  // server evaluation, response wire round-trip, and decryption.
-  const MerkleWorkload small{size_t{1} << 8, 8, 32};
-  const size_t small_target = utils::roundup_div(
-      2 * (small.leaf_count - 1), size_t{96});
-  PirParams small_reference =
-      PirParams().with_layout({small_target, 3, true});
-  const BenchmarkTrialPlan small_trials{
-      {}, {0, small.leaf_count - 1, small.leaf_count / 2}};
+uint64_t padded_plaintexts_of(const std::vector<LayerLayoutRecord> &layers) {
+  uint64_t total = 0;
+  for (const LayerLayoutRecord &layer : layers) {
+    total += layer.features.padded_plaintexts;
+  }
+  return total;
+}
 
+uint64_t padded_plaintexts_of(const std::vector<LayerLayout> &plan) {
+  uint64_t total = 0;
+  for (const LayerLayout &layout : plan) total += layout.params.get_num_pt();
+  return total;
+}
+
+std::shared_ptr<LayerLayoutProfile> require_h8_path_and_profiled_layerwise(const MerkleWorkload &small, const PirParams &small_reference, const BenchmarkTrialPlan &small_trials) {
   BenchmarkCaseExecution standard =
       run_standard_case(small, small_reference, small_trials);
   require_test(standard.result.correctness_passed,
@@ -178,7 +219,10 @@ void PirTest::test_merkle_integration() {
                      fallback.measured_paths == legacy_ref.measured_paths,
                  "case runner fallback must produce the legacy plan");
   }
+  return profile8;
+}
 
+std::shared_ptr<LayerLayoutProfile> require_h16_multidimensional_profiled_layerwise() {
   // H=16 forces remaining-dimension RGSW MUX work; a small-only fixture could
   // otherwise pass while testing only the first-dimension path.
   const MerkleWorkload multidimensional{size_t{1} << 16, 16, 32};
@@ -243,7 +287,10 @@ void PirTest::test_merkle_integration() {
     require_test(profiled_padded <= legacy_padded * 1.01 + 1,
                  "H=16 profiled plan respects the padding budget");
   }
+  return profile16;
+}
 
+void require_suite_profile_routing(const MerkleWorkload &small, const std::shared_ptr<LayerLayoutProfile> &profile8, const std::shared_ptr<LayerLayoutProfile> &profile16) {
   // The benchmark suite with profiles loaded from disk, one per tree height:
   // the suite must pick the profile whose height matches the workload even
   // when the primary profile is the other one, reject a run with no matching
@@ -302,4 +349,294 @@ void PirTest::test_merkle_integration() {
                      fallback.cases[0].layer_layout_policy == "legacy",
                  "suite fallback must report the legacy policy");
   }
+}
+
+
+}  // namespace
+
+void PirTest::test_merkle_integration() {
+  require_applicable(paper_config_active(),
+                     paper_config_reason("the Merkle benchmark suite"));
+  // H=8 cheaply covers first, last, and interior leaves through codec, query,
+  // server evaluation, response wire round-trip, and decryption.
+  const MerkleWorkload small{size_t{1} << 8, 8, 32};
+  const size_t small_target = utils::roundup_div(
+      2 * (small.leaf_count - 1), size_t{96});
+  PirParams small_reference =
+      PirParams().with_layout({small_target, 3, true});
+  const BenchmarkTrialPlan small_trials{
+      {}, {0, small.leaf_count - 1, small.leaf_count / 2}};
+
+  std::shared_ptr<LayerLayoutProfile> profile8 =
+      require_h8_path_and_profiled_layerwise(small, small_reference,
+                                             small_trials);
+
+
+  std::shared_ptr<LayerLayoutProfile> profile16 =
+      require_h16_multidimensional_profiled_layerwise();
+
+
+  require_suite_profile_routing(small, profile8, profile16);
+
+}
+
+// The profiled blocks of test_merkle_integration take their profiles from a
+// real timing sweep, so whether a non-legacy layout is ever executed depends
+// on this machine's noise (on the M4 the H=8 sweep selects exactly the legacy
+// heights). Here the profile measures only one non-legacy candidate per PIR
+// level, so the planner has to leave the legacy plan, and the case runner must
+// build every level server and generate every query from the same overridden
+// layout.params, retrieve the oracle path, and record the override in
+// layers[] and in the padded-storage columns.
+void test_merkle_profiled_override() {
+  require_applicable(paper_config_active(),
+                     paper_config_reason("the Merkle benchmark suite"));
+
+  // H=8: legacy serves level 7 at h=1 (2 plaintexts) and level 8 at h=2 (4
+  // plaintexts). Force the reference height h=3 at both: 8 plaintexts each,
+  // so 6 of 8 and 5 of 8 stored plaintexts are padding, a shape the legacy
+  // planner never produces at this height.
+  const MerkleWorkload small{size_t{1} << 8, 8, 32};
+  const PirParams reference = make_benchmark_reference(small);
+  const std::vector<LayerLayout> legacy_plan =
+      plan_layer_layouts(8, 96, reference);
+  require_test(reference.get_expan_height() == 3 &&
+                   legacy_plan[6].params.get_expan_height() == 1 &&
+                   legacy_plan[7].params.get_expan_height() == 2,
+               "H=8 fixture: reference height or legacy heights changed");
+  LayerPlannerConfig config;
+  config.policy = LayerLayoutPolicy::profiled;
+  config.total_padding_budget = 2.0;  // 10 extra on a legacy total of 12
+  config.profile = forced_height_profile(reference, 8, {{7, 3}, {8, 3}});
+  const BenchmarkTrialPlan trials{
+      {}, {0, small.leaf_count - 1, small.leaf_count / 2}};
+  const BenchmarkCaseExecution flat =
+      run_merkle_flat_case(small, reference, trials);
+  const BenchmarkCaseExecution legacy =
+      run_merkle_layerwise_case(small, reference, trials);
+  const BenchmarkCaseExecution profiled =
+      run_merkle_layerwise_case(small, reference, trials, config);
+  require_test(profiled.result.correctness_passed,
+               "H=8 overridden layerwise correctness");
+  require_test(profiled.measured_paths == flat.measured_paths,
+               "H=8 overridden layouts retrieved a different path");
+  for (size_t i = 0; i < trials.measured_leaf_indices.size(); ++i) {
+    require_expected_path(profiled.measured_paths.at(i),
+                          trials.measured_leaf_indices[i], 8);
+  }
+  require_test(profiled.result.layer_layout_policy == "profiled" &&
+                   profiled.result.layers.size() == 8,
+               "H=8 override must be recorded as the profiled policy");
+  for (size_t level = 7; level <= 8; ++level) {
+    const LayerLayoutFeatures &f =
+        profiled.result.layers[level - 1].features;
+    require_test(f.expansion_height == 3 && f.first_dim_size == 8 &&
+                     f.other_dim_size == 1 && f.padded_plaintexts == 8,
+                 "H=8 level " + std::to_string(level) +
+                     " did not record the forced h=3 layout");
+  }
+  require_test(padded_plaintexts_of(legacy.result.layers) == 12 &&
+                   padded_plaintexts_of(profiled.result.layers) == 22,
+               "H=8 padded totals must be 6+2+4 (legacy) and 6+8+8 (forced)");
+  // The wire model is layout-independent: queries are modelled from the
+  // reference and a response is one ciphertext whatever the level's shape.
+  validate_layerwise_path_communication(
+      flat.result.communication, profiled.result.communication,
+      profiled.result.direct_return_levels,
+      profiled.result.direct_return_response_bytes);
+  // Storage accounting follows the executed layouts: the paper (target)
+  // footprint does not move, the padded footprint grows by exactly the ten
+  // forced padding plaintexts.
+  require_test(profiled.result.paper_plaintext_database_bytes ==
+                   legacy.result.paper_plaintext_database_bytes,
+               "overridden layouts changed the paper plaintext footprint");
+  require_test(profiled.result.logical_padded_database_bytes ==
+                   legacy.result.logical_padded_database_bytes +
+                       10 * reference.get_pt_size(),
+               "padded footprint must grow by the 10 forced padding plaintexts");
+
+  // H=16, level 13: legacy is h=5 (N0=8, 11 x 8 = 88 plaintexts over four
+  // MUX dimensions); force h=6 (N0=32, 3 x 32 = 96 plaintexts over two), a
+  // different first-dimension size and remaining-dimension shape that fits
+  // the default 1% budget (8 extra on a legacy total of 1452).
+  const MerkleWorkload multi{size_t{1} << 16, 16, 32};
+  const PirParams reference16 = make_benchmark_reference(multi);
+  const std::vector<LayerLayout> legacy16 =
+      plan_layer_layouts(16, 96, reference16);
+  require_test(legacy16[12].params.get_expan_height() == 5 &&
+                   legacy16[12].params.get_num_other_dims() == 4,
+               "H=16 fixture: legacy level-13 layout changed");
+  LayerPlannerConfig config16;
+  config16.policy = LayerLayoutPolicy::profiled;
+  config16.total_padding_budget = 1.01;
+  config16.profile = forced_height_profile(reference16, 16, {{13, 6}});
+  const BenchmarkTrialPlan trials16{{}, {48879, multi.leaf_count - 1}};
+  const BenchmarkCaseExecution profiled16 =
+      run_merkle_layerwise_case(multi, reference16, trials16, config16);
+  require_test(profiled16.result.correctness_passed &&
+                   profiled16.result.layer_layout_policy == "profiled",
+               "H=16 overridden layerwise correctness");
+  require_expected_path(profiled16.measured_paths.at(0), 48879, 16);
+  require_expected_path(profiled16.measured_paths.at(1),
+                        multi.leaf_count - 1, 16);
+  const LayerLayoutFeatures &level13 = profiled16.result.layers.at(12).features;
+  require_test(level13.expansion_height == 6 && level13.first_dim_size == 32 &&
+                   level13.other_dim_size == 3 && level13.other_dim_count == 2 &&
+                   level13.padded_plaintexts == 96,
+               "H=16 level 13 did not record the forced h=6 layout");
+  for (size_t i = 0; i < 16; ++i) {
+    if (i == 12) continue;
+    require_test(profiled16.result.layers[i].features.expansion_height ==
+                     legacy16[i].params.get_expan_height(),
+                 "H=16 unmeasured levels must keep the legacy layout");
+  }
+  require_test(padded_plaintexts_of(profiled16.result.layers) ==
+                   padded_plaintexts_of(legacy16) + 8,
+               "H=16 forced layout must cost exactly 8 extra plaintexts");
+  BENCH_PRINT("profiled override: H=8 levels 7,8 served at h=3 ("
+              << padded_plaintexts_of(profiled.result.layers)
+              << " padded plaintexts), H=16 level 13 served at h=6 ("
+              << padded_plaintexts_of(profiled16.result.layers)
+              << " padded plaintexts); paths match the heap oracle");
+}
+
+// --layout-sweep-all (LayerLayoutSweepOptions::include_dominated) times every
+// legal candidate and flags the non-frontier ones; the default sweep times the
+// frontier only. Nothing else passes include_dominated, and the `dominated`
+// flag the loader reads (summarize_layer_layout_profile.py prints it as the
+// "dominated" role) had no round-trip check.
+void test_layer_layout_sweep_dominated() {
+  require_applicable(paper_config_active(),
+                     paper_config_reason("the Merkle benchmark suite"));
+  const MerkleWorkload small{size_t{1} << 8, 8, 32};
+  const PirParams reference = make_benchmark_reference(small);
+  LayerLayoutSweepOptions sweep;
+  sweep.leaf_count = small.leaf_count;
+  sweep.warmups = 0;
+  sweep.measured_trials = 1;
+  sweep.trial_seed = 7;
+  const LayerLayoutProfile frontier = run_layer_layout_sweep(sweep);
+  sweep.include_dominated = true;
+  const LayerLayoutProfile all = run_layer_layout_sweep(sweep);
+
+  struct Entry {
+    size_t level;
+    size_t height;
+    bool dominated;
+    bool operator==(const Entry &o) const {
+      return level == o.level && height == o.height && dominated == o.dominated;
+    }
+  };
+  const auto entries_of = [](const LayerLayoutProfile &profile) {
+    std::vector<Entry> out;
+    for (const LayerLayoutMeasurement &m : profile.measurements) {
+      out.push_back({m.level, m.features.expansion_height, m.dominated});
+    }
+    return out;
+  };
+  // Expected from the planner's own enumeration and Pareto filter: every
+  // legal candidate of both PIR levels once, dominated iff the filter drops
+  // it; direct-return levels 1..6 are not measured.
+  std::vector<Entry> expected;
+  for (size_t level = 7; level <= 8; ++level) {
+    const std::vector<LayerLayoutCandidate> candidates =
+        enumerate_layer_layout_candidates(level, 96, reference);
+    const std::vector<LayerLayoutCandidate> pareto =
+        pareto_layer_layout_candidates(candidates);
+    for (const LayerLayoutCandidate &c : candidates) {
+      bool on_frontier = false;
+      for (const LayerLayoutCandidate &f : pareto) {
+        on_frontier |= f.features.expansion_height == c.features.expansion_height;
+      }
+      expected.push_back({level, c.features.expansion_height, !on_frontier});
+    }
+  }
+  require_test(entries_of(all) == expected,
+               "--layout-sweep-all must time every legal candidate of every "
+               "PIR level exactly once, flagged by the Pareto filter");
+  // Pin today's H=8 candidate set so a with_layout legality change shows up
+  // here rather than in a CloudLab sweep. The five entries are what
+  // enumerate_layer_layout_candidates admits at the two PIR levels of this
+  // height under the sweep's own make_benchmark_reference (h=3), flagged by a
+  // Pareto filter that only compares cost features (scan bytes, substitutions,
+  // NTTs, selector rows, CMUXes). Nothing here depends on a measurement, so a
+  // change means with_layout accepts or rejects a different shape, not that
+  // this machine timed the candidates differently. Update the pin only
+  // alongside a deliberate legality or Pareto change -- an archived sweep
+  // profile covering candidates this build no longer enumerates can no longer
+  // be replayed.
+  const std::vector<Entry> pinned = {{7, 1, false}, {7, 2, true}, {7, 3, true},
+                                     {8, 2, false}, {8, 3, true}};
+  require_test(expected == pinned,
+               "H=8 candidate set drifted from h in {1,2,3} at level 7 and "
+               "{2,3} at level 8 with only h=1 / h=2 on the frontier");
+  std::vector<Entry> undominated;
+  for (const Entry &e : entries_of(all)) {
+    if (!e.dominated) undominated.push_back(e);
+  }
+  require_test(entries_of(frontier) == undominated,
+               "default sweep must measure exactly the undominated candidates");
+  for (const LayerLayoutMeasurement &m : all.measurements) {
+    require_test(m.server_samples_ms.size() == 1 &&
+                     m.median_server_ms == m.server_samples_ms[0],
+                 "one measured trial must give one sample and that median");
+  }
+  // Each alternative costs at least two extra plaintexts on a legacy total of
+  // 12, so the sweeps' default 1% budget keeps the legacy heights whatever
+  // they timed: the selection is deterministic.
+  const std::vector<size_t> legacy_heights{0, 0, 0, 0, 0, 0, 1, 2};
+  require_test(all.selected_expansion_heights == legacy_heights &&
+                   frontier.selected_expansion_heights == legacy_heights &&
+                   all.legacy_total_padded_plaintexts == 12 &&
+                   all.selected_total_padded_plaintexts == 12,
+               "1% budget must keep the legacy heights at H=8");
+
+  // JSON round trip keeps the flag, under the key the Python report reads.
+  const std::string path =
+      (std::filesystem::temp_directory_path() / "layer-layout-sweep-dominated.json")
+          .string();
+  save_layer_layout_profile(all, path);
+  std::string text;
+  {
+    std::ifstream file(path, std::ios::binary);
+    std::stringstream buffer;
+    buffer << file.rdbuf();
+    text = buffer.str();
+  }
+  const LayerLayoutProfile loaded = load_layer_layout_profile(path);
+  std::filesystem::remove(path);
+  require_test(text.find("\"dominated\": true") != std::string::npos &&
+                   text.find("\"dominated\": false") != std::string::npos,
+               "profile JSON must spell the dominated flag under that key");
+  require_test(entries_of(loaded) == entries_of(all),
+               "dominated flags did not survive the profile JSON round trip");
+
+  // The planner treats dominated measurements as ordinary legal options: a
+  // reloaded profile carrying them drives the case runner, and under the 1%
+  // budget it reproduces the legacy plan with the profiled policy recorded.
+  LayerPlannerConfig config;
+  config.policy = LayerLayoutPolicy::profiled;
+  config.total_padding_budget = 1.01;
+  config.profile = std::make_shared<LayerLayoutProfile>(loaded);
+  const BenchmarkTrialPlan trials{{}, {0, small.leaf_count - 1}};
+  const BenchmarkCaseExecution legacy_case =
+      run_merkle_layerwise_case(small, reference, trials);
+  const BenchmarkCaseExecution profiled_case =
+      run_merkle_layerwise_case(small, reference, trials, config);
+  require_test(profiled_case.result.correctness_passed &&
+                   profiled_case.measured_paths == legacy_case.measured_paths,
+               "all-candidates profile: path mismatch against the legacy plan");
+  require_test(profiled_case.result.layer_layout_policy == "profiled" &&
+                   profiled_case.result.layers.size() == 8,
+               "all-candidates profile must run as the profiled policy");
+  for (size_t i = 0; i < 8; ++i) {
+    require_test(profiled_case.result.layers[i].features.expansion_height ==
+                     legacy_heights[i],
+                 "1% budget must keep the legacy heights in the executed plan");
+  }
+  BENCH_PRINT("layout sweep: " << all.measurements.size()
+              << " candidates timed with --layout-sweep-all ("
+              << all.measurements.size() - frontier.measurements.size()
+              << " dominated), " << frontier.measurements.size()
+              << " on the default frontier sweep; flags round-trip through JSON");
 }

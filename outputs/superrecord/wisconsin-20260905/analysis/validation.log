@@ -1,0 +1,46 @@
+{
+  "1gb": {
+    "candidate_over_control": 0.8394675261970176,
+    "ratio_ci95": [
+      0.8386208222162761,
+      0.840552576413154
+    ],
+    "speedup": 1.191231308887232,
+    "speedup_ci95": [
+      1.1896935754658533,
+      1.192434022037799
+    ],
+    "server_time_reduction_percent": 16.05324738029824,
+    "reduction_percent_ci95": [
+      15.944742358684605,
+      16.13791777837239
+    ],
+    "statistically_unresolved": false,
+    "bootstrap_seed": 20260906,
+    "bootstrap_resamples": 10000,
+    "paired_blocks": 100,
+    "estimator": "ratio of arithmetic means; percentile paired-block bootstrap"
+  },
+  "4gb": {
+    "candidate_over_control": 0.9096971187121788,
+    "ratio_ci95": [
+      0.9086793283617551,
+      0.9109373969786874
+    ],
+    "speedup": 1.0992669751616442,
+    "speedup_ci95": [
+      1.0977702785248549,
+      1.1004982382540667
+    ],
+    "server_time_reduction_percent": 9.030288128782116,
+    "reduction_percent_ci95": [
+      8.906260302131264,
+      9.132067163824487
+    ],
+    "statistically_unresolved": false,
+    "bootstrap_seed": 20260906,
+    "bootstrap_resamples": 10000,
+    "paired_blocks": 100,
+    "estimator": "ratio of arithmetic means; percentile paired-block bootstrap"
+  }
+}

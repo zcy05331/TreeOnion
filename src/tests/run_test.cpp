@@ -1,6 +1,32 @@
 #include "tests.h"
+#include "tree_compress_bench.h"
 
 #include <vector>
+
+void test_approx_gadget();
+void test_tree_response_merge_e2e();
+// TimerLogger accumulation, warm-up skipping and cleanup.
+void test_logging();
+// Merkle baselines: a profiled plan off the legacy heights, the phase
+// clocks, the archived leaf schedule, one-sample statistics, large tiers.
+void test_merkle_profiled_override();
+void test_merkle_server_phases();
+void test_merkle_trial_schedule();
+void test_merkle_single_sample_stats();
+void test_layer_layout_sweep_dominated();
+void test_layer_layout_large_tiers();
+// The complete response plaintext at the paper's first-dimension width.
+void test_tree_noise_envelope();
+// PIR layouts: every row of a ragged and a perfect remaining-dimension
+// tree, and a query shape that fills the expansion capacity exactly.
+void test_pir_row_sweep();
+void test_query_shape_exact_fit();
+// Crypto primitives: the vectorized loops against the scalar primitives
+// they mirror, and the generated moduli.
+void test_bv_keyswitch_reference();
+void test_gsw_decomp_shapes();
+void test_ntt_friendly_primes();
+void test_paper_moduli_pin();
 
 // Correctness suite behind `--test all`: every registered test that asserts
 // its result and finishes in seconds to a few minutes. The timed benchmarks
@@ -16,6 +42,18 @@ static const std::vector<std::string> kRegressionTests = {
     "tree_kernel", "tree_e2e", "tree_g32", "tree_compress",
     "merkle_baseline", "merkle_benchmark_stats", "layer_layout_planner",
     "merkle_integration", "cuckoo_batch",
+    "tree_superrecord_codec", "tree_superrecord_planner",
+    "tree_superrecord_index", "tree_superrecord_e2e",
+    "tree_superrecord_noise", "tree_superrecord_kernel", "tree_superrecord_alpha",
+    "approx_gadget",
+    "tree_response_merge", "tree_response_merge_e2e",
+    "logging",
+    "merkle_profiled_override", "merkle_server_phases", "merkle_trial_schedule",
+    "merkle_single_sample_stats", "layer_layout_sweep_dominated",
+    "layer_layout_large_tiers",
+    "tree_noise_envelope",
+    "pir_row_sweep", "query_shape_exact_fit",
+    "bv_ks_reference", "gsw_decomp_shapes", "ntt_primes", "paper_moduli_pin",
 };
 
 void PirTest::run_test(const std::string &test_name) {
@@ -67,8 +105,23 @@ void PirTest::run_test(const std::string &test_name) {
   else if (test_name == "tree_g32")          test_tree_g32();
   else if (test_name == "tree_bench_g32")    test_tree_benchmark_g32();
   else if (test_name == "tree_compress")     test_tree_compress();
+  else if (test_name == "tree_noise_envelope") test_tree_noise_envelope();
+  else if (test_name == "tree_compress_bench") run_tree_compress_benchmark(*this);
   else if (test_name == "cuckoo_batch")      test_cuckoo_batch();
   else if (test_name == "cuckoo_bench")      test_cuckoo_benchmark();
+  else if (test_name == "tree_superrecord_codec")   test_tree_superrecord_codec();
+  else if (test_name == "tree_superrecord_planner") test_tree_superrecord_planner();
+  else if (test_name == "tree_superrecord_index")   test_tree_superrecord_index();
+  else if (test_name == "tree_superrecord_e2e")     test_tree_superrecord_e2e();
+  else if (test_name == "tree_superrecord_noise")   test_tree_superrecord_noise();
+  else if (test_name == "tree_superrecord_kernel")  test_tree_superrecord_kernel();
+  else if (test_name == "tree_superrecord_alpha")   test_tree_superrecord_alpha();
+  else if (test_name == "approx_gadget")            test_approx_gadget();
+  else if (test_name == "gsw_decomp_shapes")        test_gsw_decomp_shapes();
+  else if (test_name == "tree_response_merge")      test_tree_response_merge();
+  else if (test_name == "tree_response_merge_e2e")  test_tree_response_merge_e2e();
+  else if (test_name == "tree_superrecord_noise_probe") test_tree_superrecord_noise_probe();
+  else if (test_name == "tree_superrecord_bench")   test_tree_superrecord_benchmark();
   else if (test_name == "decrypt_mod_q")     test_decrypt_mod_q();
   else if (test_name == "mod_switch")        test_mod_switch();
   else if (test_name == "db_shape")          test_db_shape();
@@ -78,12 +131,24 @@ void PirTest::run_test(const std::string &test_name) {
   else if (test_name == "shared_session")      test_shared_session();
   else if (test_name == "merkle_benchmark_stats") test_merkle_benchmark_stats();
   else if (test_name == "merkle_integration")  test_merkle_integration();
+  else if (test_name == "merkle_profiled_override") test_merkle_profiled_override();
+  else if (test_name == "merkle_server_phases") test_merkle_server_phases();
+  else if (test_name == "merkle_trial_schedule") test_merkle_trial_schedule();
+  else if (test_name == "merkle_single_sample_stats") test_merkle_single_sample_stats();
   else if (test_name == "pir_profile")         test_pir_profile();
+  else if (test_name == "pir_row_sweep")       test_pir_row_sweep();
+  else if (test_name == "query_shape_exact_fit") test_query_shape_exact_fit();
   else if (test_name == "layer_layout_planner") test_layer_layout_planner();
+  else if (test_name == "layer_layout_sweep_dominated") test_layer_layout_sweep_dominated();
+  else if (test_name == "layer_layout_large_tiers") test_layer_layout_large_tiers();
   else if (test_name == "bv_ks")             test_bv_keyswitch();
+  else if (test_name == "bv_ks_reference")   test_bv_keyswitch_reference();
   else if (test_name == "cpu_info")          print_cpu_info();
   else if (test_name == "hexl_ntt")          test_hexl_ntt();
   else if (test_name == "utils_arith")       test_utils_arith();
+  else if (test_name == "logging")           test_logging();
+  else if (test_name == "ntt_primes")        test_ntt_friendly_primes();
+  else if (test_name == "paper_moduli_pin")  test_paper_moduli_pin();
   else if (test_name == "noise_sampling")    test_noise_sampling();
   else if (test_name == "rlwe_enc")          test_rlwe_enc();
   else if (test_name == "barrett")           test_barrett();

@@ -1,0 +1,14 @@
+scale,backend,stage,mean_ms,percent
+1gb,vbpir_fd256,server_first_dimension_ms,5514.9540625,62.225614681045975
+1gb,vbpir_fd256,server_second_dimension_ms,3239.4565625,36.55101630034851
+1gb,vbpir_fd256,server_last_dimension_ms,86.4099375,0.97496940401546
+1gb,vbpir_fd256,server_merge_ms,21.7228125,0.24510002170369102
+1gb,vbpir_fd256,other,0.29243749999841384,0.0032995928863532
+4gb,sealpir_d2,server_expansion_ms,20227.189125,19.99019572194083
+4gb,sealpir_d2,server_query_ntt_ms,3522.6003125,3.481327497453007
+4gb,sealpir_d2,server_database_ntt_ms,6250.3100625,6.177077828266522
+4gb,sealpir_d2,server_multiply_accumulate_ms,67864.26425000001,67.0691274254357
+4gb,sealpir_d2,server_inverse_ntt_ms,1703.669,1.6837078323112389
+4gb,sealpir_d2,server_recursive_decomposition_modswitch_ms,1535.1015625,1.517115428040582
+4gb,sealpir_d2,server_modswitch_ms,81.8995625,0.08093998003374706
+4gb,sealpir_d2,other,0.5143125000031432,0.000508286518396981

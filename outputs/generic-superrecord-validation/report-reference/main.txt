@@ -1,0 +1,1243 @@
+000
+001
+      P REFIX -C OMPATIBLE S UPER -R ECORDS FOR M ERKLE
+002   AUTHENTICATION -PATH PIR
+003
+004
+005    Anonymous authors
+006    Paper under double-blind review
+007
+008
+009                                                  A BSTRACT
+010
+011            Merkle authentication-path private information retrieval (PIR) returns the sibling
+012            at every non-root level while hiding the selected leaf. For a perfect binary tree,
+013            a public permutation that swaps each pair of siblings turns this object into an an-
+014            cestor path in the permuted logical view. We therefore reduce authentication-path
+015            retrieval to one prefix-compatible path query, without changing its encrypted in-
+016            dex. Dyadic record layouts make cross-level query reuse efficient, but they waste
+017
+               plaintext capacity when one logical node does not occupy a power-of-two number
+               of coefficients. We introduce a generic super-record layout that groups any posi-
+018
+               tive integer h of adjacent public nodes while preserving the path prefix. The key
+019
+               identity is
+020
+021                                               ⌊i/2k ⌋
+                                             ⌊︃           ⌋︃ ⌊︃       ⌋︃
+                                                                ⌊i/h⌋
+022                                                         =            .
+                                                     h            2k
+023
+024
+               One mixed-scale ciphertext then packs a one-hot selector for the high part of
+               σ = ⌊i/h⌋ together with encrypted rows for every bit of σ. The same selectors
+025
+               drive level-specific plaintext folding and private residue rotation. In the registered-
+026
+               key client-hint model, the server expands this query once, selects and aligns one
+027            plaintext per level and plane, projects away competing residues, and pools the
+028            results into same-ring response ciphertexts. The client reconstructs each super-
+029            record and selects one lane; in the sibling-swapped view that lane contains the
+030            original sibling. For 256-bit nodes, a degree-2048 ring with 12 payload bits per
+031            coefficient admits h = 3, G = 64, and one plane. Across all 25 levels of a 224 -leaf
+032            tree, the layout adds only 677 plaintext cells (0.19%); its 24-node authentication
+033            path fits in one response ciphertext.
+034
+035
+036
+      1   I NTRODUCTION
+037
+      Private access to hierarchical data often requires several related records, not one item from a flat
+038
+      array. A Merkle-tree query, for example, may need the sibling at every non-root level while revealing
+039
+      only a leaf index. Equivalently, after a public sibling-swapping permutation, the same query asks
+040   for the ancestor at every level in the swapped logical view. Running an independent PIR scan per
+041   level discards the shared prefix structure of those indices. Existing path-oriented systems avoid that
+042   repetition through ORAM bucket reuse or tree-specific batch layouts (Mayberry et al., 2014; Cao
+043   et al., 2025); here we study the corresponding problem inside an RLWE selection pipeline.
+044
+      The immediate obstacle is plaintext utilization. OnionPIR-style schemes favor power-of-two record
+045
+      geometries because binary CMux selection, private monomial rotation, and coefficient projection
+046   then share a simple bit decomposition (Mughees et al., 2021; Chen & Ren, 2025). A fixed-size
+047   node rarely fills such a geometry exactly. Padding every node to the next dyadic coefficient width
+048   increases the number of plaintexts scanned. Grouping h adjacent nodes into a super-record can
+049   remove that loss, but an arbitrary h appears to break the cross-level prefix query on which the path-
+050   wide computation depends.
+051
+      Our key observation is that grouping commutes with ancestor truncation:
+052
+                                              ⌊i/2k ⌋
+                                           ⌊︃         ⌋︃ ⌊︃       ⌋︃
+053                                                         ⌊i/h⌋
+                                                        =            .
+                                                 h            2k
+
+                                                            1
+054
+      The client can therefore encrypt one bundled index σ = ⌊i/h⌋. At level ℓ, high bits of σ select a
+055   plaintext, while a sliding low-bit window selects the super-record residue. One mixed-scale packed
+056   ciphertext contains both the first-dimension one-hot value and all encrypted σ bits. The server
+057   then applies first-dimension selection, most-significant-bit-first folding, private rotation, coefficient
+058   projection, and residue-slot response pooling for every level and data plane.
+059
+      The core construction retrieves path positions from a public logical tree view and a public set of
+060
+      active levels. The ordinary ancestor view uses the original tree and all L + 1 levels. A Merkle
+061                                                                                       auth
+      authentication query instead uses levels 1, . . . , L of the sibling-swapped view Vℓ,j   = Mℓ,j⊕1 . At
+062   logical position jℓ , this view stores the original sibling Mℓ,jℓ ⊕1 . The public permutation changes
+063   what is encoded at each position, not the encrypted prefix index or any online selection step.
+064
+065
+      Our contributions are:
+066
+             • We reduce Merkle authentication-path PIR on perfect binary trees to path retrieval over a
+067            public sibling-swapped view, then develop an arbitrary-h, multi-plane super-record layout
+068            for that view.
+069
+             • We specify a registered-key protocol, also called a client-hint model, whose online request
+070
+               is one mixed BFV/RLWE-star ciphertext, with explicit setup, preprocessing, expansion,
+071            conversion, and projection key inputs and a scale-correct packing algorithm.
+072
+             • We prove the prefix, matrix-cover, selector-range, projection, and response-placement in-
+073
+               variants, and separate exact-phase correctness, noise-conditioned correctness, and condi-
+074
+               tional non-adaptive query privacy.
+075
+076
+             • For 256-bit nodes, the Bundle3 specialization uses one plane and leaves only 677 padded
+               matrix cells out of 349,540 logical plaintexts, a 0.19% structural overhead.
+077
+078   Section 2 positions the construction, and Section 3 gives the protocol. The appendix contains full
+079   pseudocode, proofs, and selected operation counts.
+080
+081
+082
+      2   R ELATED W ORK
+083
+084
+      Lattice-based single-server PIR. OnionPIR combines lattice encryption schemes and external
+      products to reduce the response overhead of single-server PIR while retaining a practical database
+085
+      scan (Mughees et al., 2021). Compressed-query PIR introduced the single-ciphertext oblivious ex-
+086
+      pansion pattern (Angel et al., 2018). OnionPIRv2 develops these ideas into an implementation-
+087   oriented system with packed query expansion, a large first-dimension plaintext–ciphertext matrix
+088   product, and RGSW selectors for the remaining binary dimensions (Chen & Ren, 2025). Our con-
+089   struction uses these query and selection primitives but changes the indexed object and the database
+090   geometry. It replaces a separately encoded fixed record coordinate with one encrypted decomposi-
+091   tion of σ = ⌊i/h⌋, whose different bit windows control plaintext folding and record alignment at
+092   every tree level.
+093
+094   Coefficient projection and response packing. Respire targets PIR databases with small records
+095   and develops query compression and response packing from ring-switching techniques (Burton
+096   et al., 2024). Its coefficient projection zeroes coefficients outside a power-of-two stride by recur-
+097
+      sively applying odd ring automorphisms; Lemma A.6 gives the recurrence used in Eq. (27). The
+      construction here uses that projection after a private monomial shift, then assigns projected level-
+098
+      plane items to distinct residue classes of a shared response pool. It keeps the response in the original
+099
+      ring. Respire’s subsequent dimension-reduction mechanism is therefore not part of the path protocol
+100   specified here.
+101
+102   Private retrieval over trees. Path-PIR combines ORAM and PIR and, in its latency-optimized
+103   variant, reuses one PIR vector for every bucket on a root-to-leaf ORAM path (Mayberry et al.,
+104   2014). That reuse selects a fixed bucket position; our shared query instead exposes different prefix
+105   and sliding-residue windows at different levels. TreePIR targets private Merkle-proof retrieval. It
+106   first swaps every sibling pair so an authentication path in the original tree becomes a root-to-leaf
+107   path in the public logical view, then applies balanced ancestral coloring and batch PIR (Cao et al.,
+      2025). We use the same public permutation but replace coloring and parallel batch queries with one
+
+
+                                                         2
+108
+      RLWE selection pipeline: an arbitrary-h super-record layout, one encrypted σ, private alignment
+109   and projection, and pooled responses. The authentication-path object follows RFC 8391 and RFC
+110   9162 (Huelsing et al., 2018; Laurie et al., 2021).
+111
+112
+113
+      3     G ENERIC S UPER -R ECORD M ERKLE AUTHENTICATION -PATH PIR
+114
+115
+      The protocol replaces a padded single-node record with a level-local bundle of adjacent nodes. Its
+      central design choice is to query a global super-record index rather than to preserve a fixed record
+116
+      position across levels. This choice supports arbitrary bundle arity, retains one packed query for the
+117
+      full path whenever W ≤ n, and gives every level an explicit plaintext prefix and residue window.
+118   Figure 2 summarizes the complete offline and online data flow.
+119
+120
+      3.1   P ROTOCOL SCOPE , SETUP, AND INTERFACES
+121
+122   Retrieved object.    Let M be a complete binary tree whose root is at level 0, and let
+123
+                                               jℓ = i/2L−ℓ
+                                                    ⌊︁      ⌋︁
+124
+125   be the logical position of leaf i’s ancestor at level ℓ. The core protocol accepts a public logical view
+126   V with the same level shapes and an ordered public active-level set Lact = (ℓ0 < · · · < ℓH−1 ). It
+127   returns                                      (︁     )︁
+128                              PathV,Lact (i) = Vℓ,jℓ ℓ∈Lact ,        H = |Lact |.
+129
+      The ancestor mode sets V = M and Lact = {0, . . . , L}. A Merkle authentication path contains the
+130           (︁         )︁L
+131
+      siblings Mℓ,jℓ ⊕1 ℓ=1 (Huelsing et al., 2018; Laurie et al., 2021). Authentication mode therefore
+132
+      uses Lact = {1, . . . , L} and the public view
+133                                                auth
+                                                 Vℓ,j   = Mℓ,j⊕1 .
+134
+135   At logical position jℓ , this view stores the required sibling even when jℓ ⊕ 1 crosses a super-record
+136   boundary. The permutation can be applied while encoding the level, so it changes neither the matrix
+137
+      shape nor the online encrypted index. Figure 1 illustrates the case h = 3.
+138
+      Registered-key client-hint model. For security parameter λsec , the client samples an RLWE se-
+139
+      cret key sk and generates reusable evaluation material
+140
+141                                        ek = (ekexp , ekconv , ekproj ).
+142
+      This registered-key deployment is the client-hint model of Respire: the server stores per-client eval-
+143
+      uation material, but the client does not hold database-dependent PIR hints. Here ekexp contains the
+144   substitution/key-switching keys for packed-query expansion, ekconv completes expanded RLWE-
+145   star rows into RGSW selectors, and ekproj evaluates the projection automorphisms. The client
+146   registers ek once; the server retains it as client-specific key state. The public parameters pp contain
+147   the cryptographic parameters, one database-wide layout candidate (h, G, P, N0 , b), Lact , every ac-
+148   tive public level plan, and the response parameters. The layout is fixed before any leaf query and is
+149   independent of i.
+150   The protocol exposes five interfaces:
+151
+152                                  (pp, sk, ek) ← Setup(1λsec , layout, Lact ),
+153                                            ˆ︁ ← Preprocess(pp, V ),
+                                               D
+154
+                                               Q ← Query(sk, pp, i),
+155
+156                                            R ← Answer(pp, ek, D,
+                                                                   ˆ︁ Q),
+157                                PathV,Lact (i) ← Extract(sk, pp, i, R).
+158
+159
+      Accordingly, one packed query means that the online request contains one query ciphertext Q. First-
+      session communication also includes the reusable evaluation material.
+160
+161
+
+
+
+                                                          3
+162                                                 bundle 0              bundle 1
+163                           original view    M0   M1     M2        M3     M4 M5
+164                               auth view    M1   M0     M3        M2     M5 M4
+165                           logical index    0     1       2       3       4     5
+166
+167   Figure 1: Sibling-swapped view with h = 3. Although the sibling of logical position j = 2 lies in
+168
+      the next original bundle, position 2 of the auth view stores M3 . The query still selects bundle 0, lane
+      2.
+169
+170
+171   3.2   S ETTING AND SUPER - RECORD LAYOUT
+172
+173
+      Let T be a complete binary tree with N = 2L leaves and levels ℓ ∈ {0, . . . , L}. The selected public
+      view has E-bit entries Vℓ,0 , . . . , Vℓ,2ℓ −1 at every active level, where E ≥ 1. The view changes
+174
+      values but not level sizes. At each level the client may decode an entire super-record and select one
+175
+      lane locally.
+176
+177   Computations use ring-learning-with-errors (RLWE) ciphertexts in Rq = Zq [X]/(X n + 1), where
+178   n is a power of two and
+                                                    K−1
+179                                                 ∏︂
+                                                q=      qν
+180
+                                                         ν=0
+181
+      for pairwise-coprime odd RNS moduli qν . The plaintext database lies in Rt = Zt [X]/(X n +1), with
+182
+      odd 2c ≤ t < q. When an NTT implementation is used, qν ≡ 1 (mod 2n). Query packing uses
+183
+      Brakerski–Fan–Vercauteren (BFV) encryption (Fan & Vercauteren, 2012), and encrypted selector
+184   bits are represented as ring Gentry–Sahai–Waters (RGSW) ciphertexts after query expansion (Gentry
+185   et al., 2013). The selector rows packed into the query use gadget parameters (Bsel , ℓsel ), with Bsel =
+186   2bsel ≥ 2 and
+187                                               ℓsel bsel ≥ ⌈log2 q⌉,
+188   so the packed selector digits span the ciphertext modulus. Conversion, CMux, and projection key
+189   switching may use separate gadget parameters (Bconv , ℓconv ), (Bcmux , ℓcmux ), and (Bproj , ℓproj ).
+190   These lengths are chosen for their respective primitives; the protocol does not identify them with
+191   ℓsel . Each plaintext coefficient carries c ≥ 1 payload bits. A layout candidate chooses
+192                                                                     n
+                                       h ≥ 1,       G = 2g ,         ρ=   = 2r ,
+193                                                                     G
+194   subject to 1 ≤ G ≤ n and G | n. Here h is the number of adjacent nodes per super-record, G is the
+195   number of coefficient digits in one plane, and ρ is the number of super-records per plaintext. Unlike
+196   G and ρ, h need not be a power of two. The minimum number of planes is
+197                                                         ⌈︃    ⌉︃
+                                                               hE
+198                                                  P =             .                                      (1)
+                                                               cG
+199
+200   Thus the slot utilization and padding amplification are
+201                                            hE                 P cG
+202
+                                          η=        ,    Aslot =        .
+                                              P cG                 hE
+203   The response modulus qresp is odd and satisfies t < qresp ≤ q; equality denotes no modulus switch.
+204   For centered coefficient rounding from modulus qresp to plaintext modulus t, we use the sufficient
+205   decoder margin
+206                                               qresp
+                                         Bdec =         − (qresp mod t).                             (2)
+207                                                2t
+208   and require Bdec > 0. Thus an encoded coefficient ⌊qresp /t⌋m + e, with |m| < t, decodes correctly
+209   whenever the centered error satisfies |e| < Bdec (Burton et al., 2024).
+210   At level ℓ, group nodes into                       ⌈︃ ℓ ⌉︃
+211                                                        2
+212
+                                                    Sℓ =                                                   (3)
+                                                           h
+213   super-records. Define its padded lanes by
+214
+                                          Vℓ,hx+y , hx + y < 2ℓ ,
+                                       {︃
+215                           Vℓ,x,y =
+                              ˜︁                                          0 ≤ y < h.
+                                          0E ,      hx + y ≥ 2ℓ ,
+
+                                                         4
+216
+217
+        Client index              One packed query               Expand once              Offline matrices
+218
+        σ = ⌊i/h⌋                  Aα and bits(σ)              with ekexp , ekconv             Dℓ,z,p
+219
+220
+221     Residue-slot              Project with ekproj             Private rotate          Select one Cℓ,z
+222
+       response pool              to strided support           by the level window        for each (ℓ, z)
+223
+224
+225
+226                                  Reconstruct                Select local lane
+            Decrypt
+227                                  all P planes                  jℓ mod h
+228
+229
+      Figure 2: End-to-end flow. The encrypted bits of one global bundled index are reused at every active
+230   level. Selection, rotation, and projection are executed separately for each level-plane pair before
+231   their outputs enter a shared response pool.
+232
+233
+234
+      The encoded bit string is
+235                               Bℓ,x = V˜︁ℓ,x,0 ∥ · · · ∥ V˜︁ℓ,x,h−1 ∥ 0P cG−hE .                        (4)
+236   Within every E-bit entry, bit zero is the least significant bit. For Bℓ,x [j] ∈ {0, 1}, define the plane
+237   digits explicitly as
+238                                             c−1
+                                                ∑︂
+                                                    Bℓ,x c(zG + j) + ζ 2ζ ,
+                                                           [︁                 ]︁
+239                                  vℓ,x,z,j =                                                             (5)
+240                                             ζ=0
+241   where 0 ≤ z < P and 0 ≤ j < G. Thus the final bundle of a level is zero-filled within that level,
+242   and no bundle crosses a level boundary.
+243   The database uses row-major super-record numbering. Write x = pρ + u, where p = ⌊x/ρ⌋ and
+244   u = x mod ρ. Plane z of plaintext p is
+245                                                 ρ−1 ∑︂
+                                                        G−1
+                                                    ∑︂
+246                                  Dℓ,z,p (X) =              vℓ,pρ+u,z,j X u+jρ ,                        (6)
+247                                                 u=0 j=0
+248
+      where digits belonging to x ≥ Sℓ are zero. Hence all G digits of record position u occupy
+249
+250
+                                          u, u + ρ, . . . , u + (G − 1)ρ.
+251   This strided support is the invariant used by private rotation and projection.
+252   Algorithm 1 in Appendix A.1 materializes the layout in Eq. (6).
+253
+254   3.3   P REFIX - COMPATIBLE INDEXING
+255
+256   Define the global bundled path index                ⌊︃ ⌋︃
+257                                                         i
+                                                      σ=        .                                          (7)
+258                                                         h
+259   For level ℓ, let k = L − ℓ. The target node, its super-record, and its local lane are
+260                                                      ⌊︃ ⌋︃
+                                                             i
+261                                                 jℓ = k ,                                               (8)
+                                                            2
+262                                                      ⌊︃ ⌋︃
+263
+                                                            jℓ
+                                                   σℓ =          ,                                         (9)
+264                                                         h
+265                                             laneℓ = jℓ mod h.                                         (10)
+266   Lemma 3.1 (Grouping commutes with path truncation). For every h ≥ 1, leaf i, and level ℓ,
+267
+                                              ⌊i/2k ⌋
+                                           ⌊︃         ⌋︃ ⌊︃        ⌋︃ ⌊︂ ⌋︂
+                                                             ⌊i/h⌋      σ
+268                                  σℓ =               =            = k .                                (11)
+                                                 h             2k       2
+269
+      Equivalently, σℓ = σ ≫ k.
+
+
+                                                           5
+270
+      Proof. For nonnegative integer x and positive integers a, b, ⌊⌊x/a⌋/b⌋ = ⌊x/(ab)⌋. Applying this
+271   identity once with (a, b) = (2k , h) and once with (a, b) = (h, 2k ) makes both expressions in Eq. (11)
+272   equal to ⌊i/(h2k )⌋.
+273
+274   The server-facing coordinates follow by dividing σℓ by ρ = 2r :
+275                                        ⌊︃ ⌋︃
+276                                          σℓ
+                                      pℓ =        = σ ≫ (k + r),                                            (12)
+277                                          ρ
+278                                   uℓ = σℓ mod ρ = (σ ≫ k) mod ρ.                                        (13)
+279
+      Here pℓ selects one plaintext, whereas uℓ selects a record position inside that plaintext. Together
+280
+      with the client-local lane, they reconstruct the path index exactly:
+281                                                (︁         )︁
+282                                         jℓ = h pℓ ρ + uℓ + laneℓ .                               (14)
+283
+      The sequence pℓ is a prefix sequence of σ; the sequence uℓ is a sliding window over its bits. This
+284   replaces the fixed cross-level record coordinate used by a transposed single-record layout.
+285
+286
+      3.4   O NE SHARED ENCRYPTED INDEX
+287
+288   The largest leaf-level super-record index is SL − 1. Define
+289                                                           (︃⌊︃      ⌋︃)︃
+290
+                                                                   N −1
+                               m = bitwidth(SL − 1) = bitwidth               ,                              (15)
+291                                                                  h
+292   where bitwidth(0) = 0. Thus m = 0 when the tree has one leaf-level super-record. The planner
+293   chooses                                                         ⌈︃     ⌉︃
+294                                                                      SL
+                                 0 ≤ b ≤ max(m − r, 0),         N0 ≥            .             (16)
+295                                                                      ρ2b
+296   The lower bound may be rounded upward for an implementation alignment, so N0 need not be
+297   dyadic. Now let
+298                                ξ = σ ≫ r = α2b + β,         0 ≤ β < 2b ,
+299
+      where α = ξ ≫ b and β = ξ mod 2b . Equation (16) guarantees 0 ≤ α < N0 for every valid leaf
+300   and keeps every active fold-selector index below m. At level ℓ, pℓ = ξ ≫ k, so
+301                                         {︄ b−k ⌊︁        ⌋︁
+302                                           α2     + β/2k , k ≤ b,
+303                                   pℓ = ⌊︁         ⌋︁                                      (17)
+                                               α/2k−b ,           k > b.
+304
+305
+306
+      Let Āx = [α = x] for x = 0, . . . , N0 − 1, and let σ[0], . . . , σ[m − 1] be the little-endian bits of σ.
+      These are logical query values, not separately transmitted ciphertexts. Since each RGSW selector
+307
+      contributes ℓsel packed selector rows, one packed query has logical width
+308
+309                              w = N0 + ℓsel m,         W = nextpow2(w) ≤ n.                              (18)
+310
+      Write hq = log2 W and rev(pos) = BitRev(pos, hq ). Since W is a power of two while t and the qν
+311
+      are odd, all required inverses of W exist.
+312
+313   The two query regions have different scales. We use the ciphertext convention
+314                          (c0 , c1 ) = (−aenc sk + e + ∆µ, aenc ),        ∆ = ⌊q/t⌋,
+315
+316   so c0 is the message-dependent component. For C = (c0 , c1 ), define the secret-key phase Φsk (C) =
+317   c0 + c1 sk ∈ Rq . The alpha one-hot first enters a BFV plaintext as W −1 mod t and is lifted by ∆
+318
+      during BFV encryption. In contrast, selector row j for bit σ[ι] = 1 is the unscaled RLWE-star value
+                                                   −1
+319                                    gadsel
+                                          ν,j · (W    mod qν )      (mod qν )
+320
+                                                                                     ℓsel −1−j
+321   in RNS limb ν; it is added directly to c0 , without a ∆ factor. Here gadsel
+                                                                              ν,j = Bsel       mod qν . Both
+322   regions use bit-reversed coefficient positions so that expansion multiplies them by W and returns
+323   the intended values. This is the mixed-scale packed-query construction used by OnionPIRv2 (Chen
+      & Ren, 2025).
+
+
+                                                          6
+324
+      With the registered expansion and conversion keys, its correctness contract is
+325
+326                      E XPAND Q UERY(pp, ekexp , ekconv , Q)
+327
+                                (︂
+                                                     0 −1
+                                                                               )︂                    (19)
+                              = {Ax = Enc(Āx )}N                          m−1
+                                                    x=0 , {χι = RGSW(σ[ι])}ι=0    .
+328
+329   Thus one mixed-scale ciphertext Q, together with reusable server-side evaluation material, expands
+330   to all N0 + m selection objects. When W = 1, we define BitRev(0, 0) = 0.
+331
+      Algorithm 2 in Appendix A.1 gives the complete mixed-scale construction.
+332
+333   The server applies Eq. (19) once and then builds a ragged alpha pyramid. Row zero is A(0) = A;
+334   each later row pairs adjacent ciphertexts,
+335                                               (c+1)        (c)       (c)
+336
+                                              Aj          = A2j + A2j+1 ,
+337                                                                                  (c)
+      and carries an unpaired final ciphertext upward unchanged. Thus Aj encrypts [⌊α/2c ⌋ = j], even
+338
+339
+      when N0 is not a power of two. The pyramid height is aht = bitwidth(N0 − 1).
+340   For a level with k < b, the active plaintext-fold bits are
+341
+                                    σ[r + k], σ[r + k + 1], . . . , σ[r + b − 1].                    (20)
+342
+343   When k = b, this window is empty and the first-dimension scan already returns one candidate. For
+344   k > b, these bits have disappeared from pℓ , and the server uses pyramid row cℓ = min(k − b, aht ).
+345   The same selector vector provides the private-rotation window; there are no separate beta and gamma
+346   selector arrays.
+347   Lemma 3.2 (Level-plan bounds). Let k = L − ℓ,
+348                                                         (︁                   )︁
+                              Qℓ = ⌈Sℓ /ρ⌉ ,      dℓ = min r, bitwidth(Sℓ − 1) .
+349
+350   Then                                                     ⌊︃
+                                                              ⌋︃
+351                                                   SL − 1
+                                          Sℓ − 1 =               .
+352                                                       2k
+353   The zero-padded database shape covers every real plaintext because
+354                                          {︄
+355                                             N0 2b−k ,    k ≤ b,
+                                       Qℓ ≤           cℓ
+                                                                                                     (21)
+356                                             ⌈N0 /2 ⌉ , k > b.
+357
+358
+      Moreover, every active fold selector lies in [0, m), and
+359                                         dℓ > 0        =⇒         k + dℓ ≤ m.                     (22)
+360
+361   The proof appears in Appendix A.2.
+362
+363   3.5    L EVEL SELECTION , PRIVATE ALIGNMENT, AND PROJECTION
+364
+365   For k ≤ b, set Rℓ = 2b−k and view the zero-padded plaintext list as an N0 -by-Rℓ matrix. The
+366   first-dimension scan produces
+367                                         N0 −1
+                                            ∑︂
+368                              Yℓ,z,δ =           Dℓ,z,xRℓ +δ Ax ,           0 ≤ δ < Rℓ .          (23)
+369                                         x=0
+370
+      The server then folds Y with the bits in Eq. (20), from the most significant active bit to the least
+371
+      significant active bit. When a bit ciphertext χ encrypts ζ ∈ {0, 1}, we use the convention
+372
+373                                           CMux(χ, C0 , C1 ) = Cζ .
+374
+      Each fold step pairs the lower and upper halves of the ordered candidate vector. For k > b, no
+375
+      conditional fold remains; the server directly scans the level database with A(cℓ ) .
+376
+377   Algorithm 3 in Appendix A.1 makes both selection cases and the most-significant-bit-first fold order
+      explicit.
+
+
+                                                               7
+378
+      After Algorithm 3, one RLWE ciphertext remains for each pair (ℓ, z). Define the minimum sufficient
+379   alignment depth                           (︁                        )︁
+380                                     dℓ = min r, bitwidth(Sℓ − 1) .                                 (24)
+381
+      If Sℓ = 1, then dℓ = 0 and both alignment and projection are identity operations. Otherwise,
+382
+      uℓ < 2dℓ : this follows from uℓ < ρ = 2r when dℓ = r, and from σℓ < Sℓ ≤ 2dℓ when dℓ < r. The
+383   complete bit decomposition of uℓ is therefore σ[k], . . . , σ[k + dℓ − 1]. Starting with the selected
+384                (0)
+      ciphertext Cℓ,z , the server computes
+385
+                                            (︂                 v
+                                                                       )︂
+386                           (v+1)                 (v)            (v)
+                            Cℓ,z    = CMux χk+v , Cℓ,z , X −2 Cℓ,z , 0 ≤ v < dℓ .                      (25)
+387
+388   This is a negacyclic coefficient shift in Zq [X]/(X n + 1), not a batching-slot rotation. It aligns all G
+389   target digits simultaneously:
+390
+                                         uℓ + jρ ↦−→ jρ,              j = 0, . . . , G − 1.
+391
+392
+      The one-sided projection
+393                                                 (︄n−1            )︄
+                                                      ∑︂                      ∑︂
+394                                         Projd           ae X e        =           ae X e              (26)
+395                                                  e=0                      2d |e
+396
+      removes the other occupied record residues. It can be evaluated as a normalized trace. Since q is
+397
+      odd, 2d is invertible modulo q; write 2−d for this inverse and set
+398
+399                                              T (0) = (2−d mod q)C.
+400
+      For v = 0, . . . , d − 1, define
+401                                          θv = n/2v + 1 ∈ Z∗2n .
+402
+      The index θv is odd, so τθv (f (X)) = f (X θv ) is a ring automorphism. The encrypted recurrence is
+403
+                                                               (︂          )︂
+404                                 T (v+1) = T (v) + Autoθv T (v) ; ekproj ,                        (27)
+405
+406   where Auto includes the key switch back to sk. Its phase obeys
+407
+                                          Φsk (T (d) ) = Projd (Φsk (C)) + eproj .
+408
+409   Lemma A.6 of Respire supplies the exact trace identity, while its homomorphic projection theorem
+410   accounts for eproj (Burton et al., 2024). Thus the recurrence computes Projd only in the zero-error
+411   phase semantics; the encrypted execution carries the projection error into Corollary 3.6.
+412   Lemma 3.3 (Projection after negacyclic alignment). For every valid level ℓ and plane z,
+413
+                                              Projdℓ X −uℓ Dℓ,z,pℓ
+                                                    (︁             )︁
+414
+415   retains exactly the G digits of super-record σℓ , at exponents 0, ρ, . . . , (G − 1)ρ.
+416
+417   The proof appears in Appendix A.3.
+418   The shared χι ciphertexts do not fuse work across levels. Beta folding leaves one selected ciphertext
+419   per (ℓ, z), and Eq. (25) is applied separately to each such ciphertext. Different levels reuse selector
+420   ciphertexts, not external-product results.
+421
+422   3.6   R ESPONSE POOLING AND CLIENT RECONSTRUCTION
+423
+424   There are P H projected level-plane items. Let rankLact (ℓ) ∈ {0, . . . , H − 1} be the public position
+425   of active level ℓ. Assign item (ℓ, z) the public ordinal
+426                                           ordℓ,z = rankLact (ℓ)P + z,
+427
+428
+      the response-ciphertext index                            ⌊︃          ⌋︃
+                                                                    ordℓ,z
+429                                                  κℓ,z =                   ,                           (28)
+430                                                                   ρ
+431   and the residue offset
+                                                    oℓ,z = ordℓ,z modρ.                                   (29)
+
+
+                                                                8
+432
+      The server shifts the projected ciphertext by X oℓ,z and adds it to response Rκℓ,z . Distinct items in
+433   the same response occupy distinct residues modulo ρ. Moreover,
+434
+435                             oℓ,z + (G − 1)ρ ≤ (ρ − 1) + (G − 1)ρ = n − 1,
+436   so no placed item wraps around the negacyclic boundary. The response count is
+437                                                   ⌈︃    ⌉︃
+438                                                      PH
+                                             Cresp =           .                                         (30)
+439                                                       ρ
+440   The first ordinal in every nonempty response chunk is a multiple of ρ, so its offset is zero and it
+441   initializes the accumulator directly. Hence the P H placements require only P H − Cresp nontrivial
+442   monomial shifts and the same number of ciphertext additions.
+443
+      Algorithm 4 in Appendix A.1 executes the per-item pipeline and pools its outputs only after projec-
+444
+      tion.
+445
+446   The client decrypts the pool and recovers the digits of plane z at level ℓ from
+447                               [X oℓ,z +jρ ]Dec(Rκℓ,z ),    j = 0, . . . , G − 1.                     (31)
+448
+449   It concatenates all P planes, removes the public plane padding, splits the first hE bits into h entries,
+450   and returns lane
+451
+                                         laneℓ = (i ≫ (L − ℓ)) mod h.                                    (32)
+452   For every ℓ ∈ Lact , this reconstructs PathV,Lact (i).
+453   Algorithm 5 in Appendix A.1 applies the inverse of Eqs. (4) and (5) before selecting the local lane.
+454
+455   3.7      C ORRECTNESS , PRIVACY, AND NOISE
+456
+457   Theorem 3.4 (Exact-phase algebraic correctness). Evaluate the exact secret-key phase in Rq with
+458   all encryption, external-product, and key-switching errors set to zero, and let Eq. (19) return exact
+459   one-hot values and bit selectors. Then, for every valid leaf i, public logical view V , and active level
+460   ℓ ∈ Lact , client extraction returns Vℓ,jℓ .
+461
+      The proof appears in Appendix A.4.
+462
+463   Corollary 3.5 (Merkle authentication paths). Instantiate Theorem 3.4 with Lact = {1, . . . , L} and
+464   V = V auth . Client extraction returns
+465                                      auth
+                                       Vℓ,jℓ
+                                              = Mℓ,jℓ ⊕1 ,     ℓ = 1, . . . , L,
+466
+467
+      which is the authentication path for i in the original perfect binary tree. The preprocessing permu-
+      tation is independent of i, so the query and all prefix-indexing lemmas are unchanged. Here H = L,
+468
+      and therefore
+469                                                        ⌈︃    ⌉︃
+                                                   auth       PL
+470                                              Cresp =            .
+                                                               ρ
+471
+472   Corollary 3.6 (Noise-conditioned cryptographic correctness). For each projected item (ℓ, z), let
+473
+      εpre
+       ℓ,z bound the infinity norm of its ciphertext error before the final modulus switch and after the
+474   sequential path, where fℓ = max(b − (L − ℓ), 0):
+475        first dimension → fℓ fold CMux gates → dℓ rotation CMux gates → dℓ projection key switches.
+476
+477
+      Let Iκ be the items assigned to response Rκ , and let εround
+                                                             κ     bound the secret-key-phase error intro-
+      duced by coefficient rounding during modulus switching. Set γms = qresp /q, with εround
+                                                                                          κ    = 0 when
+478
+      qresp = q. A sufficient post-switch bound is
+479
+                                                    ∑︂ pre
+480                                      ε′κ ≤ γms        εℓ,z + εround
+                                                                   κ    .
+481                                                 (ℓ,z)∈Iκ
+482
+483   If
+484
+                                           ε′κ < Bdec      for every κ,                                (33)
+485   where Bdec is defined in Eq. (2), then the encrypted protocol returns the logical path of Theorem 3.4,
+      and hence the authentication path under Corollary 3.5.
+
+
+                                                          9
+486
+      The proof appears in Appendix A.5.
+487
+488
+      Assumption 3.7 (Mixed-query auxiliary-input security). Let ek be generated once from sk. For
+      every polynomial T and any two equal-length sequences of admissible mixed logical payloads
+489     (0)           (0)       (1)         (1)
+490   (µ1 , . . . , µT ) and (µ1 , . . . , µT ), the distributions
+491
+                  (︂                                   )︂          (︂                                  )︂
+                                           (0)                                           (1)
+                     ek, {MixedPacksk (µj ; rj )}Tj=1       and       ek, {MixedPacksk (µj ; rj )}Tj=1
+492
+493   are computationally indistinguishable for independent fresh coins rj . The auxiliary input includes
+494   the registered expansion, conversion, and projection keys. We do not reduce this assumption to
+495   standard RLWE in this report. It captures the security of reusing registered expansion, conversion,
+496   and projection material with independently randomized mixed-scale queries, including any circu-
+497   lar/KDM condition required by secret-dependent evaluation keys in the underlying OnionPIR-style
+498   construction (Mughees et al., 2021; Chen & Ren, 2025).
+499   Theorem 3.8 (Non-adaptive multi-query privacy in the registered-key model). Under Assump-
+500                                                                                       (0)       (0)
+      tion 3.7, for every polynomial T and any two sequences of valid leaves (i1 , . . . , iT ) and
+501     (1)          (1)
+      (i1 , . . . , iT ), the server’s joint views of the T protocol executions under one registered key are
+502
+      computationally indistinguishable when every query uses fresh randomness. This guarantees index
+503   privacy within one registration. The server can still associate every query that uses ek with that
+504   registration; client unlinkability is outside the theorem.
+505
+506   The proof appears in Appendix A.6.
+507
+508   3.8   S ELECTED ONLINE COUNTS AND THE 256- BIT SPECIALIZATION
+509
+510   Let H = |Lact |, k = L − ℓ,
+511                        fℓ = max(b − k, 0),       dℓ = min(r, bitwidth(Sℓ − 1)),
+512
+513   and let νℓ be the first-dimension matrix-cell count from Eq. (21): it is N0 2b−k for k ≤ b and
+514   ⌈N0 /2cℓ ⌉ for k > b. The principal per-query counts are
+515                     ∑︂                               ∑︂
+                     P        νℓ scan products,       P        (2fℓ − 1) fold CMux gates,
+516
+                      ℓ∈Lact                             ℓ∈Lact
+517          ∑︁
+518   and P ℓ∈Lact dℓ private-rotation CMux gates plus the same number of projection substitutions.
+519   The response uses Cresp = ⌈P H/ρ⌉ ciphertexts. Appendix A.7 gives the selected expansion, alpha-
+520   pyramid, first-dimension, and response-pooling counts and states their exclusions.
+521   For 256-bit nodes, c = 12, n = 2048, h = 3, G = 64 gives
+522
+523                                       P = 1,     ρ = 32,      η = 1.
+524   For N = 224 , the concrete shape b = 9, N0 = 342, m = 23, ℓsel = 6 has w = 480, W =
+525   512, one response ciphertext for its 25-node ancestor path, and one response ciphertext for its 24-
+526   node authentication path. We call this specialization Bundle3. Across all L + 1 levels it uses
+527   349,540 logical plaintexts and 350,217 physical matrix cells. Authentication mode omits the root
+528   and therefore uses 349,539 logical plaintexts and 350,216 physical cells. Both modes add 677
+529   padded cells, or 0.19%. These are layout counts, not a runtime speedup claim.
+530
+531   3.9   L IMITATIONS
+532
+533   The sibling-swapped reduction and the level plan assume a perfect binary tree; RFC 9162-style non-
+534
+      perfect history trees require a different public view and indexing argument. The database is public,
+      and the client learns one complete h-entry super-record per active level before local lane selection.
+535
+      The client-hint deployment stores per-client evaluation material at the server, so queries remain
+536
+      linkable to that registration even though their indices are hidden. Concrete parameters must satisfy
+537   Eq. (33), and the layout counts alone imply no runtime improvement. Per-query evaluation-key
+538   delivery and degree-reducing response compression require separate protocol extensions.
+539
+
+
+
+                                                       10
+540
+      4   C ONCLUSION
+541
+542
+      We formulated a prefix-compatible super-record layout for private retrieval of Merkle authentication
+543   paths in perfect binary trees. A public sibling-swapped view turns the required siblings into logical
+544   path positions, while the identity ⌊⌊i/2k ⌋/h⌋ = ⌊⌊i/h⌋/2k ⌋ lets one encrypted bundled index drive
+545   every level even when h is not dyadic. The resulting protocol defines scale-correct mixed query
+546   packing, bounded level matrices, private residue alignment, coefficient projection, pooled responses,
+547   and client-local lane extraction. Its exact-phase theorem proves path retrieval in the logical view
+548   supplied to preprocessing, and the public sibling-swapped view turns the same protocol into Merkle
+549   authentication-path retrieval for perfect binary trees. The noise and privacy statements expose the
+550   cryptographic assumptions required to realize that algebra. Bundle3 shows that the layout can nearly
+551
+      eliminate matrix padding for 256-bit nodes. Implementing the generic layout, validating its noise
+      margins, extending the view transform to non-perfect RFC 9162-style history trees, and measuring
+552
+      end-to-end runtime are the next evidence needed.
+553
+554
+555   R EFERENCES
+556
+      Sebastian Angel, Hao Chen, Kim Laine, and Srinath T. V. Setty. PIR with compressed queries and
+557     amortized query processing. In 2018 IEEE Symposium on Security and Privacy, pp. 962–979.
+558     IEEE, 2018. doi: 10.1109/SP.2018.00062. URL https://doi.org/10.1109/SP.2018.00062.
+559
+560   Alexander Burton, Samir Jordan Menon, and David J. Wu. Respire: High-rate PIR for databases
+561     with small records. In Proceedings of the 2024 ACM SIGSAC Conference on Computer and
+562
+        Communications Security, pp. 1463–1477. ACM, 2024. doi: 10.1145/3658644.3690328. URL
+        https://doi.org/10.1145/3658644.3690328.
+563
+564   Quang Cao, Son Hoang Dau, Rinaldo Gagiano, Duy Huynh, Xun Yi, Phuc Lu Le, Quang-Hung
+565     Luu, Emanuele Viterbo, Yu-Chih Huang, Jingge Zhu, Mohammad M. Jalalzai, and Chen Feng.
+566     TreePIR: Efficient private retrieval of merkle proofs via tree colorings with fast indexing and
+567     zero storage overhead. In Proceedings of the 2025 IEEE Symposium on Security and Privacy,
+568     pp. 4476–4494. IEEE, 2025. doi: 10.1109/SP61157.2025.00032. URL https://doi.org/10.1109/
+569     SP61157.2025.00032.
+570   Yue Chen and Ling Ren. OnionPIRv2: Efficient single-server PIR. IACR Cryptology ePrint Archive,
+571     2025:1142, 2025. URL https://eprint.iacr.org/2025/1142.
+572
+573   Junfeng Fan and Frederik Vercauteren. Somewhat practical fully homomorphic encryption. IACR
+574     Cryptology ePrint Archive, 2012:144, 2012. URL https://eprint.iacr.org/2012/144.
+575   Craig Gentry, Amit Sahai, and Brent Waters. Homomorphic encryption from learning with er-
+576     rors: Conceptually-simpler, asymptotically-faster, attribute-based. In Advances in Cryptology –
+577     CRYPTO 2013, volume 8042 of Lecture Notes in Computer Science, pp. 75–92. Springer, 2013.
+578     doi: 10.1007/978-3-642-40041-4_5. URL https://doi.org/10.1007/978-3-642-40041-4_5.
+579
+580
+      Andreas Huelsing, Denis Butin, Stefan Gazdag, Joost Rijneveld, and Andreas Mohaisen. XMSS:
+        extended merkle signature scheme. Technical Report RFC 8391, RFC Editor, May 2018. URL
+581
+        https://www.rfc-editor.org/info/rfc8391.
+582
+583   Ben Laurie, Eran Messeri, and Rob Stradling. Certificate transparency version 2.0. Technical Report
+584     RFC 9162, RFC Editor, December 2021. URL https://www.rfc-editor.org/info/rfc9162.
+585
+      Travis Mayberry, Erik-Oliver Blass, and Agnes Hui Chan. Efficient private file retrieval by
+586
+        combining ORAM and PIR. In 21st Annual Network and Distributed System Security
+587
+        Symposium. The Internet Society, 2014. URL https://www.ndss-symposium.org/ndss2014/
+588     efficient-private-file-retrieval-combining-oram-and-pir.
+589
+590   Muhammad Haris Mughees, Hao Chen, and Ling Ren. OnionPIR: Response efficient single-server
+591    PIR. In Proceedings of the 2021 ACM SIGSAC Conference on Computer and Communications
+592    Security, pp. 2292–2306. ACM, 2021. doi: 10.1145/3460120.3485381. URL https://doi.org/10.
+593
+       1145/3460120.3485381.
+
+
+
+                                                       11
+594
+      A     P ROTOCOL P ROOF D ETAILS
+595
+596
+      A.1   F ULL PROTOCOL PSEUDOCODE
+597
+598
+      Algorithm 1 Level-local super-record preprocessing
+599
+600
+       Input: Public logical view V ; pp with active levels
+       Output: Plane databases Dℓ,z,p
+601     for s = 0 to H − 1 do
+602       ℓ ← Lact [s]
+603       Sℓ ← ⌈2ℓ /h⌉
+604       νℓ ← LevelPlan[ℓ].matrixCells
+605       for z = 0 to P − 1 do
+             Allocate νℓ zero polynomials Dℓ,z,0 , . . . , Dℓ,z,νℓ −1 ∈ Rt
+606
+          end for
+607       for x = 0 to Sℓ − 1 do
+608          Form h lanes from Vℓ,hx , . . . , Vℓ,hx+h−1
+609          Zero-fill only lanes beyond the end of level ℓ
+610          U ← E NCODE P LANES(lanes, E, c, G, P )
+             p ← ⌊x/ρ⌋; u ← x mod ρ
+611
+             for z = 0 to P − 1 do
+612            for j = 0 to G − 1 do
+613               [X u+jρ ]Dℓ,z,p ← U [z, j]
+614            end for
+615          end for
+          end for
+616
+        end for
+617
+618
+619
+620
+      Algorithm 2 Mixed-scale packed shared-index query
+621    Input: Leaf i; secret key sk; public parameters pp
+       Output: One packed query ciphertext Q = (c0 , c1 )
+622
+        σ ← ⌊i/h⌋
+623     ξ ← σ ≫ r; α ← ξ ≫ b
+624     σ[0], . . . , σ[m − 1] ← B IT D ECOMPOSE LE(σ, m)
+625     µ ← 0 ∈ Rt
+626     µ[rev(α)] ← W −1 mod t
+        Q = (c0 , c1 ) ← F RESH BFVE NCRYPTsk (µ)
+627
+        for bit_idx = 0 to m − 1 do
+628       if σ[bit_idx] = 1 then
+629          for digit_idx = 0 to ℓsel − 1 do
+630               logical_pos ← N0 + bit_idxℓsel + digit_idx
+631               for each RNS limb ν do
+                                                  −1
+                      ω ← gadsel ν,digit_idx · (W    mod qν )
+632
+                      c0,ν [rev(logical_pos)] ← (c0,ν [rev(logical_pos)] + ω) mod qν
+633               end for
+634          end for
+635       end if
+636     end for
+637
+        return Q
+638
+639
+640
+641
+642
+643
+644
+645
+646
+647
+
+
+
+                                                            12
+648
+      Algorithm 3 Select one level-plane plaintext
+649
+       Input: Level ℓ; Dℓ,z ; A(∗) ; χ; pp
+650
+        k ←L−ℓ
+651     if k ≤ b then
+652        cols ← 2b−k
+653        for δ = 0 to∑︁cols − 1 do
+                            0 −1                              (0)
+654           Y [δ] ← N   alpha_idx=0 Dℓ,z,alpha_idxcols+δ Aalpha_idx
+
+655        end for
+           if k < b then
+656
+              for bit_idx = r + b − 1 down to r + k do
+657              half ← |Y |/2
+658              for cand_idx = 0 to half − 1 do
+659                Y ′ [cand_idx] ← CMux(χbit_idx , Y [cand_idx], Y [cand_idx + half])
+660              end for
+                 Y ←Y′
+661
+              end for
+662        end if
+663        return Y [0]
+664     else
+665        cℓ ← min(k − b, aht )
+                   ∑︁⌈N0 /2cℓ ⌉−1                   (cℓ )
+666        return alpha_idx=0       Dℓ,z,alpha_idx Aalpha_idx
+        end if
+667
+668
+669
+670   Algorithm 4 Server answer for the complete logical path
+671    Input: Preprocessed D; query Q; pp; ek
+672    Output: Same-ring response pool R
+673     (A(0) , χ) ← E XPAND Q UERY(pp, ekexp , ekconv , Q)
+674
+        A(∗) ← B UILD R AGGED P YRAMID(A(0) , N0 )
+        Initialize Cresp response accumulators as empty
+675     for level_idx = 0 to H − 1 do
+676        ℓ ← Lact [level_idx]
+677        k ← L − ℓ; dℓ ← min(r, bitwidth(Sℓ − 1))
+678        for z = 0 to P − 1 do
+679
+              C ← S ELECT L EVEL P LANE(ℓ, Dℓ,z , A(∗) , χ, pp)
+              for v = 0 to dℓ − 1 do       v
+680              C ← CMux(χk+v , C, X −2 C)
+681           end for
+682           C ← Projdℓ (C; ekproj )
+683           item_idx ← level_idxP + z; κ ← ⌊item_idx/ρ⌋; o ← item_idx mod ρ
+684           if o = 0 then
+                 Z←C
+685
+              else
+686              Z ← X oC
+687           end if
+688           if Rκ is empty then
+689              Rκ ← Z
+              else
+690
+                 Rκ ← Rκ + Z
+691           end if
+692        end for
+693     end for
+694     if qresp < q then
+           for κ = 0 to Cresp − 1 do
+695
+              Rκ ← M OD S WITCHq→qresp (Rκ )
+696        end for
+697     end if
+698     return R
+699
+700
+701
+
+
+
+                                                          13
+702
+      Algorithm 5 Client logical-path reconstruction
+703
+       Input: Leaf i; response pool R; pp; sk
+704    Output: PathV,Lact (i)
+705     Decrypt every response ciphertext under sk
+706     for level_idx = 0 to H − 1 do
+707       ℓ ← Lact [level_idx]
+          for z = 0 to P − 1 do
+708
+              item_idx ← level_idxP + z; κ ← ⌊item_idx/ρ⌋; o ← item_idx mod ρ
+709           for j = 0 to G − 1 do
+710              U [z, j] ← [X o+jρ ]Dec(Rκ )
+711           end for
+712       end for
+          (e0 , . . . , eh−1 ) ← D ECODE S UPER R ECORD(U, E, c, G, P )
+713
+          laneℓ ← (i ≫ (L − ℓ)) mod h
+714       path[ℓ] ← elaneℓ
+715     end for
+716     return path
+717
+718
+719   A.2   L EVEL - PLAN BOUNDS
+720
+      Proof of Lemma 3.2. Apply Lemma 3.1 to the rightmost leaf N − 1. Its level-L and level-ℓ super-
+721   record indices are SL − 1 and Sℓ − 1, respectively, so
+722                                                     ⌊︃         ⌋︃
+                                                           SL − 1
+723                                          Sℓ − 1 =                 .
+                                                             2k
+724
+725   For k ≤ b, Eq. (17) places pℓ in [0, N0 2b−k ). Hence the N0 -by-2b−k padded matrix covers all Qℓ
+726
+      real plaintexts. For k > b, the same equation places pℓ in
+727                                              [0, ⌈N0 /2cℓ ⌉) ,
+728   including the case in which cℓ is clamped to the top alpha-pyramid row. This proves Eq. (21).
+729   Whenever the fold window is nonempty, its largest index obeys r+b−1 < m by Eq. (16). Moreover,
+730                                        (︁                         )︁
+                  bitwidth(Sℓ − 1) = max bitwidth(SL − 1) − k, 0 = max(m − k, 0).
+731
+      Since dℓ ≤ bitwidth(Sℓ − 1), dℓ > 0 implies k + dℓ ≤ m, proving Eq. (22).
+732
+733
+      A.3   P ROJECTION UNDER NEGACYCLIC WRAP
+734
+735   Proof of Lemma 3.3. The target exponent uℓ + jρ becomes jρ without wrap and survives because
+736   2dℓ | ρ. If dℓ = r, every other record position has a nonzero residue modulo ρ = 2dℓ , so the
+737   projection removes it.
+738
+      Suppose 0 < dℓ < r. The selected plaintext has occupied residues in
+739
+740                                U = {0, . . . , Sℓ − 1},    Sℓ ≤ 2dℓ < ρ.
+            ′
+741   For u ∈ U \ {uℓ },
+742                                           0 < |u′ − uℓ | < 2dℓ .
+743   After multiplication by X −uℓ , an unwrapped exponent has residue u′ − uℓ , while a negatively
+744   wrapped exponent has residue ρ − |u′ − uℓ |. Neither is divisible by 2dℓ , because 2dℓ | ρ. The
+745   negacyclic sign on a wrapped term is irrelevant because projection removes the term. When dℓ = 0,
+746
+      either the level has one real super-record or ρ = 1; the selected plaintext then has no competing
+      record position.
+747
+748
+      A.4   E ND - TO - END ALGEBRAIC CORRECTNESS
+749
+750   Proof of Theorem 3.4. Fix any ℓ ∈ Lact . By Lemma 3.1, the target super-record at that level has
+751   index σℓ = pℓ ρ + uℓ . Equation (17) and the ragged alpha pyramid make Algorithm 3 select Dℓ,z,pℓ
+752   for every plane z. The conditional rotations in Eq. (25) multiply this ciphertext by X −uℓ . Under
+753   Eq. (6), the target digits move to 0, ρ, . . . , (G−1)ρ, and Lemma 3.3 removes every competing record
+754   residue. The injective placement in Eqs. (28) and (29) moves the digits to the coefficients read in
+755   Eq. (31) without collision or wrap. The client consequently reconstructs the super-record of view V
+      at (ℓ, σℓ ). Finally, Eqs. (14) and (32) select Vℓ,jℓ .
+
+
+                                                       14
+756
+      A.5    N OISE - CONDITIONED CORRECTNESS
+757
+758   Proof of Corollary 3.6. Monomial shifts only permute and negate error coefficients. Response pool-
+759   ing therefore gives                          ∑︂ pre
+760                             ∥εpool,pre
+                                  κ        ∥∞ ≤         εℓ,z ,    |Iκ | ≤ ρ.
+761                                                      (ℓ,z)∈Iκ
+762
+      Disjoint plaintext supports do not prevent the dense error polynomials from adding. If qresp < q,
+763
+      same-ring modulus switching scales this pooled error by γms and adds εround
+                                                                                κ   ; if qresp = q, the
+764
+      switch is the identity and the rounding term is zero. Thus the displayed bound in Corollary 3.6
+765   controls the post-switch error. Condition (33) keeps every decoded coefficient inside its correct
+766   rounding interval under the decoder margin in Eq. (2). The encrypted execution therefore realizes
+767   Theorem 3.4.
+768
+769   A.6    R EGISTERED - KEY QUERY PRIVACY
+770
+771   Proof of Theorem 3.8. Map each leaf sequence to the corresponding sequence of mixed logical pay-
+772   loads in Algorithm 2. Assumption 3.7 makes the resulting T packed-query ciphertexts indistin-
+773   guishable in the presence of the one registered ek. The database, pp, matrix dimensions, level plans,
+774
+      response placement, and server loop bounds are fixed independently of the leaves. The requests se-
+      rialize no plaintext jℓ , σℓ , pℓ , uℓ , or laneℓ . All server intermediates and responses are probabilistic-
+775
+      polynomial-time post-processing of the indistinguishable query sequence and fixed public state, so
+776
+      the complete joint views remain indistinguishable.
+777
+778
+      A.7    S ELECTED ONLINE STRUCTURAL COUNTS
+779
+780   Let H = |Lact |, k = L − ℓ,
+781
+782                         fℓ = max(b − k, 0),            dℓ = min(r, bitwidth(Sℓ − 1)),
+783   and                     {︄
+784                                N0 2b−k ,    k ≤ b,
+785                    νℓ =              cℓ
+                                                              cℓ = min(k − b, aht ) when k > b.
+                                   ⌈N0 /2 ⌉ ,   k > b,
+786
+787   The number of alpha-pyramid ciphertexts, including row zero, is
+788                                                 aht ⌈︃    ⌉︃
+                                                    ∑︂     N0
+789                                        Cpyr =                .
+790                                                 c=0
+                                                           2c
+791   The pyramid creates Cpyr − N0 upper-row outputs using N0 − 1 additions and Cpyr − 2N0 + 1
+792   odd-row carries. Let Cexp (w, W ) denote the substitutions executed by the useful-leaf-pruned ex-
+793   pansion tree; a full W -leaf tree uses W − 1. Table 1 reports protocol-level structural counts rather
+794   than a complete machine-cost model. It excludes additions and monomial shifts internal to query
+795   expansion, registered-key bytes, offline preprocessing and storage, client encryption/decryption, se-
+796   rialized bit sizes, and kernel-internal arithmetic not named in a row. Table 2 separates costs that are
+797   specific to the selected composite-NTT/m32 implementation style. A selector-completion external
+798   product uses (Bconv , ℓconv ), each folding or rotation CMux uses (Bcmux , ℓcmux ), and each projec-
+799
+      tion key switch uses (Bproj , ℓproj ); the table counts primitive invocations rather than their internal
+      polynomial products.
+800
+801
+802
+803
+804
+805
+806
+807
+808
+809
+
+
+
+                                                             15
+810
+811                Table 1: Protocol-level costs of generic super-record Merkle-path PIR.
+812                      Quantity                                 Count
+813                      Packed query ciphertexts                 1, provided W ≤ n
+814                      Useful expanded values                   w = N0 + ℓsel m
+                         Expansion substitutions                  Cexp (w, W ) ≤ W − 1
+815                      Packed selector rows                     mℓsel
+816                      Selector-completion external products    mℓsel ; each uses ℓconv
+                         Alpha-pyramid preparation                N0∑︁− 1 additions; Cpyr − 2N0 + 1 carries
+817                      Plaintext–ciphertext scan products       P             νℓ
+                                                                     ∑︁ℓ∈Lact f
+818                      First-dimension output ciphertexts       P             2 ℓ
+                                                                     ∑︁ℓ∈Lact f
+819                      Fold CMux operations                     P     ℓ∈L     (2 ℓ − 1)
+                                                                     ∑︁     act
+                         Private-rotation CMux operations         P             d
+820                                                                  ∑︁ℓ∈Lact ℓ
+                         Projection substitutions                 P     ℓ∈Lact dℓ
+821                      Response placements                      PH
+822                      Nontrivial response shifts               P H − Cresp
+                         Response-pool additions                  P H − Cresp
+823                      Response modulus switches                1[qresp < q] · Cresp
+824
+825
+826
+827                      Table 2: Selected composite-NTT/m32 implementation costs.
+828                Quantity                           Implementation-specific count
+829                Alpha-pyramid transforms/splits    up to Cpyr cached NTT/RNS objects
+                                                        ∑︁          fℓ
+830                First-dimension finalize outputs   P     ℓ∈Lact 2   CRT/INTT/materialization paths
+                   Matrix kernel work                 implementation-dependent m32 loads and multiply-accumulates
+831
+832
+833
+      The first-dimension output count satisfies
+834
+                                      ∑︂            ∑︂
+835                                P        2fℓ = P    (2fℓ − 1) + P H.
+836                                        ℓ∈Lact                ℓ∈Lact
+837
+838
+839
+840
+841
+842
+843
+844
+845
+846
+847
+848
+849
+850
+851
+852
+853
+854
+855
+856
+857
+858
+859
+860
+861
+862
+863
+
+
+
+                                                                  16
+

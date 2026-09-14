@@ -1,0 +1,85 @@
+Running test: cuckoo_bench
+==============================================================================
+                    test_cuckoo_benchmark(Benchmark build)
+==============================================================================
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 0 ms
+Noise budget after decryption: 3 (max noise: 36)
+Noise budget after decryption: 3 (max noise: 38)
+Noise budget after decryption: 3 (max noise: 35)
+Noise budget after decryption: 3 (max noise: 41)
+Noise budget after decryption: 3 (max noise: 36)
+Noise budget after decryption: 3 (max noise: 42)
+Noise budget after decryption: 3 (max noise: 37)
+Noise budget after decryption: 3 (max noise: 41)
+Noise budget after decryption: 3 (max noise: 38)
+Noise budget after decryption: 3 (max noise: 39)
+Noise budget after decryption: 3 (max noise: 44)
+Noise budget after decryption: 3 (max noise: 38)
+Noise budget after decryption: 3 (max noise: 34)
+Noise budget after decryption: 3 (max noise: 32)
+Noise budget after decryption: 3 (max noise: 41)
+Noise budget after decryption: 3 (max noise: 38)
+Noise budget after decryption: 3 (max noise: 43)
+Noise budget after decryption: 3 (max noise: 35)
+Noise budget after decryption: 3 (max noise: 34)
+Noise budget after decryption: 3 (max noise: 34)
+Noise budget after decryption: 3 (max noise: 34)
+Noise budget after decryption: 3 (max noise: 36)
+Noise budget after decryption: 3 (max noise: 37)
+Noise budget after decryption: 3 (max noise: 36)
+Noise budget after decryption: 3 (max noise: 35)
+Noise budget after decryption: 3 (max noise: 35)
+Noise budget after decryption: 3 (max noise: 45)
+Noise budget after decryption: 3 (max noise: 42)
+Noise budget after decryption: 3 (max noise: 41)
+Noise budget after decryption: 3 (max noise: 39)
+Noise budget after decryption: 3 (max noise: 35)
+Noise budget after decryption: 3 (max noise: 42)
+Noise budget after decryption: 3 (max noise: 36)
+Noise budget after decryption: 3 (max noise: 38)
+Noise budget after decryption: 3 (max noise: 40)
+Noise budget after decryption: 3 (max noise: 39)
+Noise budget after decryption: 3 (max noise: 34)
+Noise budget after decryption: 3 (max noise: 42)
+Noise budget after decryption: 3 (max noise: 38)
+Noise budget after decryption: 3 (max noise: 37)
+Noise budget after decryption: 3 (max noise: 37)
+Noise budget after decryption: 3 (max noise: 39)
+Noise budget after decryption: 3 (max noise: 40)
+Noise budget after decryption: 3 (max noise: 38)
+Noise budget after decryption: 3 (max noise: 33)
+Noise budget after decryption: 3 (max noise: 40)
+Noise budget after decryption: 3 (max noise: 47)
+Noise budget after decryption: 3 (max noise: 36)
+cuckoo batch PIR: L=10, k=10, buckets=16 (3 hashes, 1.5x+slack)
+database: 72 padded PIR matrix plaintexts across buckets (66 target packed plaintexts, 5792 actual replicated nodes, 0 MiB replicated, 0 MiB padded), largest bucket 386 nodes, setup 11.0146 ms
+estimated preprocessed bucket storage 1 MiB; public metadata 0 MiB; estimated resident peak 1 MiB
+trials: 2 measured after 1 warmup
+trial seed: 7
+bucket routing avg 0.000687 ms
+client query avg 1.20487 ms
+server batch avg 16.3978 ms; samples:
+  batch 16.2352 ms
+  batch 16.5604 ms
+server profile breakdown avg (ms, sum over bucket requests): expand 8.235687 convert 0.002188 first_dim_query_ntt 0.915980 first_dim_query_pack 0.441624 first_dim_core 0.661689 first_dim_finalize 0.407479 other_dim 0.015103 mod_switch 5.706479
+  phases sum 16.3862 ms of server batch avg 16.3978 ms
+response serialize avg 0.754104 ms
+client decode avg 3.38125 ms
+communication: queries 238080 B (modeled, 16 ciphertexts), responses 180224 B (actual wire codec), online 418304 B; helper keys shared bundle 892800 B (modeled)
+payload: 10 x 32-byte siblings = 320 B useful; position metadata public
+cuckoo raw profile JSON: outputs/generic-superrecord-validation/cuckoo-extra-bucket-smoke.json

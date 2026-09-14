@@ -1,0 +1,10 @@
+{
+  "pid": 15163,
+  "started_utc": "2026-09-05T07:43:23.830211+00:00",
+  "started_monotonic": 27488.034555327,
+  "preparing": "preparing [generic-h1-frontier-1] E=256 N=2^24 h=1 G=32 P=1 rho=64 m=24 b=9 N0=512(align 1) width=656 h_q=10 keys req/reg=10/11 resp=1 scan=8192 MiB folds=1013 rot=129 proj=129 util=0.666667 pred=2226.84 ms",
+  "scope": "generic preflight wall-clock includes this pause; online timing has not started",
+  "resumed_utc": "2026-09-05T08:03:32.547268+00:00",
+  "paused_seconds": 1208.717056841997,
+  "pilot_exit_code": 0
+}

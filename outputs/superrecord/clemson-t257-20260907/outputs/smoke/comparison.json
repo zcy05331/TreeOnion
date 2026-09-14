@@ -1,0 +1,89 @@
+{
+  "baseline_ms": 103.32107833333333,
+  "candidate_ms": 104.19342866666666,
+  "speedup": 0.9916275877999549,
+  "baseline_mib_s": 2.419346433991196,
+  "candidate_mib_s": 2.3990906683911124,
+  "stage_rows": [
+    {
+      "stage": "fold",
+      "baseline_ms": 0.0004823333333333333,
+      "candidate_ms": 0.0004653333333333334,
+      "saved_ms": 1.6999999999999925e-05
+    },
+    {
+      "stage": "pack",
+      "baseline_ms": 0.08626833333333334,
+      "candidate_ms": 0.13740333333333335,
+      "saved_ms": -0.051135000000000014
+    },
+    {
+      "stage": "project",
+      "baseline_ms": 15.183852000000002,
+      "candidate_ms": 15.188334333333332,
+      "saved_ms": -0.004482333333330146
+    },
+    {
+      "stage": "pyramid",
+      "baseline_ms": 14.351761666666667,
+      "candidate_ms": 14.547590999999999,
+      "saved_ms": -0.1958293333333323
+    },
+    {
+      "stage": "query_expand",
+      "baseline_ms": 28.359399,
+      "candidate_ms": 28.78604866666667,
+      "saved_ms": -0.4266496666666697
+    },
+    {
+      "stage": "rotate",
+      "baseline_ms": 17.544081000000002,
+      "candidate_ms": 17.844902666666666,
+      "saved_ms": -0.3008216666666641
+    },
+    {
+      "stage": "scan_core",
+      "baseline_ms": 6.172395333333333,
+      "candidate_ms": 6.17773,
+      "saved_ms": -0.005334666666667154
+    },
+    {
+      "stage": "scan_finalize",
+      "baseline_ms": 2.7513566666666667,
+      "candidate_ms": 2.733675,
+      "saved_ms": 0.017681666666666818
+    },
+    {
+      "stage": "selector_completion",
+      "baseline_ms": 18.070948333333334,
+      "candidate_ms": 17.98163,
+      "saved_ms": 0.08931833333333472
+    },
+    {
+      "stage": "switch",
+      "baseline_ms": 0.6099803333333333,
+      "candidate_ms": 0.6044200000000001,
+      "saved_ms": 0.005560333333333278
+    }
+  ],
+  "baseline_communication": {
+    "modeled_query_bytes_per_trial": 14880,
+    "actual_response_bytes_per_trial": 11264,
+    "modeled_helper_key_bytes": 1607040,
+    "modeled_compression_key_bytes": 0,
+    "query_bytes_kind": "modeled",
+    "response_bytes_kind": "actual",
+    "helper_key_bytes_kind": "modeled",
+    "compression_key_bytes_kind": "modeled"
+  },
+  "candidate_communication": {
+    "modeled_query_bytes_per_trial": 14880,
+    "actual_response_bytes_per_trial": 11264,
+    "modeled_helper_key_bytes": 1607040,
+    "modeled_compression_key_bytes": 0,
+    "query_bytes_kind": "modeled",
+    "response_bytes_kind": "actual",
+    "helper_key_bytes_kind": "modeled",
+    "compression_key_bytes_kind": "modeled"
+  }
+}

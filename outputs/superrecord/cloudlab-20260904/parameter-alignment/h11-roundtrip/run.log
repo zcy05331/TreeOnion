@@ -1,0 +1,10 @@
+DB gen+NTT+realign: 77 ms
+height=10 N0=512 plaintext=0 correct; noise=101 budget=2
+height=10 N0=512 plaintext=1023 correct; noise=118 budget=2
+height=10 N0=512 plaintext=1024 correct; noise=114 budget=2
+height=10 N0=512 plaintext=4095 correct; noise=109 budget=2
+DB gen+NTT+realign: 62 ms
+height=11 N0=1024 plaintext=0 correct; noise=134 budget=1
+height=11 N0=1024 plaintext=1023 correct; noise=149 budget=1
+height=11 N0=1024 plaintext=1024 correct; noise=158 budget=1
+height=11 N0=1024 plaintext=4095 correct; noise=172 budget=1

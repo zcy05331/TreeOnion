@@ -33,6 +33,11 @@ struct LayerLayout {
   bool direct_return = false;
 };
 
+struct TargetPlaintextLayout {
+  size_t target_num_pt = 0;
+  PirParams params;
+};
+
 // Return a level-local sibling index, not a global heap index.
 size_t merkle_sibling_local(size_t leaf, size_t tree_height, size_t level);
 // Breadth-first ordinal in the root-excluded flat database; ordinal 0 is the
@@ -58,6 +63,8 @@ RlwePt make_layer_merkle_plaintext(size_t level, size_t plaintext_index,
 
 // Minimize padded plaintext count per level while retaining the reference
 // scheme parameters and maximum remaining-dimension count.
+TargetPlaintextLayout select_target_plaintext_layout(
+    size_t target_num_pt, const PirParams &reference);
 std::vector<LayerLayout> plan_layer_layouts(
     size_t tree_height, size_t nodes_per_pt, const PirParams &reference);
 uint64_t sum_padded_bytes(const std::vector<LayerLayout> &layouts);

@@ -5,6 +5,7 @@
 #include "rlwe.h"
 
 #include <cstddef>
+#include <functional>
 
 // Milestone-3：单边系数投影（蓝图 §13）。投影映射
 //   π_d(Σ f_e X^e) = Σ_{2^d | e} f_e X^e
@@ -26,4 +27,6 @@
 // 位于非零残差 u - γ_ℓ (mod 2^ℓ)，深度 ℓ 已全部杀掉）。
 RlweCt project_keep_stride(RlweCt ct, size_t depth,
                            const bvks::BvGaloisKeys &keys,
-                           const PirParams &scheme);
+                           const PirParams &scheme,
+                           const std::function<void(size_t, const RlweCt &)> *
+                               checkpoint = nullptr);

@@ -1,0 +1,5 @@
+Running test: tree_superrecord_planner
+==============================================================================
+                    test_tree_superrecord_planner(Benchmark build)
+==============================================================================
+E=256, N=2^24: 826 candidates, frontier 342, best predicted: E=256 N=2^24 h=3 G=64 P=1 rho=32 m=23 b=8 N0=683(align 1) width=821 h_q=10 keys req/reg=10/11 resp=1 scan=5464 MiB folds=502 rot=105 proj=105 util=1 pred=1986.6 ms

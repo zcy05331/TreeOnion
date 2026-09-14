@@ -1,0 +1,12 @@
+Running test: tree_superrecord_bench
+==============================================================================
+                    test_tree_superrecord_benchmark(Benchmark build)
+==============================================================================
+calibrating first-dimension kernels for 745 candidate shapes
+planner: E=384 c=12 N=2^24: 745 candidates (353 h=1), Pareto frontier 270, benchmark rows 6, execution seed 20260904
+preparing [generic-h1-mandatory-0] E=384 N=2^24 h=1 G=32 P=1 rho=64 m=24 b=9 N0=512(align 1) width=656 h_q=10 keys req/reg=10/11 resp=1 scan=8192 MiB folds=1013 rot=129 proj=129 util=1 pred=1243.9 ms
+preparing [generic-h3-mandatory] E=384 N=2^24 h=3 G=32 P=3 rho=64 m=23 b=8 N0=352(align 16) width=490 h_q=9 keys req/reg=9/11 resp=2 scan=8448 MiB folds=1506 rot=369 proj=369 util=1 pred=1421.49 ms
+preparing [generic-h1-frontier-1] E=384 N=2^24 h=1 G=16 P=2 rho=128 m=24 b=8 N0=512(align 1) width=656 h_q=10 keys req/reg=10/11 resp=1 scan=8192 MiB folds=1004 rot=294 proj=294 util=1 pred=1306.87 ms
+preparing [generic-h1-frontier-2] E=384 N=2^24 h=1 G=8 P=4 rho=256 m=24 b=7 N0=512(align 1) width=656 h_q=10 keys req/reg=10/11 resp=1 scan=8192 MiB folds=988 rot=656 proj=656 util=1 pred=1432.34 ms
+preparing [frontier-1] E=384 N=2^24 h=1 G=32 P=1 rho=64 m=24 b=10 N0=256(align 1) width=400 h_q=9 keys req/reg=9/11 resp=1 scan=8192 MiB folds=2036 rot=129 proj=129 util=1 pred=1449.51 ms
+preparing [frontier-2] E=384 N=2^24 h=1 G=16 P=2 rho=128 m=24 b=9 N0=256(align 1) width=400 h_q=9 keys req/reg=9/11 resp=1 scan=8192 MiB folds=2026 rot=294 proj=294 util=1 pred=1502.67 ms

@@ -1,0 +1,99 @@
+{
+  "schema_version": "cloudlab-tier-completion.v1",
+  "tier": "1gb",
+  "leaf_count": 16777216,
+  "formal_process_jobs_completed": 11,
+  "generic_configurations": 7,
+  "completed": [
+    {
+      "case": "standard",
+      "family": "merkle",
+      "measured_trials_per_configuration": 100,
+      "process_exit_code": 0,
+      "raw_file": "standard.json",
+      "process_file": "standard-process.json"
+    },
+    {
+      "case": "layerwise",
+      "family": "merkle",
+      "measured_trials_per_configuration": 100,
+      "process_exit_code": 0,
+      "raw_file": "layerwise.json",
+      "process_file": "layerwise-process.json"
+    },
+    {
+      "case": "layerwise_tuned",
+      "family": "merkle",
+      "measured_trials_per_configuration": 100,
+      "process_exit_code": 0,
+      "raw_file": "layerwise_tuned.json",
+      "process_file": "layerwise_tuned-process.json"
+    },
+    {
+      "case": "tree_g32",
+      "family": "sampled",
+      "measured_trials_per_configuration": 100,
+      "process_exit_code": 0,
+      "raw_file": "tree_g32.json",
+      "process_file": "tree_g32-process.json"
+    },
+    {
+      "case": "tree_g1",
+      "family": "sampled",
+      "measured_trials_per_configuration": 100,
+      "process_exit_code": 0,
+      "raw_file": "tree_g1.json",
+      "process_file": "tree_g1-process.json"
+    },
+    {
+      "case": "tree_compressed",
+      "family": "sampled",
+      "measured_trials_per_configuration": 100,
+      "process_exit_code": 0,
+      "raw_file": "tree_compressed.json",
+      "process_file": "tree_compressed-process.json"
+    },
+    {
+      "case": "cuckoo",
+      "family": "sampled",
+      "measured_trials_per_configuration": 100,
+      "process_exit_code": 0,
+      "raw_file": "cuckoo.json",
+      "process_file": "cuckoo-process.json"
+    },
+    {
+      "case": "cuckoo_tuned",
+      "family": "sampled",
+      "measured_trials_per_configuration": 100,
+      "process_exit_code": 0,
+      "raw_file": "cuckoo_tuned.json",
+      "process_file": "cuckoo_tuned-process.json"
+    },
+    {
+      "case": "generic",
+      "family": "generic",
+      "measured_trials_per_configuration": 100,
+      "process_exit_code": 0,
+      "raw_file": "generic.json",
+      "process_file": "generic-process.json"
+    },
+    {
+      "case": "treepir",
+      "family": "treepir",
+      "measured_trials_per_configuration": 100,
+      "process_exit_code": 0,
+      "raw_file": "treepir.json",
+      "process_file": "treepir-process.json"
+    },
+    {
+      "case": "flat",
+      "family": "merkle",
+      "measured_trials_per_configuration": 16,
+      "process_exit_code": 0,
+      "raw_file": "flat.json",
+      "process_file": "flat-process.json"
+    }
+  ],
+  "remaining_scope": "8gb tier still running",
+  "final_logs_complete": true
+}

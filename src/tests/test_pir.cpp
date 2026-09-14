@@ -1,6 +1,9 @@
 #include "tests.h"
 #include "bv_keyswitch.h"
 
+#include <algorithm>
+#include <limits>
+
 void PirTest::test_pir() {
   print_func_name(__FUNCTION__);
   auto success_count = 0;
@@ -30,6 +33,27 @@ void PirTest::test_pir() {
   size_t galois_key_size = 0;
   size_t query_size = 0;
   size_t resp_size = 0;
+
+  // Response noise margin. At the paper point (CONFIG_N2048_K1_COMP with the
+  // default gadgets) the flat pipeline leaves only 1-2 bits of budget, so a
+  // regression that inflates the noise (wrong base_log2 rounding, a lost
+  // centering in the rescale, an extra expansion level) would pass the decode
+  // check until it reaches ~3x. Pin one bit of budget, i.e. max_noise <=
+  // small_q / (4t) (254 here), as the early canary. The measured response
+  // noise is 104-193 (mean 135, sd 15) over 200 experiments in 20 processes,
+  // so the floor sits ~7.7 sd above the mean of a per-experiment maximum over
+  // 2048 coefficients; extrapolating that tail leaves a spurious failure
+  // below 1e-4 per suite run. Other configs and the gadget-campaign builds
+  // (PIR_EP_ROWS, PIR_EP_LOW_BITS, PIR_KS_ROWS, PIR_KS_LOW_BITS) have their
+  // own margins and only report the measurement; the decode check above them
+  // stays, which is why this is a conditional pin and not require_applicable.
+  const bool pin_noise_margin =
+      paper_config_active() && DBConsts::L_EP == DBConsts::DefaultL_EP &&
+      DBConsts::EP_LOW_BITS == 0 && DBConsts::L_KS == DBConsts::DefaultL_KS &&
+      DBConsts::KS_LOW_BITS == 0;
+  int min_budget_bits = std::numeric_limits<int>::max();
+  uint64_t worst_noise = 0;
+  size_t worst_noise_idx = 0;
 
   // Run the query process many times.
   for (size_t i = 0; i < num_experiments; i++) {
@@ -65,11 +89,22 @@ void PirTest::test_pir() {
     resp_size = server.save_resp_to_stream(response, resp_stream);
 
     // ============= CLIENT ===============
-    // client gets result from the server and decrypts it
+    // client gets result from the server and decrypts it, measuring the
+    // largest centered residue of the response on the way.
     RlweCt reconstructed_result = client.load_resp_from_stream(resp_stream);
+    uint64_t max_noise = 0;
+    int budget_bits = 0;
     TIME_START(CLIENT_TOT_TIME);
-    RlwePt decrypted_result = client.decrypt_mod_q(reconstructed_result);
+    RlwePt decrypted_result = client.decrypt_mod_q_measured(
+        reconstructed_result, max_noise, budget_bits);
     TIME_END(CLIENT_TOT_TIME);
+    BENCH_PRINT("Noise budget after decryption: " << budget_bits
+                << " (max noise: " << max_noise << ")");
+    if (max_noise > worst_noise) {
+      worst_noise = max_noise;
+      worst_noise_idx = query_pt_idx;
+    }
+    min_budget_bits = std::min(min_budget_bits, budget_bits);
 
     // ============= Directly get the plaintext from server. Not part of PIR.
     RlwePt actual_plaintext = server.direct_get_original_plaintext(query_pt_idx);
@@ -98,12 +133,27 @@ void PirTest::test_pir() {
 
   require_test(success_count == num_experiments,
                "standard OnionPIR correctness mismatch");
+  if (pin_noise_margin) {
+    require_test(
+        min_budget_bits >= 1,
+        "response noise margin fell below one bit at the paper point: max "
+        "noise " + std::to_string(worst_noise) + " (query index " +
+            std::to_string(worst_noise_idx) + ") exceeds small_q/(4t) = " +
+            std::to_string(pir_params.get_small_q() /
+                           (4 * pir_params.get_plain_mod())));
+  }
 
   // ============= PRINTING FINAL RESULTS ===============]
   PRINT_BAR;
   BENCH_PRINT("                                FINAL RESULTS")
   PRINT_BAR;
   BENCH_PRINT("Success rate: " << success_count << "/" << num_experiments);
+  if (num_experiments > 0) {
+    BENCH_PRINT("Response noise: max " << worst_noise << " (decode limit small_q/(2t) = "
+                << pir_params.get_small_q() / (2 * pir_params.get_plain_mod())
+                << "), min budget " << min_budget_bits << " bits"
+                << (pin_noise_margin ? ", one-bit floor enforced" : ""));
+  }
   BENCH_PRINT("BV galois key size: " << static_cast<double>(galois_key_size) / 1024 << " KB");
   // BENCH_PRINT("gsw key size: " << gsw_key_size << " bytes");
   BENCH_PRINT("gsw key size: " << pir_params.get_gsw_key_size() << " bytes = " << static_cast<double>(pir_params.get_gsw_key_size()) / 1024 << " KB");

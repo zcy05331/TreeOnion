@@ -108,6 +108,7 @@ class PirTest {
     void test_tree_rotate();
     // Milestone 3: projection map for every depth plus the rotate+project gate.
     void test_tree_project();
+    void test_tree_response_merge();
     // Milestone 4: full path pipeline, chunk packing, client decode.
     void test_tree_e2e();
     // Milestone 6: scalar vs NTT first-dimension kernels, bit-for-bit.
@@ -122,6 +123,18 @@ class PirTest {
     // Cuckoo-hash batch PIR baseline: correctness gate and L=22 benchmark.
     void test_cuckoo_batch();
     void test_cuckoo_benchmark();
+    // Generic super-record tree PIR: arbitrary h, dyadic G, minimal P, ragged
+    // N0, one shared sigma selector vector, pooled multi-plane responses.
+    void test_tree_superrecord_codec();
+    void test_tree_superrecord_planner();
+    void test_tree_superrecord_index();
+    void test_tree_superrecord_e2e();
+    void test_tree_superrecord_noise();
+    void test_tree_superrecord_kernel();
+    void test_tree_superrecord_alpha();
+    void test_tree_superrecord_noise_probe();
+    // Timed: planner candidates for 32-byte nodes against the legacy g=32 path.
+    void test_tree_superrecord_benchmark();
     void test_mod_switch();
     void test_db_shape();
     void test_runtime_layout();

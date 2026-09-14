@@ -1,0 +1,120 @@
+Running test: tree_superrecord_bench
+==============================================================================
+                    test_tree_superrecord_benchmark(Benchmark build)
+==============================================================================
+calibrating first-dimension kernels for 1 candidate shapes
+planner: E=256 c=12 N=2^22: 1 candidates (0 h=1), Pareto frontier 1, benchmark rows 1, execution seed 6003972730984227889
+preparing [bundle3] E=256 N=2^22 h=3 G=64 P=1 rho=32 m=21 b=7 N0=352(align 16) width=478 h_q=9 keys req/reg=9/11 resp=1 scan=1408 MiB folds=247 rot=95 proj=95 util=1 pred=539.066 ms
+completed warmup block 0 leaf 3419699
+completed warmup block 1 leaf 3498595
+completed warmup block 2 leaf 3633798
+completed measured block 3 leaf 458193
+completed measured block 4 leaf 2661374
+completed measured block 5 leaf 3293229
+completed measured block 6 leaf 44374
+completed measured block 7 leaf 3321838
+completed measured block 8 leaf 2739185
+completed measured block 9 leaf 2293452
+completed measured block 10 leaf 2990647
+completed measured block 11 leaf 1576270
+completed measured block 12 leaf 2201528
+completed measured block 13 leaf 1558709
+completed measured block 14 leaf 2966958
+completed measured block 15 leaf 1985438
+completed measured block 16 leaf 2654853
+completed measured block 17 leaf 2906681
+completed measured block 18 leaf 3737117
+completed measured block 19 leaf 1941352
+completed measured block 20 leaf 294355
+completed measured block 21 leaf 168734
+completed measured block 22 leaf 153677
+completed measured block 23 leaf 3972790
+completed measured block 24 leaf 1866798
+completed measured block 25 leaf 503455
+completed measured block 26 leaf 1947882
+completed measured block 27 leaf 3308326
+completed measured block 28 leaf 2399015
+completed measured block 29 leaf 9032
+completed measured block 30 leaf 1027352
+completed measured block 31 leaf 2032730
+completed measured block 32 leaf 2892276
+completed measured block 33 leaf 771648
+completed measured block 34 leaf 1910269
+completed measured block 35 leaf 2180196
+completed measured block 36 leaf 424282
+completed measured block 37 leaf 1862275
+completed measured block 38 leaf 3539527
+completed measured block 39 leaf 2388725
+completed measured block 40 leaf 638903
+completed measured block 41 leaf 1049323
+completed measured block 42 leaf 2571300
+completed measured block 43 leaf 663600
+completed measured block 44 leaf 2221554
+completed measured block 45 leaf 502360
+completed measured block 46 leaf 302887
+completed measured block 47 leaf 3605493
+completed measured block 48 leaf 2323458
+completed measured block 49 leaf 681565
+completed measured block 50 leaf 1280106
+completed measured block 51 leaf 3741127
+completed measured block 52 leaf 968688
+completed measured block 53 leaf 2241362
+completed measured block 54 leaf 3217627
+completed measured block 55 leaf 2538462
+completed measured block 56 leaf 2578260
+completed measured block 57 leaf 1538349
+completed measured block 58 leaf 2637494
+completed measured block 59 leaf 1563105
+completed measured block 60 leaf 1702238
+completed measured block 61 leaf 1278117
+completed measured block 62 leaf 1192594
+completed measured block 63 leaf 2280650
+completed measured block 64 leaf 4042623
+completed measured block 65 leaf 1635354
+completed measured block 66 leaf 2124317
+completed measured block 67 leaf 1405502
+completed measured block 68 leaf 687037
+completed measured block 69 leaf 1411634
+completed measured block 70 leaf 3829198
+completed measured block 71 leaf 2583770
+completed measured block 72 leaf 3297806
+completed measured block 73 leaf 27332
+completed measured block 74 leaf 1226388
+completed measured block 75 leaf 1707790
+completed measured block 76 leaf 3085924
+completed measured block 77 leaf 3748717
+completed measured block 78 leaf 575108
+completed measured block 79 leaf 1073024
+completed measured block 80 leaf 312965
+completed measured block 81 leaf 320189
+completed measured block 82 leaf 1467303
+completed measured block 83 leaf 2901284
+completed measured block 84 leaf 857950
+completed measured block 85 leaf 1691460
+completed measured block 86 leaf 1440246
+completed measured block 87 leaf 2246488
+completed measured block 88 leaf 2119970
+completed measured block 89 leaf 1457777
+completed measured block 90 leaf 2952400
+completed measured block 91 leaf 2427118
+completed measured block 92 leaf 3274545
+completed measured block 93 leaf 3909875
+completed measured block 94 leaf 62155
+completed measured block 95 leaf 4065228
+completed measured block 96 leaf 601990
+completed measured block 97 leaf 2158346
+completed measured block 98 leaf 876188
+completed measured block 99 leaf 924345
+completed measured block 100 leaf 3180491
+completed measured block 101 leaf 307935
+completed measured block 102 leaf 4190068
+generic super-record JSON: /Users/little_sun/Desktop/little_sun/26Summer/OnionPIRv2/.worktrees/generic-superrecord/outputs/superrecord/alpha-ntt-20260908/local/pinned-full-query-ab/round1-new.json
+
+generic super-record benchmark: N=2^22 leaves, E=256 bits, 100 measured trials after 3 warmup, trial seed 7
+[candidate-0 bundle3] E=256 N=2^22 h=3 G=64 P=1 rho=32 m=21 b=7 N0=352(align 16) width=478 h_q=9 keys req/reg=9/11 resp=1 scan=1408 MiB folds=247 rot=95 proj=95 util=1 pred=539.066 ms
+  database 1408.1 MiB (90119 plaintext cells, scan 1408.1 MiB per query), setup 7156.5 ms
+  server total mean 554.264 ms, median 547.368, p95 595.848, stddev 25.3991
+  stages avg (ms): expand 71.646344 complete 36.706692 prepare 10.911970 scan 347.564478 finalize 11.013974 fold 43.863824 rotate 17.577663 project 14.053432 pack 0.081830 switch 0.372396
+  stages sum 553.793 ms; client query 0.089385 ms, client extract 0.235161 ms
+  throughput 2540.5 MiB/s scanned; communication: modeled query 14880 B, actual response payload 11264 B; noise: min budget 1 bits, max residue 153 of decoder bound 508.628; real non-target neighbour slots/trial 42.28
+  samples(server): 545.456291 543.530500 545.512250 542.303958 542.571084 540.892125 543.836375 541.906792 560.643292 568.799042 673.321250 559.869709 546.379292 696.755667 595.848084 567.777583 557.632792 541.134958 542.697166 542.466542 547.569583 550.604042 588.616083 548.810000 542.475791 546.241542 543.824292 539.305167 544.060791 541.454291 541.587542 545.189500 582.269042 568.080708 548.558791 549.469459 549.782125 551.044084 544.790084 541.603084 546.732000 552.531167 550.392292 543.119458 543.207375 540.834583 540.923958 544.126125 545.324917 541.888209 540.875250 540.329375 540.601833 540.028833 542.446416 542.669292 541.841208 541.696459 544.612375 539.381500 541.397000 565.589875 541.425709 538.293167 541.563958 542.700834 543.840625 545.020917 564.533750 554.388333 551.235542 549.956584 574.888666 619.551083 627.689042 547.165541 541.023958 543.534000 553.355458 549.969625 549.748958 550.923917 548.765250 548.054917 552.028542 556.662000 550.618417 553.751458 550.590167 556.228459 639.615792 548.274958 555.603791 551.504084 552.004333 548.630667 548.059875 550.791291 549.846666 549.325417

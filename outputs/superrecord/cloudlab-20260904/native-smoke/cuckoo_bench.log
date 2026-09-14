@@ -1,0 +1,81 @@
+Running test: cuckoo_bench
+==============================================================================
+                    test_cuckoo_benchmark(Benchmark build)
+==============================================================================
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 0 ms
+DB gen+NTT+realign: 0 ms
+Noise budget after decryption: 3 (max noise: 34)
+Noise budget after decryption: 3 (max noise: 35)
+Noise budget after decryption: 3 (max noise: 44)
+Noise budget after decryption: 3 (max noise: 39)
+Noise budget after decryption: 3 (max noise: 36)
+Noise budget after decryption: 3 (max noise: 34)
+Noise budget after decryption: 3 (max noise: 37)
+Noise budget after decryption: 3 (max noise: 34)
+Noise budget after decryption: 3 (max noise: 44)
+Noise budget after decryption: 3 (max noise: 39)
+Noise budget after decryption: 3 (max noise: 33)
+Noise budget after decryption: 3 (max noise: 40)
+Noise budget after decryption: 3 (max noise: 40)
+Noise budget after decryption: 3 (max noise: 38)
+Noise budget after decryption: 3 (max noise: 34)
+Noise budget after decryption: 3 (max noise: 40)
+Noise budget after decryption: 3 (max noise: 33)
+Noise budget after decryption: 3 (max noise: 34)
+Noise budget after decryption: 3 (max noise: 35)
+Noise budget after decryption: 3 (max noise: 38)
+Noise budget after decryption: 3 (max noise: 35)
+Noise budget after decryption: 3 (max noise: 36)
+Noise budget after decryption: 3 (max noise: 46)
+Noise budget after decryption: 3 (max noise: 47)
+Noise budget after decryption: 3 (max noise: 41)
+Noise budget after decryption: 3 (max noise: 37)
+Noise budget after decryption: 3 (max noise: 39)
+Noise budget after decryption: 3 (max noise: 38)
+Noise budget after decryption: 3 (max noise: 37)
+Noise budget after decryption: 3 (max noise: 39)
+Noise budget after decryption: 3 (max noise: 39)
+Noise budget after decryption: 3 (max noise: 38)
+Noise budget after decryption: 3 (max noise: 38)
+Noise budget after decryption: 3 (max noise: 46)
+Noise budget after decryption: 3 (max noise: 49)
+Noise budget after decryption: 3 (max noise: 40)
+Noise budget after decryption: 3 (max noise: 38)
+Noise budget after decryption: 3 (max noise: 42)
+Noise budget after decryption: 3 (max noise: 37)
+Noise budget after decryption: 3 (max noise: 37)
+Noise budget after decryption: 3 (max noise: 40)
+Noise budget after decryption: 3 (max noise: 35)
+Noise budget after decryption: 3 (max noise: 40)
+Noise budget after decryption: 3 (max noise: 36)
+Noise budget after decryption: 3 (max noise: 42)
+cuckoo batch PIR: L=10, k=10, buckets=15 (3 hashes, 1.5x)
+database: 92 padded PIR matrix plaintexts across buckets (68 target packed plaintexts, 5758 actual replicated nodes, 0 MiB replicated, 0 MiB padded), largest bucket 420 nodes, setup 34.6368 ms
+estimated preprocessed bucket storage 1 MiB; public metadata 0 MiB; estimated resident peak 1 MiB
+trials: 2 measured after 1 warmup
+trial seed: 7
+bucket routing avg 0.0009585 ms
+client query avg 3.37263 ms
+server batch avg 54.9138 ms; samples:
+  batch 54.8916 ms
+  batch 54.9361 ms
+server profile breakdown avg (ms, sum over bucket requests): expand 24.687740 convert 0.011220 first_dim_query_ntt 2.302243 first_dim_query_pack 8.544683 first_dim_core 7.642893 first_dim_finalize 1.973917 other_dim 0.032462 mod_switch 9.344881
+  phases sum 54.54 ms of server batch avg 54.9138 ms
+response serialize avg 5.67944 ms
+client decode avg 10.9685 ms
+communication: queries 223200 B (modeled, 15 ciphertexts), responses 168960 B (actual wire codec), online 392160 B; helper keys shared bundle 892800 B (modeled)
+payload: 10 x 32-byte siblings = 320 B useful; position metadata public
+cuckoo raw profile JSON: /users/zcy05331/generic-superrecord-bench-20260904/outputs/native-smoke/cuckoo_bench.json

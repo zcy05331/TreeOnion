@@ -6,6 +6,7 @@
 #include "hexl/hexl.hpp"
 
 #include <bit>
+#include <functional>
 #include <stdexcept>
 #include <string>
 
@@ -18,7 +19,9 @@
 // 输出：系数形式密文，解密 = π_depth(原明文)，保留系数保持原尺度不变。
 RlweCt project_keep_stride(RlweCt ct, size_t depth,
                            const bvks::BvGaloisKeys &keys,
-                           const PirParams &scheme) {
+                           const PirParams &scheme,
+                           const std::function<void(size_t, const RlweCt &)> *
+                               checkpoint) {
   // 环维数 n、RNS 模数组 {q_k} 与 limb 数 K。
   constexpr size_t N = DBConsts::PolyDegree;
   const auto &qs = scheme.get_rns_mods();
@@ -71,6 +74,7 @@ RlweCt project_keep_stride(RlweCt ct, size_t depth,
     bvks::bv_apply_galois_inplace(tau, eta, keys.get(eta), scheme);
     // 累加回原密文：T <- T + τ_{η_j}(T)，完成本轮指数集减半。
     tree_ct_add_inplace(ct, tau, scheme);
+    if (checkpoint) (*checkpoint)(j, ct);
   }
   // 此时解密 = π_depth(原明文)：非 stride 系数全零，保留系数尺度与输入一致。
   return ct;

@@ -1,0 +1,1751 @@
+diff --git a/VBPIR_TreePIR/header/batchpirparams.h b/VBPIR_TreePIR/header/batchpirparams.h
+index 821f13a..e153b5e 100644
+--- a/VBPIR_TreePIR/header/batchpirparams.h
++++ b/VBPIR_TreePIR/header/batchpirparams.h
+@@ -21,6 +21,7 @@ public:
+     uint32_t get_num_slots_per_entry();
+     seal::EncryptionParameters get_seal_parameters() const;
+     void set_max_bucket_size(size_t max_bucket_size);
++    void set_first_dimension_override(size_t dim_size);
+ 
+     void print_params() const;
+ 
+@@ -31,6 +32,7 @@ private:
+     size_t entry_size_= 0;
+     size_t max_bucket_size_= 0;
+     size_t dim_size_= 0;
++    size_t dim_size_override_= 0;
+     uint64_t default_value_ = DatabaseConstants::DefaultVal;
+     seal::EncryptionParameters seal_params_;
+ 
+diff --git a/VBPIR_TreePIR/header/batchpirserver.h b/VBPIR_TreePIR/header/batchpirserver.h
+index 971d289..db3ad1a 100644
+--- a/VBPIR_TreePIR/header/batchpirserver.h
++++ b/VBPIR_TreePIR/header/batchpirserver.h
+@@ -11,6 +11,12 @@
+ #include <string>
+ #include "rapidjson/document.h"
+ 
++struct BatchServerProfile {
++    double process_first_dimension_ms = 0.0;
++    double process_second_dimension_ms = 0.0;
++    double process_last_dimension_ms = 0.0;
++    double merge_ms = 0.0;
++};
+ 
+ class BatchPIRServer {
+ 
+@@ -19,11 +25,13 @@ public:
+     //BatchPIRServer( BatchPirParams& batchpir_params);
+ 
+     BatchPIRServer(unsigned int tree_height, unsigned int children, BatchPirParams &batchpir_params);
++    BatchPIRServer(unsigned int tree_height, unsigned int children, BatchPirParams &batchpir_params, bool synthetic_data);
+ 
+     std::unordered_map<std::string, uint64_t> get_hash_map() const;
+     void set_client_keys(uint32_t client_id, std::pair<seal::GaloisKeys, seal::RelinKeys> keys);
+     void get_client_keys();
+     PIRResponseList generate_response(uint32_t client_id, vector<PIRQuery> queries);
++    PIRResponseList generate_response(uint32_t client_id, vector<PIRQuery> queries, BatchServerProfile *profile);
+     bool check_decoded_entries(vector<std::vector<std::vector<unsigned char>>> entries_list, vector<uint64_t> cuckoo_table);
+     unsigned int tree_height_;
+     unsigned int children_;
+@@ -42,6 +50,8 @@ private:
+     std::vector<std::vector<uint64_t>>  simeple_hash_with_map();
+     void prepare_pir_server();
+     void populate_raw_db();
++    void populate_synthetic_buckets();
++    std::vector<unsigned char> synthetic_entry(size_t color_index, uint64_t entry_index) const;
+     std::size_t get_max_bucket_size() const;
+     std::size_t get_min_bucket_size() const;
+     std::size_t get_avg_bucket_size() const;
+diff --git a/VBPIR_TreePIR/header/database_constants.h b/VBPIR_TreePIR/header/database_constants.h
+index 92b74f0..7728622 100644
+--- a/VBPIR_TreePIR/header/database_constants.h
++++ b/VBPIR_TreePIR/header/database_constants.h
+@@ -2,6 +2,7 @@
+ #define DATABASE_CONSTANTS_H
+ 
+ #include <limits>
++#include <cstdint>
+ 
+ namespace DatabaseConstants {
+ 
+@@ -15,4 +16,4 @@ namespace DatabaseConstants {
+ 
+ }
+ 
+-#endif // DATABASE_CONSTANTS_H
+\ No newline at end of file
++#endif // DATABASE_CONSTANTS_H
+diff --git a/VBPIR_TreePIR/header/server.h b/VBPIR_TreePIR/header/server.h
+index 64e55ec..19b2cb0 100644
+--- a/VBPIR_TreePIR/header/server.h
++++ b/VBPIR_TreePIR/header/server.h
+@@ -10,6 +10,12 @@
+ using namespace seal;
+ using namespace utils;
+ 
++struct ServerProfile {
++    double process_first_dimension_ms = 0.0;
++    double process_second_dimension_ms = 0.0;
++    double process_last_dimension_ms = 0.0;
++};
++
+ class Server {
+ public:
+     // Constructor and destructor
+@@ -32,6 +38,7 @@ public:
+     void get_client_keys();
+ 
+     PIRResponseList generate_response(uint32_t client_id, PIRQuery query);
++    PIRResponseList generate_response(uint32_t client_id, PIRQuery query, ServerProfile *profile);
+ 
+     bool check_decoded_entry( std::vector<unsigned char> entry, int index);
+     bool check_decoded_entries(std::vector<std::vector<unsigned char>> entries, vector<uint64_t> indices);
+diff --git a/VBPIR_TreePIR/src/batchpirparams.cpp b/VBPIR_TreePIR/src/batchpirparams.cpp
+index dffff80..986dfc3 100644
+--- a/VBPIR_TreePIR/src/batchpirparams.cpp
++++ b/VBPIR_TreePIR/src/batchpirparams.cpp
+@@ -37,7 +37,12 @@ uint64_t BatchPirParams::get_default_value(){
+ }
+ 
+ void BatchPirParams::set_first_dimension_size(size_t max_bucket_size){
+-    dim_size_ = 64;//We set 64 for our experiments until h = 20
++    if (dim_size_override_ != 0) {
++        dim_size_ = dim_size_override_;
++        return;
++    }
++    const size_t h20_max_bucket = 104858;
++    dim_size_ = max_bucket_size <= h20_max_bucket ? 64 : utils::next_power_of_two(std::ceil(std::cbrt(max_bucket_size)));
+ }
+ 
+ void BatchPirParams::set_max_bucket_size(size_t max_bucket_size){
+@@ -45,6 +50,13 @@ void BatchPirParams::set_max_bucket_size(size_t max_bucket_size){
+     set_first_dimension_size(max_bucket_size_);
+ }
+ 
++void BatchPirParams::set_first_dimension_override(size_t dim_size){
++    dim_size_override_ = dim_size;
++    if (max_bucket_size_ != 0) {
++        set_first_dimension_size(max_bucket_size_);
++    }
++}
++
+ 
+ void BatchPirParams::print_params() const {
+ std::cout << "+---------------------------------------------------+" << std::endl;
+@@ -53,4 +65,4 @@ std::cout << "+---------------------------------------------------+" << std::end
+ std::cout << std::left << std::setw(20) << "| batch_size_: " << batch_size_ << std::endl;
+ std::cout << std::left << std::setw(20) << "| num_entries_: " << num_entries_ << std::endl;
+ std::cout << "+---------------------------------------------------+" << std::endl;
+-}
+\ No newline at end of file
++}
+diff --git a/VBPIR_TreePIR/src/batchpirserver.cpp b/VBPIR_TreePIR/src/batchpirserver.cpp
+index 5bb3bba..f053359 100644
+--- a/VBPIR_TreePIR/src/batchpirserver.cpp
++++ b/VBPIR_TreePIR/src/batchpirserver.cpp
+@@ -1,6 +1,35 @@
+ #include "header/batchpirserver.h"
+ 
++#include <cstdlib>
++#include <chrono>
++#include <limits>
++#include <stdexcept>
++#include <utility>
++
++namespace {
++
++std::string treepir_data_path(const std::string &suffix)
++{
++    const char *root = std::getenv("TREEPIR_DATA_DIR");
++    if (root == nullptr || root[0] == '\0') {
++        return suffix;
++    }
++
++    std::string base(root);
++    if (!base.empty() && base[base.size() - 1] == '/') {
++        return base + suffix;
++    }
++    return base + "/" + suffix;
++}
++
++}
++
+ BatchPIRServer::BatchPIRServer(unsigned int tree_height, unsigned int children, BatchPirParams &batchpir_params)
++    : BatchPIRServer(tree_height, children, batchpir_params, false)
++{
++}
++
++BatchPIRServer::BatchPIRServer(unsigned int tree_height, unsigned int children, BatchPirParams &batchpir_params, bool synthetic_data)
+ {
+     tree_height_ = tree_height;
+     children_ = children;
+@@ -8,20 +37,66 @@ BatchPIRServer::BatchPIRServer(unsigned int tree_height, unsigned int children,
+     is_client_keys_set_ = false;
+     is_simple_hash_ = false;
+ 
+-    std::cout << "BatchPIRServer: Populating raw database..." << std::endl;
+-    populate_raw_db();
+-    std::cout << "BatchPIRServer: Raw database populated." << std::endl;
+-
+-    std::cout << "BatchPIRServer: Reading Color sub-databases and balancing..." << std::endl;
+-    read_colorBD();
+-    balance_buckets();
+-    std::cout << "BatchPIRServer: Reading Color sub-databases completed." << std::endl;
++    if (synthetic_data) {
++        std::cout << "BatchPIRServer: Generating synthetic balanced color buckets..." << std::endl;
++        populate_synthetic_buckets();
++        std::cout << "BatchPIRServer: Synthetic buckets generated." << std::endl;
++    } else {
++        std::cout << "BatchPIRServer: Populating raw database..." << std::endl;
++        populate_raw_db();
++        std::cout << "BatchPIRServer: Raw database populated." << std::endl;
++
++        std::cout << "BatchPIRServer: Reading Color sub-databases and balancing..." << std::endl;
++        read_colorBD();
++        balance_buckets();
++        std::cout << "BatchPIRServer: Reading Color sub-databases completed." << std::endl;
++    }
+ 
+     std::cout << "BatchPIRServer: Preparing PIR servers......" << std::endl;
+     prepare_pir_server();
+     std::cout << "BatchPIRServer: PIR servers preparation complete." << std::endl;
+ }
+ 
++std::vector<unsigned char> BatchPIRServer::synthetic_entry(size_t color_index, uint64_t entry_index) const
++{
++    auto mix = [](uint64_t x) -> uint64_t {
++        x += 0x9e3779b97f4a7c15ULL;
++        x = (x ^ (x >> 30)) * 0xbf58476d1ce4e5b9ULL;
++        x = (x ^ (x >> 27)) * 0x94d049bb133111ebULL;
++        return x ^ (x >> 31);
++    };
++
++    uint64_t state = mix((static_cast<uint64_t>(tree_height_) << 48) ^ (static_cast<uint64_t>(color_index) << 40) ^ entry_index);
++    std::vector<unsigned char> entry(batchpir_params_->get_entry_size());
++    for (size_t i = 0; i < entry.size(); ++i) {
++        if ((i % 8) == 0) {
++            state = mix(state + i);
++        }
++        entry[i] = static_cast<unsigned char>((state >> (8 * (i % 8))) & 0xff);
++    }
++    return entry;
++}
++
++void BatchPIRServer::populate_synthetic_buckets()
++{
++    const uint64_t max_bucket = get_max_bucket_size();
++    buckets_.clear();
++    buckets_.resize(tree_height_);
++    for (size_t color_idx = 0; color_idx < buckets_.size(); ++color_idx) {
++        RawDB bucket;
++        if (max_bucket > static_cast<uint64_t>(std::numeric_limits<size_t>::max())) {
++            throw std::runtime_error("synthetic bucket is too large for this platform");
++        }
++        bucket.reserve(static_cast<size_t>(max_bucket));
++        for (uint64_t entry_idx = 0; entry_idx < max_bucket; ++entry_idx) {
++            bucket.push_back(synthetic_entry(color_idx, entry_idx));
++        }
++        buckets_[color_idx].swap(bucket);
++    }
++    batchpir_params_->set_max_bucket_size(max_bucket);
++    print_stats();
++}
++
+ 
+ void BatchPIRServer::populate_raw_db()
+ {
+@@ -34,9 +109,10 @@ void BatchPIRServer::populate_raw_db()
+     std::string filename = "WholeTree_" + std::to_string(tree_height_) + "_" + std::to_string(children_) + ".json";
+ 
+     // Open the JSON file
+-    ifstream file("/home/quang/Desktop/PIR-CSA/VBPIR_CSA/treedata/" + filename);
++    std::string full_path = treepir_data_path("treedata/" + filename);
++    ifstream file(full_path);
+     if (!file.is_open()) {
+-        std::cerr << "Error: Unable to open file." << std::endl;
++        throw std::runtime_error("Error: Unable to open file: " + full_path);
+     }
+     // Read the entire file into a string
+     string json((istreambuf_iterator<char>(file)), istreambuf_iterator<char>());
+@@ -47,6 +123,9 @@ void BatchPIRServer::populate_raw_db()
+     rapidjson::Document doc;
+     // Parse the JSON data
+     doc.Parse(json.c_str());
++    if (doc.HasParseError() || !doc.IsObject()) {
++        throw std::runtime_error("Error: Invalid JSON object: " + full_path);
++    }
+     json.clear();
+ 
+     size_t i = 0;
+@@ -98,15 +177,14 @@ void BatchPIRServer::read_colorBD() {
+ 
+     for (uint64_t i = 0; i < tree_height_; i++) {
+         std::string filename = "color" + std::string(1, color[i]) + "_" + std::to_string(tree_height_) + "_" + std::to_string(children_) + ".json";
+-        std::string full_path = "/home/quang/Desktop/PIR-CSA/VBPIR_CSA/colorSubDB/" + filename;
++        std::string full_path = treepir_data_path("colorSubDB/" + filename);
+ 
+         //std::cout << "fullpath: " << full_path << std::endl;
+ 
+         // Open the JSON file
+         std::ifstream file(full_path);
+         if (!file.is_open()) {
+-            std::cerr << "Error: Unable to open file: " << full_path << std::endl;
+-            continue; // Skip to the next iteration
++            throw std::runtime_error("Error: Unable to open file: " + full_path);
+         }
+ 
+         // Read the entire file into a string
+@@ -118,6 +196,9 @@ void BatchPIRServer::read_colorBD() {
+         rapidjson::Document doc;
+         // Parse the JSON data
+         doc.Parse(json.c_str());
++        if (doc.HasParseError() || !doc.IsArray()) {
++            throw std::runtime_error("Error: Invalid JSON array: " + full_path);
++        }
+         json.clear(); // Clear the string to release memory
+ 
+         // Handle the JSON format (array of key-value pairs)
+@@ -219,14 +300,18 @@ void BatchPIRServer::prepare_pir_server()
+     for (int i = 0; i < num_servers; i++)
+     {
+         const size_t offset = std::min(per_server_capacity, num_buckets - previous_idx);
+-        vector<RawDB> sub_buckets(buckets_.begin() + previous_idx, buckets_.begin() + previous_idx + offset);
++        vector<RawDB> sub_buckets;
++        sub_buckets.reserve(offset);
++        for (size_t bucket_idx = 0; bucket_idx < offset; ++bucket_idx) {
++            sub_buckets.push_back(std::move(buckets_[previous_idx + bucket_idx]));
++        }
+         previous_idx += offset;
+ 
+         PirParams params(max_bucket_size, entry_size, offset, batchpir_params_->get_seal_parameters(), dim_size);
+         params.print_values();
+-        Server server(params, sub_buckets);
++        Server server(params, std::move(sub_buckets));
+ 
+-        server_list_.push_back(server);
++        server_list_.push_back(std::move(server));
+     }
+ }
+ 
+@@ -249,6 +334,11 @@ void BatchPIRServer::get_client_keys()
+ }
+ 
+ PIRResponseList BatchPIRServer::generate_response(uint32_t client_id, vector<PIRQuery> queries)
++{
++    return generate_response(client_id, queries, nullptr);
++}
++
++PIRResponseList BatchPIRServer::generate_response(uint32_t client_id, vector<PIRQuery> queries, BatchServerProfile *profile)
+ {
+ 
+     if (!is_client_keys_set_)
+@@ -259,13 +349,25 @@ PIRResponseList BatchPIRServer::generate_response(uint32_t client_id, vector<PIR
+ 
+     for (int i = 0; i < server_list_.size(); i++)
+     {
+-        responses.push_back(server_list_[i].generate_response(client_id, queries[i]));
++        ServerProfile server_profile;
++        responses.push_back(server_list_[i].generate_response(client_id, queries[i], profile == nullptr ? nullptr : &server_profile));
++        if (profile != nullptr) {
++            profile->process_first_dimension_ms += server_profile.process_first_dimension_ms;
++            profile->process_second_dimension_ms += server_profile.process_second_dimension_ms;
++            profile->process_last_dimension_ms += server_profile.process_last_dimension_ms;
++        }
+     }
+ 
+-    return merge_responses(responses, client_id);
++    auto merge_start = std::chrono::high_resolution_clock::now();
++    PIRResponseList merged = merge_responses(responses, client_id);
++    auto merge_end = std::chrono::high_resolution_clock::now();
++    if (profile != nullptr) {
++        profile->merge_ms += std::chrono::duration_cast<std::chrono::duration<double, std::milli>>(merge_end - merge_start).count();
++    }
++    return merged;
+ }
+ 
+ PIRResponseList BatchPIRServer::merge_responses(vector<PIRResponseList> &responses, uint32_t client_id)
+ {
+     return server_list_[0].merge_responses_chunks_buckets(responses, client_id);
+-}
+\ No newline at end of file
++}
+diff --git a/VBPIR_TreePIR/src/main.cpp b/VBPIR_TreePIR/src/main.cpp
+index 124284f..8a8ebd0 100644
+--- a/VBPIR_TreePIR/src/main.cpp
++++ b/VBPIR_TreePIR/src/main.cpp
+@@ -1,278 +1,1080 @@
+-#include <iostream>
++#include <algorithm>
+ #include <chrono>
+-#include <functional>
+-#include "pirparams.h"
++#include <cstdlib>
++#include <fstream>
++#include <iomanip>
++#include <iostream>
++#include <set>
++#include <sstream>
++#include <stdexcept>
++#include <string>
++#include <unordered_map>
++#include <unistd.h>
++#include <vector>
++
++#include "batchpirclient.h"
+ #include "batchpirparams.h"
+ #include "batchpirserver.h"
+-#include "batchpirclient.h"
++#include "pirparams.h"
++#include "rapidjson/document.h"
+ 
+ using namespace std;
+ using namespace chrono;
+ 
+-void
+-addSubIndices(const std::unordered_map<int, std::vector<int>> &indices, std::vector<uint64_t> &sub_indices, int index) {
+-    auto it = indices.find(index);
+-    if (it != indices.end()) {
+-        for (int index: it->second) {
+-            sub_indices.push_back(static_cast<uint64_t>(index));
++namespace {
++
++const unsigned int kDefaultTreeHeight = 10;
++const unsigned int kChildren = 2;
++const size_t kEntrySize = 32;
++const char kColors[] = {'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q',
++                        'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', '0', '1', '2', '3', '4', '5', '6', '7',
++                        '8', '9'};
++const char *kUpstreamCommit = "930063c5aefc441244abb4890fdf35383f3aa956";
++
++struct Options {
++    unsigned int height = kDefaultTreeHeight;
++    string leaf_file;
++    size_t warmups = 3;
++    size_t trials = 100;
++    string output = "-";
++    bool validate_index_only = false;
++    size_t first_dim_override = 0;
++};
++
++struct ColorEntry {
++    size_t color;
++    size_t index;
++    vector<unsigned char> bytes;
++};
++
++struct PreparedLeaf {
++    uint64_t leaf_id;
++    vector<uint64_t> path_nodes;
++    vector<uint64_t> sub_indices;
++    vector<vector<unsigned char>> expected_entries;
++    double index_ms;
++};
++
++struct TrialResult {
++    size_t ordinal;
++    bool warmup;
++    uint64_t leaf_id;
++    vector<uint64_t> path_nodes;
++    vector<uint64_t> sub_indices;
++    double index_ms;
++    double query_ms;
++    double server_ms;
++    double server_first_dimension_ms;
++    double server_second_dimension_ms;
++    double server_last_dimension_ms;
++    double server_merge_ms;
++    double response_serialize_ms;
++    double decode_ms;
++    size_t query_payload_bytes_bound_save_size_seeded_div2;
++    size_t actual_response_payload_bytes;
++    size_t query_ciphertexts;
++    size_t response_ciphertexts;
++    bool correct;
++    size_t decoded_entries;
++    double query_serialize_ms;
++    size_t actual_query_payload_bytes_unseeded;
++};
++
++class ScopedCoutRedirect {
++public:
++    explicit ScopedCoutRedirect(ostream &target)
++        : original_(cout.rdbuf(target.rdbuf()))
++    {
++    }
++
++    ~ScopedCoutRedirect()
++    {
++        cout.rdbuf(original_);
++    }
++
++private:
++    streambuf *original_;
++};
++
++struct NumColor {
++    char color;
++    uint64_t size;
++};
++
++uint64_t pow2(unsigned int exponent)
++{
++    if (exponent >= 63) {
++        throw runtime_error("height is too large for uint64_t node ids");
++    }
++    return 1ULL << exponent;
++}
++
++uint64_t node_count_for_height(unsigned int height)
++{
++    return pow2(height + 1) - 2;
++}
++
++uint64_t leaf_count_for_height(unsigned int height)
++{
++    return pow2(height);
++}
++
++bool is_power_of_two(size_t value)
++{
++    return value != 0 && (value & (value - 1)) == 0;
++}
++
++size_t default_first_dimension_for_bucket(uint64_t max_bucket_size)
++{
++    const size_t h20_max_bucket = 104858;
++    return max_bucket_size <= h20_max_bucket ? 64 : utils::next_power_of_two(std::ceil(std::cbrt(static_cast<double>(max_bucket_size))));
++}
++
++size_t actual_first_dimension(const Options &options, uint64_t max_bucket_size)
++{
++    return options.first_dim_override == 0 ? default_first_dimension_for_bucket(max_bucket_size) : options.first_dim_override;
++}
++
++int color_index(char color)
++{
++    for (size_t i = 0; i < sizeof(kColors); ++i) {
++        if (kColors[i] == color) {
++            return static_cast<int>(i);
++        }
++    }
++    throw runtime_error("unknown color");
++}
++
++void stable_sort_colors(vector<NumColor> &colors)
++{
++    stable_sort(colors.begin(), colors.end(), [](const NumColor &a, const NumColor &b) {
++        return a.size < b.size;
++    });
++}
++
++vector<NumColor> balanced_color_sequence(unsigned int height)
++{
++    uint64_t total_nodes = node_count_for_height(height);
++    uint64_t base = total_nodes / height;
++    uint64_t larger = total_nodes % height;
++    vector<NumColor> colors;
++    colors.reserve(height);
++    for (unsigned int i = 0; i < height; ++i) {
++        colors.push_back(NumColor{kColors[i], base + (i >= height - larger ? 1 : 0)});
++    }
++    stable_sort_colors(colors);
++    return colors;
++}
++
++pair<vector<NumColor>, vector<NumColor>> feasible_split(unsigned int height, const vector<NumColor> &c)
++{
++    vector<NumColor> a;
++    vector<NumColor> b;
++    a.reserve(height - 1);
++    b.reserve(height - 1);
++
++    if (height == 2) {
++        if (c[0].size == 2) {
++            a.push_back(NumColor{c[1].color, c[1].size / 2});
++            b.push_back(NumColor{c[1].color, c[1].size / 2});
++        } else {
++            a.push_back(NumColor{c[1].color, c[1].size - 1});
++            b.push_back(NumColor{c[0].color, c[0].size - 1});
++        }
++    } else if (c[0].size == 2) {
++        size_t i = 1;
++        uint64_t a_value = c[i].size / 2;
++        uint64_t b_value = (c[i].size + 1) / 2;
++        a.push_back(NumColor{c[i].color, a_value});
++        b.push_back(NumColor{c[i].color, b_value});
++        uint64_t sa = a_value;
++        uint64_t sb = b_value;
++        ++i;
++        while (i < height) {
++            if (sa < sb) {
++                a_value = (c[i].size + 1) / 2;
++                b_value = c[i].size / 2;
++            } else {
++                a_value = c[i].size / 2;
++                b_value = (c[i].size + 1) / 2;
++            }
++            a.push_back(NumColor{c[i].color, a_value});
++            b.push_back(NumColor{c[i].color, b_value});
++            sa += a_value;
++            sb += b_value;
++            ++i;
+         }
+     } else {
+-        std::cerr << "Iteration index " << index << " not found." << std::endl;
++        size_t i = 1;
++        uint64_t a_value = c[i].size - 1;
++        uint64_t b_value = c[0].size - 1;
++        a.push_back(NumColor{c[1].color, a_value});
++        b.push_back(NumColor{c[0].color, b_value});
++        uint64_t sa = a_value;
++        uint64_t sb = b_value;
++        ++i;
++        a_value = (c[i].size + c[0].size - c[i - 1].size + 1) / 2;
++        b_value = c[i - 1].size - c[0].size + (c[i].size + c[0].size - c[i - 1].size) / 2;
++        a.push_back(NumColor{c[i].color, a_value});
++        b.push_back(NumColor{c[i].color, b_value});
++        sa += a_value;
++        sb += b_value;
++        ++i;
++        while (i < height) {
++            if (sa < sb) {
++                a_value = (c[i].size + 1) / 2;
++                b_value = c[i].size / 2;
++            } else {
++                a_value = c[i].size / 2;
++                b_value = (c[i].size + 1) / 2;
++            }
++            a.push_back(NumColor{c[i].color, a_value});
++            b.push_back(NumColor{c[i].color, b_value});
++            sa += a_value;
++            sb += b_value;
++            ++i;
++        }
+     }
++
++    stable_sort_colors(a);
++    stable_sort_colors(b);
++    return make_pair(a, b);
++}
++
++string join_path(const string &base, const string &suffix)
++{
++    if (base.empty() || base == ".") {
++        return suffix;
++    }
++    if (base[base.size() - 1] == '/') {
++        return base + suffix;
++    }
++    return base + "/" + suffix;
+ }
+ 
+-long first_nodeID(int l) {
+-    return static_cast<long>(std::pow(2, l) - 1) + 1;
++string current_working_dir()
++{
++    char buf[4096];
++    if (getcwd(buf, sizeof(buf)) == nullptr) {
++        throw runtime_error("unable to read current working directory");
++    }
++    return string(buf);
+ }
+ 
+-std::vector<long> PathID(int h, int index) {
+-    std::vector<long> path_nodeID(h);
++string data_dir()
++{
++    const char *env = getenv("TREEPIR_DATA_DIR");
++    if (env != nullptr && env[0] != '\0') {
++        return string(env);
++    }
++    return current_working_dir();
++}
+ 
+-    path_nodeID[h - 1] = first_nodeID(h) + index - 1;
+-    // Node ID from bottom to top
+-    for (int i = h - 2; i >= 0; i--) {
+-        path_nodeID[i] = static_cast<long>(std::ceil(static_cast<double>(path_nodeID[i + 1] - 1) / 2));
++string read_text_file(const string &path)
++{
++    ifstream file(path.c_str());
++    if (!file.is_open()) {
++        throw runtime_error("unable to open file: " + path);
+     }
+-    return path_nodeID;
++    return string((istreambuf_iterator<char>(file)), istreambuf_iterator<char>());
+ }
+ 
+-void printHex(const std::vector<unsigned char> &bytes) {
+-    std::string hexString;
+-    for (const auto &byte: bytes) {
+-        std::stringstream ss;
+-        ss << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(byte);
+-        hexString += ss.str();
++rapidjson::Document parse_json_file(const string &path)
++{
++    string json = read_text_file(path);
++    rapidjson::Document doc;
++    doc.Parse(json.c_str());
++    if (doc.HasParseError()) {
++        throw runtime_error("JSON parse error in " + path);
+     }
+-    // Print the hexadecimal string
+-    std::cout << "Hexadecimal string: 0x" << hexString << std::endl;
++    return doc;
+ }
+ 
+-int batchpir_main(int argc, char *argv[]) {
+-    unsigned int tree_height = 10;
+-    unsigned int children = 2;
+-    size_t serialized_anw_size = 0;
+-    size_t serialized_query_size = 0;
+-    std::chrono::microseconds query_gen_costs{0};
+-    std::chrono::microseconds resp_gen_costs{0};
+-    std::chrono::microseconds extract_costs{0};
++vector<unsigned char> hex_to_bytes(const string &hex, const string &label)
++{
++    if (hex.size() != kEntrySize * 2) {
++        throw runtime_error(label + " has unexpected hex length");
++    }
++    vector<unsigned char> bytes;
++    bytes.reserve(kEntrySize);
++    for (size_t i = 0; i < hex.size(); i += 2) {
++        string byte_string = hex.substr(i, 2);
++        bytes.push_back(static_cast<unsigned char>(stoi(byte_string, nullptr, 16)));
++    }
++    return bytes;
++}
+ 
+-    //  batch size, numb6.16er of entries, size of entry
+-    std::vector<std::array<size_t, 3>> input_choices;
+-    size_t num_nodes = pow(children, tree_height + 1) - 2;
+-    input_choices.push_back({tree_height, num_nodes, 32}); //{height, N, size}
++string bytes_to_hex(const vector<unsigned char> &bytes)
++{
++    ostringstream out;
++    out << hex << setfill('0');
++    for (unsigned char byte : bytes) {
++        out << setw(2) << static_cast<unsigned int>(byte);
++    }
++    return out.str();
++}
+ 
+-    const int client_id = 0;
++unordered_map<uint64_t, vector<unsigned char>> load_whole_tree(const string &root, unsigned int height)
++{
++    string path = join_path(root, "treedata/WholeTree_" + to_string(height) + "_2.json");
++    rapidjson::Document doc = parse_json_file(path);
++    if (!doc.IsObject()) {
++        throw runtime_error(path + " must contain a JSON object");
++    }
+ 
+-    //std::vector<std::chrono::microseconds> init_times;
+-    std::vector<std::chrono::microseconds> query_gen_times;
+-    std::vector<std::chrono::microseconds> resp_gen_times;
+-    std::vector<std::chrono::microseconds> extract_times;
+-    std::vector<size_t> communication_query_list;
+-    std::vector<size_t> communication_response_list;
++    unordered_map<uint64_t, vector<unsigned char>> whole_tree;
++    for (rapidjson::Value::ConstMemberIterator itr = doc.MemberBegin(); itr != doc.MemberEnd(); ++itr) {
++        if (!itr->name.IsString() || !itr->value.IsString()) {
++            throw runtime_error(path + " contains a non-string node entry");
++        }
++        uint64_t node_id = stoull(itr->name.GetString());
++        whole_tree[node_id] = hex_to_bytes(itr->value.GetString(), "WholeTree node " + to_string(node_id));
++    }
+ 
+-    std::string filePath =
+-            "/home/quang/Desktop/PIR-CSA/VBPIR_CSA/list_TXs_" + std::to_string(tree_height) + "_" + std::to_string(2) +
+-            ".txt";
+-    std::vector<long> randIndices;
++    const size_t expected_nodes = static_cast<size_t>(node_count_for_height(height));
++    if (whole_tree.size() != expected_nodes) {
++        throw runtime_error("WholeTree_10_2.json node count mismatch");
++    }
++    return whole_tree;
++}
+ 
+-    std::ifstream file(filePath);
+-    if (file.is_open()) {
+-        std::string line;
+-        while (std::getline(file, line)) {
+-            randIndices.push_back(std::stol(line));
+-            //cout << std::stol(line) << endl;
++unordered_map<uint64_t, ColorEntry> load_color_index(
++    const string &root,
++    const unordered_map<uint64_t, vector<unsigned char>> &whole_tree,
++    unsigned int height)
++{
++    unordered_map<uint64_t, ColorEntry> index;
++    for (size_t color_idx = 0; color_idx < height; ++color_idx) {
++        string filename = string("colorSubDB/color") + kColors[color_idx] + "_" + to_string(height) + "_2.json";
++        string path = join_path(root, filename);
++        rapidjson::Document doc = parse_json_file(path);
++        if (!doc.IsArray() || doc.Size() != 1 || !doc[0].IsObject()) {
++            throw runtime_error(path + " must contain one object inside an array");
+         }
+-        file.close();
+-    } else {
+-        std::cerr << "Unable to open file: " << filePath << std::endl;
+-    }
+-
+-    std::string filename =
+-            "/home/quang/Desktop/PIR-CSA/VBPIR_CSA/subIndices/color_indices_" + std::to_string(tree_height) + "_" +
+-            std::to_string(2) +
+-            ".txt";
+-
+-    std::ifstream file2(filename);
+-    std::unordered_map<int, std::vector<int>> indices;
+-
+-    if (file2.is_open()) {
+-        std::string line;
+-        int txIndex = -1;
+-        while (std::getline(file2, line)) {
+-            if (line.find("TX_index:") != std::string::npos) {
+-                // Extract TX_index from the line
+-                std::istringstream iss(line);
+-                std::string token;
+-                while (iss >> token) {
+-                    if (token == "TX_index:") {
+-                        iss >> txIndex;
+-                        break;
+-                    }
++
++        size_t entry_index = 0;
++        for (rapidjson::Value::ConstMemberIterator itr = doc[0].MemberBegin(); itr != doc[0].MemberEnd(); ++itr) {
++            if (!itr->name.IsString() || !itr->value.IsString()) {
++                throw runtime_error(path + " contains a non-string node entry");
++            }
++            uint64_t node_id = stoull(itr->name.GetString());
++            vector<unsigned char> bytes = hex_to_bytes(itr->value.GetString(), filename + " node " + to_string(node_id));
++            auto whole_it = whole_tree.find(node_id);
++            if (whole_it == whole_tree.end()) {
++                throw runtime_error(filename + " node " + to_string(node_id) + " is missing from WholeTree");
++            }
++            if (whole_it->second != bytes) {
++                throw runtime_error(filename + " node " + to_string(node_id) + " does not match WholeTree");
++            }
++            if (index.find(node_id) != index.end()) {
++                throw runtime_error("node " + to_string(node_id) + " appears in more than one color file");
++            }
++            index[node_id] = ColorEntry{color_idx, entry_index, bytes};
++            ++entry_index;
++        }
++    }
++
++    const size_t expected_nodes = static_cast<size_t>(node_count_for_height(height));
++    if (index.size() != expected_nodes) {
++        throw runtime_error("colorSubDB node coverage mismatch");
++    }
++    return index;
++}
++
++vector<uint64_t> path_nodes_for_leaf(unsigned int height, uint64_t leaf_id)
++{
++    const uint64_t leaf_count = leaf_count_for_height(height);
++    if (leaf_id >= leaf_count) {
++        throw runtime_error("leaf id " + to_string(leaf_id) + " is outside h" + to_string(height) + " leaf range");
++    }
++
++    vector<uint64_t> path;
++    uint64_t node_id = leaf_count + leaf_id;
++    for (size_t i = 0; i < height; ++i) {
++        path.push_back(node_id);
++        node_id /= 2;
++    }
++    reverse(path.begin(), path.end());
++    return path;
++}
++
++vector<int> path_positions_for_leaf(unsigned int height, uint64_t leaf_id)
++{
++    vector<uint64_t> node_ids = path_nodes_for_leaf(height, leaf_id);
++    vector<int> path;
++    path.reserve(height);
++    for (unsigned int level = 1; level <= height; ++level) {
++        uint64_t first = pow2(level);
++        int temp = static_cast<int>((node_ids[level - 1] - first + 1) % 2);
++        path.push_back(temp == 0 ? 2 : temp);
++    }
++    return path;
++}
++
++vector<uint64_t> map_indices_for_leaf(unsigned int height, uint64_t leaf_id)
++{
++    vector<int> path = path_positions_for_leaf(height, leaf_id);
++    vector<NumColor> c = balanced_color_sequence(height);
++    vector<uint64_t> count(height, 0);
++    vector<uint64_t> indices(height, 0);
++    vector<bool> seen(height, false);
++
++    for (unsigned int l = 0; l < height - 1; ++l) {
++        unsigned int current_height = height - l;
++        int x = (c[0].size == 2) ? 2 : 1;
++        char root_col;
++
++        if (path[l] <= x) {
++            root_col = c[0].color;
++            count[color_index(c[0].color)] += path[l] - 1;
++            count[color_index(c[1].color)] += 2 - x;
++            int idx = color_index(c[0].color);
++            indices[idx] = count[idx];
++            seen[idx] = true;
++        } else {
++            root_col = c[1].color;
++            count[color_index(c[1].color)] += path[l] - x - 1;
++            count[color_index(c[0].color)] += x;
++            int idx = color_index(c[1].color);
++            indices[idx] = count[idx];
++            seen[idx] = true;
++        }
++
++        pair<vector<NumColor>, vector<NumColor>> split = feasible_split(current_height, c);
++        const vector<NumColor> &a = split.first;
++        const vector<NumColor> &b = split.second;
++
++        if (path[l] == 2) {
++            for (size_t i = 0; i < a.size(); ++i) {
++                if (root_col != a[i].color) {
++                    count[color_index(a[i].color)] += a[i].size;
+                 }
+-            } else if (line.find("Index:") != std::string::npos && txIndex != -1) {
+-                // Extract Index from the line
+-                size_t pos = line.find("Index:");
+-                int index = std::stoi(line.substr(pos + 7));
+-                indices[txIndex].push_back(index);
+             }
+         }
+-        file2.close();
++
++        c = (path[l] == 1) ? a : b;
++        if (c.size() == 1) {
++            int idx = color_index(c[0].color);
++            count[idx] += path[path.size() - 1] - 1;
++            indices[idx] = count[idx];
++            seen[idx] = true;
++        } else {
++            stable_sort_colors(c);
++        }
++    }
++
++    for (unsigned int i = 0; i < height; ++i) {
++        if (!seen[i]) {
++            throw runtime_error("indexing did not produce color " + string(1, kColors[i]));
++        }
++    }
++    return indices;
++}
++
++PreparedLeaf prepare_leaf(
++    unsigned int height,
++    uint64_t leaf_id,
++    const unordered_map<uint64_t, ColorEntry> *fixture_color_index)
++{
++    PreparedLeaf prepared;
++    prepared.leaf_id = leaf_id;
++    auto index_start = high_resolution_clock::now();
++    prepared.path_nodes = path_nodes_for_leaf(height, leaf_id);
++    prepared.sub_indices = map_indices_for_leaf(height, leaf_id);
++    auto index_end = high_resolution_clock::now();
++    prepared.index_ms = duration_cast<duration<double, milli>>(index_end - index_start).count();
++    prepared.expected_entries.assign(height, vector<unsigned char>());
++
++    if (fixture_color_index != nullptr) {
++        set<size_t> seen_colors;
++        for (uint64_t node_id : prepared.path_nodes) {
++            auto it = fixture_color_index->find(node_id);
++            if (it == fixture_color_index->end()) {
++                throw runtime_error("path node " + to_string(node_id) + " missing from color index");
++            }
++            if (!seen_colors.insert(it->second.color).second) {
++                throw runtime_error("leaf " + to_string(leaf_id) + " path has duplicate color");
++            }
++            if (prepared.sub_indices[it->second.color] != it->second.index) {
++                throw runtime_error("generated h10 index does not match fixture for node " + to_string(node_id));
++            }
++            prepared.expected_entries[it->second.color] = it->second.bytes;
++        }
++        if (seen_colors.size() != height) {
++            throw runtime_error("leaf " + to_string(leaf_id) + " path does not cover all colors");
++        }
+     } else {
+-        std::cerr << "Unable to open file: " << filename << std::endl;
++        auto mix = [](uint64_t x) -> uint64_t {
++            x += 0x9e3779b97f4a7c15ULL;
++            x = (x ^ (x >> 30)) * 0xbf58476d1ce4e5b9ULL;
++            x = (x ^ (x >> 27)) * 0x94d049bb133111ebULL;
++            return x ^ (x >> 31);
++        };
++        for (unsigned int color = 0; color < height; ++color) {
++            uint64_t state = mix((static_cast<uint64_t>(height) << 48) ^ (static_cast<uint64_t>(color) << 40) ^ prepared.sub_indices[color]);
++            vector<unsigned char> entry(kEntrySize);
++            for (size_t i = 0; i < entry.size(); ++i) {
++                if ((i % 8) == 0) {
++                    state = mix(state + i);
++                }
++                entry[i] = static_cast<unsigned char>((state >> (8 * (i % 8))) & 0xff);
++            }
++            prepared.expected_entries[color] = entry;
++        }
++    }
++    return prepared;
++}
++
++vector<uint64_t> read_leaf_ids(const string &path, size_t count)
++{
++    ifstream file(path.c_str());
++    if (!file.is_open()) {
++        throw runtime_error("unable to open leaf file: " + path);
+     }
+ 
+-    /*for (const auto& pair : indices) {
+-        std::cout << "TX_index: " << pair.first << std::endl;
+-        std::cout << "Indices:";
+-        for (int index : pair.second) {
+-            std::cout << " " << index;
++    vector<uint64_t> leaf_ids;
++    string line;
++    while (getline(file, line)) {
++        if (line.empty()) {
++            continue;
+         }
+-        std::cout << std::endl;
+-    }*/
++        if (line[0] == '#') {
++            continue;
++        }
++        leaf_ids.push_back(stoull(line));
++        if (leaf_ids.size() == count) {
++            break;
++        }
++    }
++    if (leaf_ids.size() < count) {
++        throw runtime_error("leaf file has fewer entries than warmups + trials");
++    }
++    return leaf_ids;
++}
+ 
+-    for (size_t iteration = 0; iteration < randIndices.size(); ++iteration) {
+-        long index = randIndices[iteration];
+-        std::cout << "***************************************************" << std::endl;
+-        std::cout << "             Starting example index = " << index << "               " << std::endl;
+-        std::cout << "***************************************************" << std::endl;
++void validate_h10_fixture_against_generated_indices(
++    const unordered_map<uint64_t, ColorEntry> &fixture_color_index,
++    const string &root)
++{
++    const unsigned int height = 10;
++    const uint64_t leaves = leaf_count_for_height(height);
++    for (uint64_t leaf_id = 0; leaf_id < leaves; ++leaf_id) {
++        vector<uint64_t> path_nodes = path_nodes_for_leaf(height, leaf_id);
++        vector<uint64_t> indices = map_indices_for_leaf(height, leaf_id);
++        for (uint64_t node_id : path_nodes) {
++            auto it = fixture_color_index.find(node_id);
++            if (it == fixture_color_index.end()) {
++                throw runtime_error("generated h10 validation path node missing from fixture: " + to_string(node_id));
++            }
++            if (indices[it->second.color] != it->second.index) {
++                throw runtime_error("generated h10 validation index mismatch at node " + to_string(node_id));
++            }
++        }
++    }
+ 
+-        const auto &choice = input_choices[0];
++    string golden_path = join_path(root, "subIndices/color_indices_10_2.txt");
++    ifstream file(golden_path.c_str());
++    if (!file.is_open()) {
++        throw runtime_error("unable to open h10 golden index file: " + golden_path);
++    }
+ 
+-        string selection =
+-                std::to_string(choice[0]) + "," + std::to_string(choice[1]) + "," + std::to_string(choice[2]);
++    string line;
++    uint64_t current_leaf_one_based = 0;
++    size_t checked = 0;
++    while (getline(file, line)) {
++        if (line.find("TX_index: ") == 0) {
++            current_leaf_one_based = stoull(line.substr(string("TX_index: ").size()));
++            if (current_leaf_one_based == 0) {
++                throw runtime_error("h10 golden uses invalid one-based TX_index 0");
++            }
++            continue;
++        }
++        size_t color_pos = line.find("color");
++        size_t node_pos = line.find("; NodeID: ");
++        size_t index_pos = line.find("; Index: ");
++        if (color_pos == string::npos || node_pos == string::npos || index_pos == string::npos) {
++            continue;
++        }
++        if (current_leaf_one_based == 0) {
++            throw runtime_error("h10 golden color entry appears before TX_index");
++        }
++        char color = line[color_pos + 5];
++        uint64_t node_id = stoull(line.substr(node_pos + string("; NodeID: ").size(), index_pos - (node_pos + string("; NodeID: ").size())));
++        uint64_t index = stoull(line.substr(index_pos + string("; Index: ").size()));
++        vector<uint64_t> generated_indices = map_indices_for_leaf(height, current_leaf_one_based - 1);
++        vector<uint64_t> generated_nodes = path_nodes_for_leaf(height, current_leaf_one_based - 1);
++        int idx = color_index(color);
++        if (generated_indices[idx] != index) {
++            throw runtime_error("h10 golden index mismatch for TX_index " + to_string(current_leaf_one_based) + " color " + string(1, color));
++        }
++        if (find(generated_nodes.begin(), generated_nodes.end(), node_id) == generated_nodes.end()) {
++            throw runtime_error("h10 golden node is not on generated path for TX_index " + to_string(current_leaf_one_based));
++        }
++        ++checked;
++    }
++    if (checked == 0) {
++        throw runtime_error("h10 golden index file had no checked entries");
++    }
++}
+ 
+-        vector<long> MerkleProof = PathID(tree_height, index);
+-        vector<uint64_t> sub_indices;
+-        vector<uint64_t> test_id;
++Options parse_options(int argc, char *argv[])
++{
++    Options options;
++    for (int i = 1; i < argc; ++i) {
++        string arg = argv[i];
++        if (arg == "--height" && i + 1 < argc) {
++            options.height = static_cast<unsigned int>(stoul(argv[++i]));
++        } else if (arg == "--leaf-file" && i + 1 < argc) {
++            options.leaf_file = argv[++i];
++        } else if (arg == "--warmup" && i + 1 < argc) {
++            options.warmups = stoull(argv[++i]);
++        } else if (arg == "--trials" && i + 1 < argc) {
++            options.trials = stoull(argv[++i]);
++        } else if (arg == "--output" && i + 1 < argc) {
++            options.output = argv[++i];
++        } else if (arg == "--validate-index-only") {
++            options.validate_index_only = true;
++        } else if (arg == "--first-dim" && i + 1 < argc) {
++            options.first_dim_override = stoull(argv[++i]);
++        } else {
++            throw runtime_error("usage: vbpir_treepir --height 10|24|26|27 --leaf-file FILE [--warmup N] [--trials N] [--output FILE|-] [--first-dim D] [--validate-index-only]");
++        }
++    }
++    if (options.height != 10 && options.height != 24 && options.height != 26 && options.height != 27) {
++        throw runtime_error("--height must be 10, 24, 26, or 27");
++    }
++    if (options.leaf_file.empty()) {
++        throw runtime_error("--leaf-file is required");
++    }
++    if (options.trials == 0) {
++        throw runtime_error("--trials must be greater than zero");
++    }
++    if (options.first_dim_override != 0) {
++        if (!is_power_of_two(options.first_dim_override) || options.first_dim_override < 32 || options.first_dim_override > 256) {
++            throw runtime_error("--first-dim must be a power of two in [32, 256]");
++        }
++        if (options.height > 8192 / options.first_dim_override) {
++            throw runtime_error("--first-dim exceeds current one-client batch capacity for this height");
++        }
++    }
++    return options;
++}
+ 
+-        std::cout << "Merkle Proof: ";
+-        for (uint64_t id: MerkleProof) {
+-            std::cout << id << " ";
+-            test_id.push_back(id - 2);
++size_t query_payload_size_bound(const vector<PIRQuery> &queries)
++{
++    size_t total = 0;
++    for (const auto &query_list : queries) {
++        for (const auto &query : query_list) {
++            total += static_cast<size_t>(query.save_size() / 2);
+         }
+-        std::cout << std::endl;
++    }
++    return total;
++}
+ 
+-        addSubIndices(indices, sub_indices, index);
++size_t serialize_response_payload_uncompressed(const PIRResponseList &responses)
++{
++    size_t total = 0;
++    for (const auto &response : responses) {
++        ostringstream stream(ios::out | ios::binary);
++        streamoff written = response.save(stream, seal::compr_mode_type::none);
++        if (written < 0) {
++            throw runtime_error("response ciphertext serialization failed");
++        }
++        total += static_cast<size_t>(written);
++    }
++    return total;
++}
+ 
+-        std::cout << "sub_indices: ";
+-        for (uint64_t index: sub_indices) {
+-            std::cout << index << " ";
++size_t serialize_query_payload_uncompressed(const vector<PIRQuery> &queries)
++{
++    size_t total = 0;
++    for (const auto &part : queries) {
++        total += serialize_response_payload_uncompressed(part);
++    }
++    return total;
++}
++
++bool check_correct(
++    const vector<RawResponses> &decoded,
++    const vector<vector<unsigned char>> &expected_entries,
++    size_t *decoded_count)
++{
++    vector<string> actual;
++    for (const auto &outer : decoded) {
++        for (const auto &entry : outer) {
++            actual.push_back(bytes_to_hex(entry));
+         }
+-        std::cout << std::endl;
++    }
++    *decoded_count = actual.size();
+ 
+-        auto encryption_params = utils::create_encryption_parameters(selection);
+-        BatchPirParams params(choice[0], choice[1], choice[2], encryption_params);
+-        params.print_params();
+-
+-        //auto start = chrono::high_resolution_clock::now();
+-        BatchPIRServer batch_server(tree_height, children, params);
+-        //auto end = chrono::high_resolution_clock::now();
+-        //auto duration_init = chrono::duration_cast<chrono::microseconds>(end - start);
+-        //init_times.push_back(duration_init);
+-
+-
+-        BatchPIRClient batch_client(tree_height, children, params);
+-        batch_server.set_client_keys(client_id, batch_client.get_public_keys());
+-
+-
+-        cout << "Main: Starting query generation for example " << (iteration + 1) << "..." << endl;
+-        auto start = chrono::high_resolution_clock::now();
+-        auto queries = batch_client.create_queries(sub_indices);
+-        auto end = chrono::high_resolution_clock::now();
+-        auto duration_querygen = chrono::duration_cast<chrono::microseconds>(end - start);
+-        query_gen_times.push_back(duration_querygen);
+-        cout << "Main: Query generation complete for example " << (iteration + 1) << "." << endl;
+-
+-        cout << "Main: Starting response generation for example " << (iteration + 1) << "..." << endl;
+-        start = chrono::high_resolution_clock::now();
+-        PIRResponseList responses = batch_server.generate_response(client_id, queries);
+-        end = chrono::high_resolution_clock::now();
+-        auto duration_respgen = chrono::duration_cast<chrono::microseconds>(end - start);
+-        resp_gen_times.push_back(duration_respgen);
+-        cout << "Main: Response generation complete for example " << (iteration + 1) << "." << endl;
+-
+-        cout << "Main: Extracting responses for example " << (iteration + 1) << "..." << endl;
+-        start = chrono::high_resolution_clock::now();
+-        auto decode_responses = batch_client.decode_responses_chunks(responses);
+-        end = chrono::high_resolution_clock::now();
+-        auto duration_extract = chrono::duration_cast<chrono::microseconds>(end - start);
+-        extract_times.push_back(duration_extract);
+-        cout << "Main: Extraction complete for example " << (iteration + 1) << "." << endl;
+-
+-        //Total Answer Communication costs
+-        serialized_anw_size = 0;
+-        for (int i = 0; i < responses.size(); i++){
+-            serialized_anw_size += ceil(responses[i].save_size());
+-        }
+-
+-        //Total Query Communication costs
+-        serialized_query_size = 0;
+-        for (const auto & query : queries[client_id]){
+-            serialized_query_size += ceil(query.save_size()/2);
+-        }
+-
+-        // Printing decode_responses
+-        std::cout << "Contents of decode_responses:" << std::endl;
+-        for (const auto &outer_vec: decode_responses) {
+-            for (const auto &inner_vec: outer_vec) {
+-                printHex(inner_vec); // Printing each RawDB object as hexadecimal bytes
+-            }
++    vector<string> expected;
++    for (const auto &entry : expected_entries) {
++        expected.push_back(bytes_to_hex(entry));
++    }
++    sort(actual.begin(), actual.end());
++    sort(expected.begin(), expected.end());
++    return actual == expected;
++}
++
++double elapsed_ms(high_resolution_clock::time_point start, high_resolution_clock::time_point end)
++{
++    return duration_cast<duration<double, milli>>(end - start).count();
++}
++
++void write_uint_array(ostream &out, const vector<uint64_t> &values)
++{
++    out << "[";
++    for (size_t i = 0; i < values.size(); ++i) {
++        if (i != 0) {
++            out << ",";
+         }
++        out << values[i];
++    }
++    out << "]";
++}
+ 
+-        cout << "Total Query communication: " << serialized_query_size/1024 << " KB" << endl;
+-        cout << "Total Answer communication: " << serialized_anw_size/1024 << " KB" << endl;
++string json_escape(const string &value)
++{
++    ostringstream out;
++    for (char ch : value) {
++        switch (ch) {
++            case '\\': out << "\\\\"; break;
++            case '"': out << "\\\""; break;
++            case '\n': out << "\\n"; break;
++            case '\r': out << "\\r"; break;
++            case '\t': out << "\\t"; break;
++            default: out << ch; break;
++        }
++    }
++    return out.str();
++}
+ 
+-        auto RAW_DB = batch_server.getRawDB();
+-        //printHex(RAW_DB[sub_indices[0]]);
++void write_json(
++    ostream &out,
++    const Options &options,
++    const string &root,
++    double index_prep_ms,
++    const vector<TrialResult> &results,
++    double offline_setup_ms = 0.0,
++    size_t actual_helper_key_bytes = 0)
++{
++    size_t measured_count = 0;
++    double measured_index_ms = 0.0;
++    double measured_query_ms = 0.0;
++    double measured_server_ms = 0.0;
++    double measured_first_ms = 0.0;
++    double measured_second_ms = 0.0;
++    double measured_last_ms = 0.0;
++    double measured_merge_ms = 0.0;
++    double measured_response_serialize_ms = 0.0;
++    double measured_decode_ms = 0.0;
++    double measured_actual_response_payload_bytes = 0.0;
++    bool all_correct = true;
++    for (const auto &r : results) {
++        all_correct = all_correct && r.correct;
++        if (!r.warmup) {
++            ++measured_count;
++            measured_index_ms += r.index_ms;
++            measured_query_ms += r.query_ms;
++            measured_server_ms += r.server_ms;
++            measured_first_ms += r.server_first_dimension_ms;
++            measured_second_ms += r.server_second_dimension_ms;
++            measured_last_ms += r.server_last_dimension_ms;
++            measured_merge_ms += r.server_merge_ms;
++            measured_response_serialize_ms += r.response_serialize_ms;
++            measured_decode_ms += r.decode_ms;
++            measured_actual_response_payload_bytes += r.actual_response_payload_bytes;
++        }
++    }
++    if (measured_count != 0) {
++        measured_index_ms /= measured_count;
++        measured_query_ms /= measured_count;
++        measured_server_ms /= measured_count;
++        measured_first_ms /= measured_count;
++        measured_second_ms /= measured_count;
++        measured_last_ms /= measured_count;
++        measured_merge_ms /= measured_count;
++        measured_response_serialize_ms /= measured_count;
++        measured_decode_ms /= measured_count;
++        measured_actual_response_payload_bytes /= measured_count;
++    }
+ 
+-        int count = 0;
+-        for (int i = 0; i < tree_height; i++){
+-            //cout << "i = " << i << endl;
+-            //printHex(RAW_DB[test_id[i]]);
+-            for (const auto& outer_vec : decode_responses) {
+-                for (const auto& inner_vec : outer_vec) {
+-                    if (inner_vec == RAW_DB[test_id[i]]) {
+-                        //cout << "true " << i << endl;
+-                        count++;
+-                    }
+-                }
+-            }
++    out << fixed << setprecision(3);
++    out << "{";
++    out << "\"model\":\"SEAL+VBPIRTreePIR\",";
++    out << "\"upstream_commit\":\"" << kUpstreamCommit << "\",";
++    out << "\"data_dir\":\"" << json_escape(root) << "\",";
++    out << "\"leaf_file\":\"" << json_escape(options.leaf_file) << "\",";
++    out << "\"height\":" << options.height << ",";
++    out << "\"leaf_count\":" << leaf_count_for_height(options.height) << ",";
++    out << "\"data_mode\":\"" << (options.height == 10 ? "fixture_json_validated" : "synthetic_balanced_color_buckets") << "\",";
++    out << "\"entry_size_bytes\":" << kEntrySize << ",";
++    uint64_t max_bucket_size = (node_count_for_height(options.height) + options.height - 1) / options.height;
++    size_t first_dimension = actual_first_dimension(options, max_bucket_size);
++    out << "\"layout\":{";
++    out << "\"color_buckets\":" << options.height << ",";
++    out << "\"max_bucket_entries\":" << max_bucket_size << ",";
++    out << "\"first_two_dimensions\":" << first_dimension << ",";
++    out << "\"first_dimension_source\":\"" << (options.first_dim_override == 0 ? "default" : "cli") << "\",";
++    out << "\"pir_shape\":\"" << first_dimension << "x" << first_dimension << "xceil(max_bucket/(d*d))\"";
++    out << "},";
++    out << "\"warmups\":" << options.warmups << ",";
++    out << "\"trials\":" << options.trials << ",";
++    out << "\"validate_index_only\":" << (options.validate_index_only ? "true" : "false") << ",";
++    out << "\"index_prep_ms_excluded\":" << index_prep_ms << ",";
++    out << "\"offline_setup_ms\":" << offline_setup_ms << ",";
++    out << "\"actual_helper_key_bytes_uncompressed\":" << actual_helper_key_bytes << ",";
++    out << "\"indexing_validation\":\"h10 C++ SubIndices port checked against all fixture path nodes and color_indices_10_2.txt; h24/h27 reuse the same port with range checks\",";
++    out << "\"stage_definitions\":{";
++    out << "\"index_ms\":\"per-leaf path_nodes_for_leaf plus map_indices_for_leaf; excludes h10 fixture load/validation and expected-entry setup\",";
++    out << "\"query_ms\":\"client create_queries\",";
++    out << "\"query_serialize_ms\":\"uncompressed expanded query ciphertext serialization after decode, outside query and server timing\",";
++    out << "\"server_first_dimension_ms\":\"sum over PIR servers of process_first_dimension_delayed_mod\",";
++    out << "\"server_second_dimension_ms\":\"sum over PIR servers of process_second_dimension or passthrough for 2D\",";
++    out << "\"server_last_dimension_ms\":\"sum over PIR servers of process_last_dimension\",";
++    out << "\"server_merge_ms\":\"merge_responses_chunks_buckets across color buckets\",";
++    out << "\"server_ms\":\"full BatchPIRServer generate_response wall time including stages and merge\",";
++    out << "\"response_serialize_ms\":\"SEAL Ciphertext::save to uncompressed in-memory streams, outside server and decode timers\",";
++    out << "\"decode_ms\":\"client decode_responses_chunks only; correctness comparison happens after this timer\"";
++    out << "},";
++    out << "\"seal_parameters\":{";
++    out << "\"scheme\":\"BFV\",";
++    out << "\"poly_modulus_degree\":8192,";
++    out << "\"coeff_modulus_bits\":[42,58,58,60],";
++    out << "\"plain_modulus_bits\":28";
++    out << "},";
++    out << "\"communication_size_labels\":{";
++    out << "\"query\":\"seeded save_size/2 model plus separately measured actual unseeded ciphertext payload; these are different encodings\",";
++    out << "\"helper_keys\":\"actual GaloisKeys and RelinKeys save bytes, uncompressed, once per session\",";
++    out << "\"response\":\"actual bytes returned by Ciphertext::save(compr_mode_type::none) to in-memory streams\"";
++    out << "},";
++    out << "\"serialization_timing\":\"query and response save uncompressed in memory, outside server timing\",";
++    out << "\"measured_summary\":{";
++    out << "\"count\":" << measured_count << ",";
++    out << "\"index_ms_mean\":" << measured_index_ms << ",";
++    out << "\"query_ms_mean\":" << measured_query_ms << ",";
++    out << "\"server_ms_mean\":" << measured_server_ms << ",";
++    out << "\"server_first_dimension_ms_mean\":" << measured_first_ms << ",";
++    out << "\"server_second_dimension_ms_mean\":" << measured_second_ms << ",";
++    out << "\"server_last_dimension_ms_mean\":" << measured_last_ms << ",";
++    out << "\"server_merge_ms_mean\":" << measured_merge_ms << ",";
++    out << "\"response_serialize_ms_mean\":" << measured_response_serialize_ms << ",";
++    out << "\"decode_ms_mean\":" << measured_decode_ms << ",";
++    out << "\"actual_response_payload_bytes_mean\":" << measured_actual_response_payload_bytes << ",";
++    out << "\"all_correct\":" << (all_correct ? "true" : "false");
++    out << "},";
++    out << "\"results\":[";
++    for (size_t i = 0; i < results.size(); ++i) {
++        const TrialResult &r = results[i];
++        if (i != 0) {
++            out << ",";
+         }
++        out << "{";
++        out << "\"iteration\":" << r.ordinal << ",";
++        out << "\"phase\":\"" << (r.warmup ? "warmup" : "measured") << "\",";
++        out << "\"leaf_id\":" << r.leaf_id << ",";
++        out << "\"path_nodes\":";
++        write_uint_array(out, r.path_nodes);
++        out << ",\"sub_indices\":";
++        write_uint_array(out, r.sub_indices);
++        out << ",\"index_ms\":" << r.index_ms << ",";
++        out << "\"query_ms\":" << r.query_ms << ",";
++        out << "\"query_serialize_ms\":" << r.query_serialize_ms << ",";
++        out << "\"actual_query_payload_bytes_unseeded\":" << r.actual_query_payload_bytes_unseeded << ",";
++        out << "\"server_ms\":" << r.server_ms << ",";
++        out << "\"server_first_dimension_ms\":" << r.server_first_dimension_ms << ",";
++        out << "\"server_second_dimension_ms\":" << r.server_second_dimension_ms << ",";
++        out << "\"server_last_dimension_ms\":" << r.server_last_dimension_ms << ",";
++        out << "\"server_merge_ms\":" << r.server_merge_ms << ",";
++        out << "\"response_serialize_ms\":" << r.response_serialize_ms << ",";
++        out << "\"decode_ms\":" << r.decode_ms << ",";
++        out << "\"query_payload_bytes_bound_save_size_seeded_div2\":" << r.query_payload_bytes_bound_save_size_seeded_div2 << ",";
++        out << "\"actual_response_payload_bytes\":" << r.actual_response_payload_bytes << ",";
++        out << "\"query_ciphertexts\":" << r.query_ciphertexts << ",";
++        out << "\"response_ciphertexts\":" << r.response_ciphertexts << ",";
++        out << "\"decoded_entries\":" << r.decoded_entries << ",";
++        out << "\"correct\":" << (r.correct ? "true" : "false");
++        out << "}";
++    }
++    out << "]}";
++}
++
++int run_benchmark(int argc, char *argv[])
++{
++    Options options = parse_options(argc, argv);
++    const size_t total_iterations = options.warmups + options.trials;
++    const string root = data_dir();
+ 
+-        if(count == tree_height)
+-        {
+-            cout << "Main: All the entries matched for example " << (iteration + 1) << "!!" << endl;
++    auto prep_start = high_resolution_clock::now();
++    unordered_map<uint64_t, ColorEntry> color_index;
++    unordered_map<uint64_t, ColorEntry> *fixture_color_index = nullptr;
++    if (options.height == 10) {
++        auto whole_tree = load_whole_tree(root, options.height);
++        color_index = load_color_index(root, whole_tree, options.height);
++        validate_h10_fixture_against_generated_indices(color_index, root);
++        fixture_color_index = &color_index;
++    }
++    vector<uint64_t> leaf_ids = read_leaf_ids(options.leaf_file, total_iterations);
++    vector<PreparedLeaf> prepared_leaves;
++    prepared_leaves.reserve(leaf_ids.size());
++    for (uint64_t leaf_id : leaf_ids) {
++        PreparedLeaf prepared = prepare_leaf(options.height, leaf_id, fixture_color_index);
++        uint64_t max_bucket_size = (node_count_for_height(options.height) + options.height - 1) / options.height;
++        for (size_t color = 0; color < prepared.sub_indices.size(); ++color) {
++            if (prepared.sub_indices[color] >= max_bucket_size) {
++                throw runtime_error("generated sub-index is outside color bucket range");
++            }
+         }
+-        cout << endl;
++        prepared_leaves.push_back(prepared);
+     }
++    auto prep_end = high_resolution_clock::now();
++    double index_prep_ms = elapsed_ms(prep_start, prep_end);
+ 
+-    cout << "***********************" << endl;
+-    cout << "     Timings Report    " << endl;
+-    cout << "***********************" << endl;
+-    cout << "Input Parameters: ";
+-    cout << "Batch Size: " << input_choices[0][0] << ", ";
+-    cout << "Number of Entries: " << input_choices[0][1] << ", ";
+-    cout << "Entry Size: " << input_choices[0][2] << endl;
++    if (options.validate_index_only) {
++        ostringstream json;
++        vector<TrialResult> index_results;
++        index_results.reserve(prepared_leaves.size());
++        for (size_t i = 0; i < prepared_leaves.size(); ++i) {
++            const PreparedLeaf &leaf = prepared_leaves[i];
++            index_results.push_back(TrialResult{
++                i + 1,
++                i < options.warmups,
++                leaf.leaf_id,
++                leaf.path_nodes,
++                leaf.sub_indices,
++                leaf.index_ms,
++                0.0,
++                0.0,
++                0.0,
++                0.0,
++                0.0,
++                0.0,
++                0.0,
++                0.0,
++                0,
++                0,
++                0,
++                0,
++                true,
++                0});
++        }
++        write_json(json, options, root, index_prep_ms, index_results);
++        if (options.output == "-") {
++            cout << json.str() << endl;
++        } else {
++            ofstream file(options.output.c_str());
++            if (!file.is_open()) {
++                throw runtime_error("unable to open output file: " + options.output);
++            }
++            file << json.str() << endl;
++            cout << json.str() << endl;
++        }
++        return 0;
++    }
+ 
+-    for (size_t i = 0; i < randIndices.size(); ++i)
++    const size_t num_nodes = static_cast<size_t>(node_count_for_height(options.height));
++    const string selection = to_string(options.height) + "," + to_string(num_nodes) + "," + to_string(kEntrySize);
++    const uint32_t client_id = 0;
++    vector<TrialResult> results;
++    results.reserve(total_iterations);
++    double offline_setup_ms = 0.0;
++    size_t actual_helper_key_bytes = 0;
+     {
+-        query_gen_costs += query_gen_times[i];
+-        resp_gen_costs += resp_gen_times[i];
+-        extract_costs += extract_times[i];
+-    }
++        ScopedCoutRedirect redirect(cerr);
++        auto setup_start = high_resolution_clock::now();
++        auto encryption_params = utils::create_encryption_parameters(selection);
++        BatchPirParams params(options.height, num_nodes, kEntrySize, encryption_params);
++        if (options.first_dim_override != 0) {
++            params.set_first_dimension_override(options.first_dim_override);
++        }
++
++        BatchPIRServer batch_server(options.height, kChildren, params, options.height != 10);
++        BatchPIRClient batch_client(options.height, kChildren, params);
++        auto public_keys = batch_client.get_public_keys();
++        batch_server.set_client_keys(client_id, public_keys);
++        offline_setup_ms = elapsed_ms(setup_start, high_resolution_clock::now());
++        ostringstream key_stream(ios::out | ios::binary);
++        actual_helper_key_bytes = static_cast<size_t>(public_keys.first.save(key_stream, seal::compr_mode_type::none));
++        actual_helper_key_bytes += static_cast<size_t>(public_keys.second.save(key_stream, seal::compr_mode_type::none));
++
++        for (size_t i = 0; i < prepared_leaves.size(); ++i) {
++            const PreparedLeaf &leaf = prepared_leaves[i];
++            auto query_start = high_resolution_clock::now();
++            auto queries = batch_client.create_queries(leaf.sub_indices);
++            auto query_end = high_resolution_clock::now();
++
++            auto server_start = high_resolution_clock::now();
++            BatchServerProfile server_profile;
++            PIRResponseList responses = batch_server.generate_response(client_id, queries, &server_profile);
++            auto server_end = high_resolution_clock::now();
+ 
+-    cout << "Query generation time: " << query_gen_costs.count()/query_gen_times.size() << " microseconds" << endl;
+-    cout << "Response generation time: " << resp_gen_costs.count()/resp_gen_times.size() << " microseconds" << endl;
+-    cout << "Extraction time: " << extract_costs.count()/extract_times.size() << " microseconds" << endl;
+-    cout << "Total Query communication: " << serialized_query_size/1024 << " KB" << endl;
+-    cout << "Total Answer communication: " << serialized_anw_size/1024 << " KB" << endl;
+-    cout << endl;
++            auto response_serialize_start = high_resolution_clock::now();
++            size_t actual_response_payload_bytes = serialize_response_payload_uncompressed(responses);
++            auto response_serialize_end = high_resolution_clock::now();
+ 
++            auto decode_start = high_resolution_clock::now();
++            auto decoded = batch_client.decode_responses_chunks(responses);
++            auto decode_end = high_resolution_clock::now();
++
++            auto query_serialize_start = high_resolution_clock::now();
++            size_t actual_query_payload_bytes = serialize_query_payload_uncompressed(queries);
++            auto query_serialize_end = high_resolution_clock::now();
++
++            size_t decoded_count = 0;
++            bool correct = check_correct(decoded, leaf.expected_entries, &decoded_count);
++            if (!correct) throw runtime_error("decoded TreePIR path mismatch at leaf " + to_string(leaf.leaf_id));
++            size_t query_count = 0;
++            for (const auto &part : queries) query_count += part.size();
++
++            results.push_back(TrialResult{
++                i + 1,
++                i < options.warmups,
++                leaf.leaf_id,
++                leaf.path_nodes,
++                leaf.sub_indices,
++                leaf.index_ms,
++                elapsed_ms(query_start, query_end),
++                elapsed_ms(server_start, server_end),
++                server_profile.process_first_dimension_ms,
++                server_profile.process_second_dimension_ms,
++                server_profile.process_last_dimension_ms,
++                server_profile.merge_ms,
++                elapsed_ms(response_serialize_start, response_serialize_end),
++                elapsed_ms(decode_start, decode_end),
++                query_payload_size_bound(queries),
++                actual_response_payload_bytes,
++                query_count,
++                responses.size(),
++                correct,
++                decoded_count,
++                elapsed_ms(query_serialize_start, query_serialize_end),
++                actual_query_payload_bytes});
++        }
++    }
++
++    ostringstream json;
++    write_json(json, options, root, index_prep_ms, results, offline_setup_ms, actual_helper_key_bytes);
++    if (options.output == "-") {
++        cout << json.str() << endl;
++    } else {
++        ofstream file(options.output.c_str());
++        if (!file.is_open()) {
++            throw runtime_error("unable to open output file: " + options.output);
++        }
++        file << json.str() << endl;
++        cout << json.str() << endl;
++    }
+     return 0;
+ }
+ 
++} // namespace
+ 
+-int main(int argc, char *argv[]) {
+-    batchpir_main(argc, argv);
+-    return 0;
++int main(int argc, char *argv[])
++{
++    try {
++        return run_benchmark(argc, argv);
++    } catch (const exception &e) {
++        cerr << "TreePIR benchmark error: " << e.what() << endl;
++        return 1;
++    }
+ }
+diff --git a/VBPIR_TreePIR/src/server.cpp b/VBPIR_TreePIR/src/server.cpp
+index 2d9867e..f4a6be6 100644
+--- a/VBPIR_TreePIR/src/server.cpp
++++ b/VBPIR_TreePIR/src/server.cpp
+@@ -1,5 +1,6 @@
+ #include "server.h"
+ #include <bitset>
++#include <utility>
+ 
+ // Constructor
+ Server::Server(PirParams &pir_params) : pir_params_(pir_params)
+@@ -30,7 +31,7 @@ Server::Server(PirParams &pir_params, vector<RawDB> sub_buckets) : pir_params_(p
+     num_databases_ = pir_params_.get_db_count();
+     is_db_preprocessed_ = false;
+     is_client_keys_set_ = false;
+-    rawdb_list_ = sub_buckets;
++    rawdb_list_ = std::move(sub_buckets);
+     round_dbs();
+     convert_merge_pir_dbs();
+     ntt_preprocess_db();
+@@ -901,6 +902,11 @@ PIRResponseList Server::process_last_dimension(uint32_t client_id, vector<Cipher
+ // };
+ 
+ PIRResponseList Server::generate_response(uint32_t client_id, PIRQuery query)
++{
++    return generate_response(client_id, query, nullptr);
++}
++
++PIRResponseList Server::generate_response(uint32_t client_id, PIRQuery query, ServerProfile *profile)
+ {
+ 
+     if (!is_db_preprocessed_)
+@@ -908,32 +914,28 @@ PIRResponseList Server::generate_response(uint32_t client_id, PIRQuery query)
+ 
+     query_ = query;
+ 
+-    // Time process_first_dimension function
+-    // auto start = chrono::high_resolution_clock::now();
+-    // vector<Ciphertext> first_intermediate_data = process_first_dimension(client_id);
++    auto first_start = chrono::high_resolution_clock::now();
+     vector<Ciphertext> first_intermediate_data = process_first_dimension_delayed_mod(client_id);
+-    // auto end = chrono::high_resolution_clock::now();
+-    // auto duration = chrono::duration_cast<chrono::milliseconds>(end - start);
+-    // cout << "Server: process_first_dimension time: " << duration.count() << " milliseconds" << endl;
++    auto first_end = chrono::high_resolution_clock::now();
+ 
+-    // Time process_second_dimension function
+-    // start = chrono::high_resolution_clock::now();
++    auto second_start = chrono::high_resolution_clock::now();
+     vector<Ciphertext> second_intermediate_data;
+     if(pir_dimensions_.size() == 3){
+         second_intermediate_data = process_second_dimension(client_id, first_intermediate_data);
+     }else{
+         second_intermediate_data = first_intermediate_data;
+     }
+-    // end = chrono::high_resolution_clock::now();
+-    // duration = chrono::duration_cast<chrono::milliseconds>(end - start);
+-    // cout << "Server: process_second_dimension time: " << duration.count() << " milliseconds" << endl;
++    auto second_end = chrono::high_resolution_clock::now();
+ 
+-    // Time process_third_dimension function
+-    // start = chrono::high_resolution_clock::now();
++    auto last_start = chrono::high_resolution_clock::now();
+     PIRResponseList response = process_last_dimension(client_id, second_intermediate_data, pir_dimensions_.size() == 2);
+-    // end = chrono::high_resolution_clock::now();
+-    // duration = chrono::duration_cast<chrono::milliseconds>(end - start);
+-    // cout << "Server: process_third_dimension time: " << duration.count() << " milliseconds" << endl;
++    auto last_end = chrono::high_resolution_clock::now();
++
++    if (profile != nullptr) {
++        profile->process_first_dimension_ms += chrono::duration_cast<chrono::duration<double, milli>>(first_end - first_start).count();
++        profile->process_second_dimension_ms += chrono::duration_cast<chrono::duration<double, milli>>(second_end - second_start).count();
++        profile->process_last_dimension_ms += chrono::duration_cast<chrono::duration<double, milli>>(last_end - last_start).count();
++    }
+ 
+     return response;
+ }

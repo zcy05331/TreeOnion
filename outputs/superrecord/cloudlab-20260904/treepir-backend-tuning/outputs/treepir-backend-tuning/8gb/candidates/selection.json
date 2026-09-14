@@ -1,0 +1,48 @@
+{
+  "height": 27,
+  "scale": "8gb",
+  "selected": {
+    "label": "sealpir_d2",
+    "eligible": true,
+    "mean_server_ms": 287562.7990625,
+    "reason": "ok"
+  },
+  "candidate_eligibility": [
+    {
+      "label": "vbpir_fd128",
+      "eligible": false,
+      "mean_server_ms": null,
+      "reason": "process exit 1"
+    },
+    {
+      "label": "vbpir_fd256",
+      "eligible": false,
+      "mean_server_ms": null,
+      "reason": "process exit 1"
+    },
+    {
+      "label": "sealpir_d1",
+      "eligible": false,
+      "mean_server_ms": null,
+      "reason": "process exit 1"
+    },
+    {
+      "label": "sealpir_d2",
+      "eligible": true,
+      "mean_server_ms": 287562.7990625,
+      "reason": "ok"
+    }
+  ],
+  "comparison_regime": {
+    "scope": "TreePIR backend tuning only for the same generated leaf schedule and configured height",
+    "formal_trials": 100,
+    "warmups": 3,
+    "pilot_trials": 16,
+    "global_optimality_claim": "none",
+    "excluded_backends": [
+      "Spiral",
+      "PIRANA"
+    ],
+    "note": "Spiral and PIRANA are separately investigated and not measured by this runner."
+  }
+}

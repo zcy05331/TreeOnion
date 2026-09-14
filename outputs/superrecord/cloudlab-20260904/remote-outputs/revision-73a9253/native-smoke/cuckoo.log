@@ -1,0 +1,106 @@
+Running test: cuckoo_bench
+==============================================================================
+                    test_cuckoo_benchmark(Benchmark build)
+==============================================================================
+DB gen+NTT+realign: 2 ms
+DB gen+NTT+realign: 2 ms
+DB gen+NTT+realign: 2 ms
+DB gen+NTT+realign: 2 ms
+DB gen+NTT+realign: 2 ms
+DB gen+NTT+realign: 2 ms
+DB gen+NTT+realign: 2 ms
+DB gen+NTT+realign: 2 ms
+DB gen+NTT+realign: 2 ms
+DB gen+NTT+realign: 2 ms
+DB gen+NTT+realign: 2 ms
+DB gen+NTT+realign: 2 ms
+DB gen+NTT+realign: 2 ms
+DB gen+NTT+realign: 2 ms
+DB gen+NTT+realign: 2 ms
+DB gen+NTT+realign: 2 ms
+DB gen+NTT+realign: 2 ms
+DB gen+NTT+realign: 2 ms
+DB gen+NTT+realign: 2 ms
+DB gen+NTT+realign: 2 ms
+DB gen+NTT+realign: 2 ms
+Noise budget after decryption: 3 (max noise: 34)
+Noise budget after decryption: 3 (max noise: 42)
+Noise budget after decryption: 3 (max noise: 37)
+Noise budget after decryption: 3 (max noise: 43)
+Noise budget after decryption: 3 (max noise: 34)
+Noise budget after decryption: 3 (max noise: 40)
+Noise budget after decryption: 3 (max noise: 44)
+Noise budget after decryption: 3 (max noise: 38)
+Noise budget after decryption: 3 (max noise: 38)
+Noise budget after decryption: 3 (max noise: 38)
+Noise budget after decryption: 3 (max noise: 36)
+Noise budget after decryption: 3 (max noise: 35)
+Noise budget after decryption: 3 (max noise: 37)
+Noise budget after decryption: 3 (max noise: 36)
+Noise budget after decryption: 3 (max noise: 38)
+Noise budget after decryption: 3 (max noise: 43)
+Noise budget after decryption: 3 (max noise: 37)
+Noise budget after decryption: 3 (max noise: 38)
+Noise budget after decryption: 3 (max noise: 41)
+Noise budget after decryption: 3 (max noise: 38)
+Noise budget after decryption: 3 (max noise: 42)
+Noise budget after decryption: 3 (max noise: 46)
+Noise budget after decryption: 3 (max noise: 36)
+Noise budget after decryption: 3 (max noise: 40)
+Noise budget after decryption: 3 (max noise: 39)
+Noise budget after decryption: 3 (max noise: 36)
+Noise budget after decryption: 3 (max noise: 37)
+Noise budget after decryption: 3 (max noise: 37)
+Noise budget after decryption: 3 (max noise: 38)
+Noise budget after decryption: 3 (max noise: 37)
+Noise budget after decryption: 3 (max noise: 39)
+Noise budget after decryption: 3 (max noise: 38)
+Noise budget after decryption: 3 (max noise: 34)
+Noise budget after decryption: 3 (max noise: 44)
+Noise budget after decryption: 3 (max noise: 38)
+Noise budget after decryption: 3 (max noise: 56)
+Noise budget after decryption: 3 (max noise: 34)
+Noise budget after decryption: 3 (max noise: 43)
+Noise budget after decryption: 3 (max noise: 45)
+Noise budget after decryption: 3 (max noise: 37)
+Noise budget after decryption: 3 (max noise: 44)
+Noise budget after decryption: 3 (max noise: 36)
+Noise budget after decryption: 3 (max noise: 40)
+Noise budget after decryption: 3 (max noise: 41)
+Noise budget after decryption: 3 (max noise: 35)
+Noise budget after decryption: 3 (max noise: 34)
+Noise budget after decryption: 3 (max noise: 40)
+Noise budget after decryption: 3 (max noise: 38)
+Noise budget after decryption: 3 (max noise: 41)
+Noise budget after decryption: 3 (max noise: 42)
+Noise budget after decryption: 3 (max noise: 36)
+Noise budget after decryption: 3 (max noise: 36)
+Noise budget after decryption: 3 (max noise: 48)
+Noise budget after decryption: 3 (max noise: 45)
+Noise budget after decryption: 3 (max noise: 46)
+Noise budget after decryption: 3 (max noise: 35)
+Noise budget after decryption: 3 (max noise: 38)
+Noise budget after decryption: 3 (max noise: 38)
+Noise budget after decryption: 3 (max noise: 40)
+Noise budget after decryption: 3 (max noise: 38)
+Noise budget after decryption: 3 (max noise: 41)
+Noise budget after decryption: 3 (max noise: 36)
+Noise budget after decryption: 3 (max noise: 36)
+cuckoo batch PIR: L=13, k=13, buckets=21 (3 hashes, 1.5x+slack)
+reference layout: h=6, N0=32, Nrest=6, remaining dims limit=3
+database: 672 padded PIR matrix plaintexts across buckets (499 target packed plaintexts, 46853 actual replicated nodes, 1 MiB replicated, 1 MiB padded), largest bucket 2333 nodes, setup 84.2964 ms
+estimated preprocessed bucket storage 10 MiB; public metadata 0 MiB; estimated resident peak 10 MiB
+trials: 2 measured after 1 warmup
+trial seed: 7
+bucket routing avg 0.001655 ms
+client query avg 4.71276 ms
+server batch avg 293.824 ms; samples:
+  batch 293.84 ms
+  batch 293.808 ms
+server profile breakdown avg (ms, sum over bucket requests): expand 200.676440 convert 0.016273 first_dim_query_ntt 16.764592 first_dim_query_pack 49.136219 first_dim_core 8.321253 first_dim_finalize 2.577942 other_dim 0.115168 mod_switch 12.923920
+  phases sum 290.532 ms of server batch avg 293.824 ms
+response serialize avg 7.48244 ms
+client decode avg 15.4637 ms
+communication: queries 312480 B (modeled, 21 ciphertexts), responses 236544 B (actual wire codec), online 549024 B; helper keys shared bundle 1011840 B (modeled)
+payload: 13 x 32-byte siblings = 416 B useful; position metadata public
+cuckoo raw profile JSON: /users/zcy05331/generic-superrecord-bench-20260904/revision-73a9253/outputs/native-smoke/cuckoo.json

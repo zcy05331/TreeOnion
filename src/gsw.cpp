@@ -190,6 +190,10 @@ void GSWEval::decomp_rlwe_mp(RlweCt const &ct, std::vector<std::vector<uint64_t>
   // coeff_val_cnt each; we write digit rows in place (no allocation here).
   assert(output.size() == 2 * l_);
   // Setup parameters
+  if (low_bits_ != 0) {
+    throw std::invalid_argument(
+        "approximate GSW decomposition is only implemented for K=1");
+  }
   const uint64_t base = uint64_t(1) << base_log2_;
   const uint64_t mask = base - 1;
   const auto &rns_mods = pir_params_.get_rns_mods();
@@ -265,28 +269,43 @@ void GSWEval::decomp_rlwe_single_mod(RlweCt const &ct, std::vector<std::vector<u
   const uint64_t q = pir_params_.get_rns_mods()[0];
   const int64_t qi = static_cast<int64_t>(q);
   const uint64_t half_q = q >> 1;
-  const int64_t native = 64 - static_cast<int64_t>(base_log2_);
+  // Copy parameters before writing scratch/output. Otherwise GCC reloads the
+  // potentially aliased members inside the coefficient loops and scalarizes
+  // both centering and digit extraction.
+  const size_t ell = l_;
+  const size_t base_log2 = base_log2_;
+  const size_t low_bits = low_bits_;
+  const unsigned native_shift = 64u - static_cast<unsigned>(base_log2);
 
   if (ep_dwork_.size() != N) ep_dwork_.resize(N);
   int64_t *const d = ep_dwork_.data();
 
   for (size_t poly_id = 0; poly_id < 2; poly_id++) {
     const uint64_t *poly_ptr = ct.data(poly_id);
-    const size_t base_row = poly_id * l_;
+    const size_t base_row = poly_id * ell;
 
     // Center [0, q) -> (-q/2, q/2].
     for (size_t k = 0; k < N; ++k) {
       const int64_t v = static_cast<int64_t>(poly_ptr[k]);
       d[k] = (poly_ptr[k] > half_q) ? v - qi : v;
     }
+    if (low_bits) {
+      const int64_t half_step = int64_t{1} << (low_bits - 1);
+      for (size_t k = 0; k < N; ++k) {
+        d[k] = (d[k] + half_step) >> low_bits;
+      }
+    }
 
     // Digit i is the B^i coefficient (extracted LSB-first); store MSB-first, so
     // it lands in row (l_-1-i). Poly 0 -> rows [0,l_), poly 1 -> rows [l_,2*l_).
-    for (size_t i = 0; i < l_; ++i) {
-      uint64_t *const outrow = output[base_row + (l_ - 1 - i)].data();
+    for (size_t i = 0; i < ell; ++i) {
+      uint64_t *const outrow = output[base_row + (ell - 1 - i)].data();
       for (size_t k = 0; k < N; ++k) {
-        const int64_t r = (d[k] << native) >> native;  // balanced low digit
-        d[k] = (d[k] - r) >> static_cast<int64_t>(base_log2_);
+        // Unsigned left shift preserves the baseline branchless extraction
+        // without signed-overflow UB. C++20 signed right shift sign-extends.
+        const int64_t r = static_cast<int64_t>(
+            static_cast<uint64_t>(d[k]) << native_shift) >> native_shift;
+        d[k] = (d[k] - r) >> base_log2;
         outrow[k] = (r >= 0) ? static_cast<uint64_t>(r)
                              : static_cast<uint64_t>(r + qi);
       }
@@ -369,7 +388,7 @@ GSWCt GSWEval::plain_to_gsw(std::vector<uint64_t> const &plaintext,
   // MP gadget table: gadget_table[k][p] = B^(l_-1-p) mod q_k, MSB-first
   // (p=0 = largest power B^(l_-1)).
   std::vector<std::vector<uint64_t>> gadget_table =
-      utils::gsw_gadget(l_, base_log2_, rns_mods_arr);
+      utils::gsw_gadget(l_, base_log2_, rns_mods_arr, low_bits_);
 
   const size_t rows_per_half = l_;
   GSWCt output(2 * rows_per_half, std::vector<uint64_t>(2 * K * N));

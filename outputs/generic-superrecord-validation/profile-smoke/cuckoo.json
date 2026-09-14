@@ -1,0 +1,24 @@
+{
+  "schema_version": "cuckoo_raw_profile.v1",
+  "scheme": "cuckoo_batch_pir",
+  "leaf_count": 1024,
+  "tree_height": 10,
+  "node_entry_bits": 256,
+  "actual_logical_bytes": 65472,
+  "root_excluded_node_count": 2046,
+  "warmups": 1,
+  "measured_trials": 2,
+  "trial_seed": 7,
+  "batch_size": 10,
+  "num_buckets": 15,
+  "num_hashes": 3,
+  "offline_setup_ms": 10.774125,
+  "setup_ms": 10.774125,
+  "stage_map": ["expand", "convert", "first_dim_query_ntt", "first_dim_query_pack", "first_dim_core", "first_dim_finalize", "other_dim", "mod_switch"],
+  "communication": {"modeled_query_bytes": 223200, "actual_response_bytes": 168960, "modeled_helper_key_bytes": 892800},
+  "storage": {"bucket_count": 15, "total_member_entries": 5758, "total_target_plaintexts": 68, "total_padded_plaintexts": 92, "max_bucket_members": 420, "max_bucket_target_plaintexts": 5, "max_bucket_plaintexts": 8, "logical_replicated_bytes": 184256, "logical_padded_bytes": 282624, "public_metadata_bytes": 30720, "estimated_preprocessed_bytes": 1507328, "estimated_peak_resident_bytes": 1538048},
+  "samples": [
+    {"trial": 0, "leaf": 297, "bucket_routing_ms": 0.000542, "server_total_ms": 20.257292, "client_query_ms": 1.219042, "response_serialize_ms": 0.858542, "client_decode_ms": 3.180877, "stages_ms": {"expand":11.666127,"convert":0.002459,"first_dim_query_ntt":1.215002,"first_dim_query_pack":0.656623,"first_dim_core":0.646335,"first_dim_finalize":0.396457,"other_dim":0.022918,"mod_switch":5.635917}, "correct": true},
+    {"trial": 1, "leaf": 514, "bucket_routing_ms": 0.000666, "server_total_ms": 19.748415, "client_query_ms": 1.156623, "response_serialize_ms": 0.778210, "client_decode_ms": 3.073206, "stages_ms": {"expand":11.572415,"convert":0.002457,"first_dim_query_ntt":1.167124,"first_dim_query_pack":0.547877,"first_dim_core":0.613333,"first_dim_finalize":0.382999,"other_dim":0.014206,"mod_switch":5.434251}, "correct": true}
+  ]
+}

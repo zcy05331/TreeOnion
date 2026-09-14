@@ -1,0 +1,125 @@
+scale,scheme,stage,mean_ms
+1gb,Generic h3,expand,65.33145859999999
+1gb,Generic h3,complete,39.376007359999996
+1gb,Generic h3,prepare,33.55094496
+1gb,Generic h3,scan,543.51604042
+1gb,Generic h3,finalize,63.509003830000005
+1gb,Generic h3,fold,166.54390784999998
+1gb,Generic h3,rotate,19.00975248
+1gb,Generic h3,project,13.403371360000001
+1gb,Generic h3,pack,0.12976004
+1gb,Generic h3,switch,0.09623661
+1gb,Generic h1,expand,87.98324991
+1gb,Generic h1,complete,40.19946279
+1gb,Generic h1,prepare,50.06795908
+1gb,Generic h1,scan,625.37115996
+1gb,Generic h1,finalize,50.869000830000004
+1gb,Generic h1,fold,121.94712852
+1gb,Generic h1,rotate,85.9678353
+1gb,Generic h1,project,62.1032243
+1gb,Generic h1,pack,0.39517141
+1gb,Generic h1,switch,0.09616652
+1gb,Standard,convert,17.07631602
+1gb,Standard,expand,82.77214239000001
+1gb,Standard,first_dim_core,534.9641927600001
+1gb,Standard,first_dim_finalize,50.89432623
+1gb,Standard,first_dim_query_ntt,7.00841745
+1gb,Standard,first_dim_query_pack,18.864588949999998
+1gb,Standard,mod_switch,0.09592288
+1gb,Standard,other_dim,112.18450098
+1gb,Layerwise tuned,convert,122.03147824
+1gb,Layerwise tuned,expand,347.43812891
+1gb,Layerwise tuned,first_dim_core,565.04413213
+1gb,Layerwise tuned,first_dim_finalize,71.40087
+1gb,Layerwise tuned,first_dim_query_ntt,28.97802111
+1gb,Layerwise tuned,first_dim_query_pack,67.88778112
+1gb,Layerwise tuned,mod_switch,1.7147575499999999
+1gb,Layerwise tuned,other_dim,162.25174673
+1gb,Tree g32,fold,166.45605085
+1gb,Tree g32,pack,0.12657504
+1gb,Tree g32,project,16.76747377
+1gb,Tree g32,pyramid,58.079721369999994
+1gb,Tree g32,query_expand,82.42054511
+1gb,Tree g32,rotate,22.734626400000003
+1gb,Tree g32,scan_core,829.8730240299999
+1gb,Tree g32,scan_finalize,89.09600262
+1gb,Tree g32,selector_completion,25.47376454
+1gb,Tree g32,switch,0.09561972
+1gb,Cuckoo tuned,expand,1502.308886625
+1gb,Cuckoo tuned,convert,441.9854736875
+1gb,Cuckoo tuned,first_dim_query_ntt,129.007781625
+1gb,Cuckoo tuned,first_dim_query_pack,269.80220375
+1gb,Cuckoo tuned,first_dim_core,1801.06920775
+1gb,Cuckoo tuned,first_dim_finalize,285.704052
+1gb,Cuckoo tuned,other_dim,648.2380763125
+1gb,Cuckoo tuned,mod_switch,3.5365921875
+1gb,Flat,convert,417.3045540625
+1gb,Flat,expand,1991.9532309375
+1gb,Flat,first_dim_core,12775.734029375
+1gb,Flat,first_dim_finalize,1221.8911579374999
+1gb,Flat,first_dim_query_ntt,169.05164675
+1gb,Flat,first_dim_query_pack,452.1184545
+1gb,Flat,mod_switch,2.2924415625
+1gb,Flat,other_dim,2688.814982625
+4gb,Generic h3,expand,69.14631833
+4gb,Generic h3,complete,42.734109360000005
+4gb,Generic h3,prepare,33.61504143
+4gb,Generic h3,scan,2054.6228055
+4gb,Generic h3,finalize,271.55930437
+4gb,Generic h3,fold,665.9604067800001
+4gb,Generic h3,rotate,48.73272488
+4gb,Generic h3,project,35.387649190000005
+4gb,Generic h3,pack,0.29131746
+4gb,Generic h3,switch,0.09619199
+4gb,Generic h1,expand,91.95977307999999
+4gb,Generic h1,complete,44.54023786
+4gb,Generic h1,prepare,50.17992821
+4gb,Generic h1,scan,2481.27039327
+4gb,Generic h1,finalize,206.29328647999998
+4gb,Generic h1,fold,501.17125964
+4gb,Generic h1,rotate,95.57817975
+4gb,Generic h1,project,70.37457605
+4gb,Generic h1,pack,0.43819094
+4gb,Generic h1,switch,0.09625427
+4gb,Standard,convert,20.46216284
+4gb,Standard,expand,84.73268056
+4gb,Standard,first_dim_core,2120.4540906499997
+4gb,Standard,first_dim_finalize,205.34834525999997
+4gb,Standard,first_dim_query_ntt,7.043503490000001
+4gb,Standard,first_dim_query_pack,28.670378030000002
+4gb,Standard,mod_switch,0.09624022
+4gb,Standard,other_dim,449.72429644999994
+4gb,Layerwise tuned,convert,157.62189504
+4gb,Layerwise tuned,expand,509.53432904
+4gb,Layerwise tuned,first_dim_core,2153.35098631
+4gb,Layerwise tuned,first_dim_finalize,225.3496745
+4gb,Layerwise tuned,first_dim_query_ntt,42.944543890000006
+4gb,Layerwise tuned,first_dim_query_pack,105.57811207
+4gb,Layerwise tuned,mod_switch,1.90432814
+4gb,Layerwise tuned,other_dim,501.51340454999996
+4gb,Tree g32,fold,675.2555816299999
+4gb,Tree g32,pack,0.1411536
+4gb,Tree g32,project,18.400488969999998
+4gb,Tree g32,pyramid,58.089411309999996
+4gb,Tree g32,query_expand,84.14245741999999
+4gb,Tree g32,rotate,25.05756884
+4gb,Tree g32,scan_core,3285.73215265
+4gb,Tree g32,scan_finalize,499.23893464
+4gb,Tree g32,selector_completion,28.90017008
+4gb,Tree g32,switch,0.09635811
+4gb,Cuckoo tuned,expand,3068.8622646875
+4gb,Cuckoo tuned,convert,544.8481598125001
+4gb,Cuckoo tuned,first_dim_query_ntt,281.146701125
+4gb,Cuckoo tuned,first_dim_query_pack,579.96956675
+4gb,Cuckoo tuned,first_dim_core,6360.4408103125
+4gb,Cuckoo tuned,first_dim_finalize,590.2167194375
+4gb,Cuckoo tuned,other_dim,1298.569803125
+4gb,Cuckoo tuned,mod_switch,3.817297125
+4gb,Flat,convert,534.6857746875
+4gb,Flat,expand,2218.46385075
+4gb,Flat,first_dim_core,54833.5588983125
+4gb,Flat,first_dim_finalize,5340.43364225
+4gb,Flat,first_dim_query_ntt,183.18566525
+4gb,Flat,first_dim_query_pack,744.7869845625
+4gb,Flat,mod_switch,2.4889675625
+4gb,Flat,other_dim,11704.1487719375

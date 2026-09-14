@@ -1,6 +1,7 @@
 #include "tests.h"
 #include "merkle_benchmark.h"
 #include "tree_index.h"
+#include "tree_profile_json.h"
 #include "tree_query.h"
 #include "tree_response.h"
 #include "tree_select.h"
@@ -8,17 +9,14 @@
 #include <array>
 #include <bit>
 #include <chrono>
+#include <limits>
 #include <numeric>
 #include <utility>
 #include <vector>
 
 // Real-scenario efficiency: g = 32 (full 32-byte nodes) at N = 2^22 leaves
-// by default (--leaf-count selects another power of two), the largest workload whose canonical + NTT views fit this machine's
-// memory budget (~4.3 GiB; the 2^24 row needs ~17 GiB and is reported by
-// linear first-dimension extrapolation instead). Same scheme and statistics
-// conventions as the baselines; the payload per node now matches theirs
-// exactly (32 bytes), stored as 32 x 12-bit chunks (384-bit slots, the
-// power-of-two rounding of 256 bits).
+// by default; --leaf-count selects another power of two. Nodes contain 32
+// bytes, split into digits determined by the active plaintext modulus.
 void PirTest::test_tree_benchmark_g32() {
   print_func_name(__FUNCTION__);
   constexpr size_t N = DBConsts::PolyDegree;
@@ -30,7 +28,7 @@ void PirTest::test_tree_benchmark_g32() {
 
   PirParams scheme;
   const uint64_t t = scheme.get_plain_mod();
-  // Real-hash slot count for this scheme: 256 bits over (log2(t) - 1)-bit
+  // Real-hash slot count for this scheme: 256 bits over floor(log2(t))-bit
   // chunks, rounded to a power of two (n=2048/12-bit -> g=32;
   // n=4096/39-bit -> g=8).
   const size_t chunk_bits = std::bit_width(t) - 1;
@@ -83,24 +81,23 @@ void PirTest::test_tree_benchmark_g32() {
 
   std::vector<double> query_ms, unpack_ms, path_ms, extract_ms;
   size_t actual_response_bytes = 0;
+  int min_noise_budget_bits = std::numeric_limits<int>::max();
+  uint64_t max_response_noise = 0;
   // Server-path stage breakdown: answer_path_mvp and the select kernels
   // accumulate TimerLogger sections; each trial is closed with
   // END_EXPERIMENT() and its per-stage totals read back by key.
-  constexpr std::array<const char *, 7> kStages = {
-      TREE_PYRAMID_TIME, TREE_SCAN_TIME,    TREE_FOLD_TIME, TREE_ROTATE_TIME,
-      TREE_PROJECT_TIME, TREE_PACK_TIME,    TREE_SWITCH_TIME};
-  constexpr std::array<const char *, 7> kStageLabels = {
-      "pyramid", "scan", "fold", "rotate", "project", "pack", "switch"};
   std::array<double, 7> stage_sum{};
+  std::vector<tree_profile_json::Sample> json_samples;
   CLEAN_TIMER();
-  const auto run_trial = [&](size_t leaf, bool measured) {
+  const auto run_trial = [&](size_t leaf, bool measured, size_t trial) {
     auto start = Clock::now();
     RlweCt query = make_tree_query(client, scheme, tree, leaf);
     const double q_ms = ms_since(start);
 
+    TreeQueryUnpackTiming unpack_timing;
     start = Clock::now();
     ExpandedTreeQuery unpacked = unpack_tree_query(
-        server, scheme, tree, client.get_client_id(), query);
+        server, scheme, tree, client.get_client_id(), query, &unpack_timing);
     const double u_ms = ms_since(start);
 
     start = Clock::now();
@@ -113,10 +110,55 @@ void PirTest::test_tree_benchmark_g32() {
     const std::vector<std::vector<uint64_t>> path =
         extract_path_chunks_mvp(response, client, tree);
     const double e_ms = ms_since(start);
+
+    start = Clock::now();
+    std::stringstream wire;
+    actual_response_bytes = 0;
+    for (const auto &chunk : response.chunks)
+      actual_response_bytes += server.save_resp_to_stream(chunk, wire);
+    const double response_serialize_ms = ms_since(start);
     END_EXPERIMENT();
+    std::map<std::string, double> sample_stages;
+    // Validate the complete response, including unused slots, outside timers.
+    require_test(response.small_q, "g32 benchmark requires a small-q response");
+    const auto bounds = path_chunk_bounds(response.level_count, tree.rho);
+    require_test(bounds.size() == response.chunks.size(), "response chunk count");
+    for (size_t c = 0; c < response.chunks.size(); ++c) {
+      uint64_t noise = 0;
+      int budget = 0;
+      const RlwePt decoded = client.decrypt_mod_q_measured(response.chunks[c], noise, budget);
+      std::vector<uint64_t> expected(N, 0);
+      const auto [first_level, count] = bounds[c];
+      for (size_t offset = 0; offset < count; ++offset) {
+        const size_t level = first_level + offset;
+        const size_t node = leaf >> (tree.L - level);
+        for (size_t j = 0; j < tree.g; ++j)
+          expected[response.level_offsets[level] + j * tree.rho] = source(level, node, j);
+      }
+      require_test(decoded.data == expected, "g32 full response plaintext mismatch");
+      min_noise_budget_bits = std::min(min_noise_budget_bits, budget);
+      max_response_noise = std::max(max_response_noise, noise);
+    }
     if (measured) {
-      for (size_t i = 0; i < kStages.size(); ++i) {
-        stage_sum[i] += GET_LAST_TIME(kStages[i]);
+      sample_stages["query_expand"] =
+          tree_profile_json::ns_to_ms(unpack_timing.query_expand);
+      sample_stages["selector_completion"] =
+          tree_profile_json::ns_to_ms(unpack_timing.selector_completion);
+      for (size_t i = 0; i < tree_profile_json::kLegacyTimerSections.size();
+           ++i) {
+        const double stage_ms =
+            GET_LAST_TIME(tree_profile_json::kLegacyTimerSections[i]);
+        stage_sum[i] += stage_ms;
+      }
+      for (size_t i = 0; i < tree_profile_json::kScanTimerSections.size();
+           ++i) {
+        sample_stages[tree_profile_json::kScanStageLabels[i]] =
+            GET_LAST_TIME(tree_profile_json::kScanTimerSections[i]);
+      }
+      for (size_t i = 0; i < tree_profile_json::kPathTimerSections.size();
+           ++i) {
+        sample_stages[tree_profile_json::kPathStageLabels[i]] =
+            GET_LAST_TIME(tree_profile_json::kPathTimerSections[i]);
       }
     }
 
@@ -134,14 +176,26 @@ void PirTest::test_tree_benchmark_g32() {
       unpack_ms.push_back(u_ms);
       path_ms.push_back(p_ms);
       extract_ms.push_back(e_ms);
-      std::stringstream wire;
-      actual_response_bytes =
-          server.save_resp_to_stream(response.chunks[0], wire);
+      tree_profile_json::Sample sample;
+      sample.trial = trial;
+      sample.leaf = leaf;
+      sample.client_query_ms = q_ms;
+      sample.server_total_ms =
+          tree_profile_json::query_unpack_ms(unpack_timing) + p_ms;
+      sample.stages_ms = std::move(sample_stages);
+      sample.diagnostics_ms["scan_combined"] = GET_LAST_TIME(TREE_SCAN_TIME);
+      sample.response_serialize_ms = response_serialize_ms;
+      sample.actual_response_bytes = actual_response_bytes;
+      sample.client_decode_ms = e_ms;
+      sample.correct = true;
+      json_samples.push_back(std::move(sample));
     }
   };
 
-  for (size_t leaf : plan.warmup_leaf_indices) run_trial(leaf, false);
-  for (size_t leaf : plan.measured_leaf_indices) run_trial(leaf, true);
+  size_t trial = 0;
+  for (size_t leaf : plan.warmup_leaf_indices) run_trial(leaf, false, trial++);
+  trial = 0;
+  for (size_t leaf : plan.measured_leaf_indices) run_trial(leaf, true, trial++);
 
   const auto avg = [](const std::vector<double> &v) {
     return std::accumulate(v.begin(), v.end(), 0.0) / v.size();
@@ -175,10 +229,12 @@ void PirTest::test_tree_benchmark_g32() {
   {
     std::string breakdown = "server path breakdown avg (ms):";
     double stage_total = 0;
-    for (size_t i = 0; i < kStages.size(); ++i) {
+    for (size_t i = 0; i < tree_profile_json::kLegacyTimerSections.size();
+         ++i) {
       const double v = stage_sum[i] / path_ms.size();
       stage_total += v;
-      breakdown += std::string(" ") + kStageLabels[i] + " " +
+      breakdown += std::string(" ") +
+                   tree_profile_json::kLegacyStageLabels[i] + " " +
                    std::to_string(v);
     }
     BENCH_PRINT(breakdown);
@@ -193,4 +249,22 @@ void PirTest::test_tree_benchmark_g32() {
               << " B (modeled)");
   BENCH_PRINT("payload: " << (tree.L + 1) << " x 32-byte path nodes = "
               << (tree.L + 1) * 32 << " B useful");
+  tree_profile_json::write_report(
+      tree_profile_json::output_path_from_env(), "legacy-tree-g32", tree.N,
+      256, (2 * tree.N - 1) * 32, kWarmups, kTrials, trial_seed,
+      setup_ms, query_bytes, helper_bytes, 0, false, "mvp",
+      json_samples,
+      {{"payload_note", "full 32-byte nodes; digit width follows plaintext modulus"},
+       {"acceptance_policy", "decryption_correctness_only; noise margins are diagnostic"},
+       {"plaintext_modulus", std::to_string(t)},
+       {"response_modulus", std::to_string(scheme.get_small_q())},
+       {"ciphertext_modulus", std::to_string(scheme.get_rns_mods()[0])},
+       {"ring_degree", std::to_string(N)},
+       {"chunk_bits", std::to_string(chunk_bits)},
+       {"N0", std::to_string(tree.N0)},
+       {"b", std::to_string(tree.b)},
+       {"key_height", std::to_string(key_height)},
+       {"min_noise_budget_bits", std::to_string(min_noise_budget_bits)},
+       {"max_noise", std::to_string(max_response_noise)},
+       {"g", std::to_string(tree.g)}});
 }

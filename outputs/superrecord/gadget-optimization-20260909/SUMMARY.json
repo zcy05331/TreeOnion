@@ -1,0 +1,178 @@
+{
+  "source_commit": "8506e7f4bb3bf12191f752f1f634d9b16a33d330",
+  "status": "complete",
+  "native": {
+    "3": {
+      "baseline": {
+        "h": 3,
+        "variant": "baseline",
+        "samples": 100,
+        "server_ms": 936.9083829499999,
+        "throughput_MiBs": 1092.95635316892,
+        "rotation_ms": 19.27968275,
+        "projection_ms": 13.754632529999999,
+        "rotation_projection_ms": 33.03431528,
+        "min_budget_bits": 1,
+        "zero_budget_samples": 0,
+        "query_bytes_modeled": 14880,
+        "response_bytes_actual": 11264,
+        "stages_ms": {
+          "complete": 39.27809394,
+          "expand": 67.94050004,
+          "finalize": 76.33147450999999,
+          "fold": 166.39467265,
+          "pack": 0.16123357,
+          "prepare": 26.522176899999998,
+          "project": 13.754632529999999,
+          "rotate": 19.27968275,
+          "scan": 526.97777046,
+          "switch": 0.0961577
+        }
+      },
+      "kernel": {
+        "h": 3,
+        "variant": "kernel",
+        "samples": 100,
+        "server_ms": 936.40895904,
+        "throughput_MiBs": 1093.5392699918416,
+        "rotation_ms": 18.92944507,
+        "projection_ms": 14.13582055,
+        "rotation_projection_ms": 33.06526562,
+        "min_budget_bits": 1,
+        "zero_budget_samples": 0,
+        "query_bytes_modeled": 14880,
+        "response_bytes_actual": 11264,
+        "stages_ms": {
+          "complete": 39.219987769999996,
+          "expand": 69.36998951,
+          "finalize": 75.38993163,
+          "fold": 164.2052392,
+          "pack": 0.16182589,
+          "prepare": 26.3780838,
+          "project": 14.13582055,
+          "rotate": 18.92944507,
+          "scan": 528.34835148,
+          "switch": 0.09581499
+        }
+      },
+      "ep2-s36": {
+        "h": 3,
+        "variant": "ep2-s36",
+        "samples": 100,
+        "server_ms": 814.37458014,
+        "throughput_MiBs": 1257.4065969819255,
+        "rotation_ms": 8.41448509,
+        "projection_ms": 13.9574259,
+        "rotation_projection_ms": 22.37191099,
+        "min_budget_bits": 0,
+        "zero_budget_samples": 4,
+        "query_bytes_modeled": 14880,
+        "response_bytes_actual": 11264,
+        "stages_ms": {
+          "complete": 13.542421260000001,
+          "expand": 56.01326202,
+          "finalize": 72.12484961,
+          "fold": 68.42192764,
+          "pack": 0.13265305,
+          "prepare": 26.24289953,
+          "project": 13.9574259,
+          "rotate": 8.41448509,
+          "scan": 555.2641352,
+          "switch": 0.09589444
+        }
+      },
+      "improvement": {
+        "latency_reduction_percent": 13.078525610389292,
+        "throughput_gain_percent": 15.046368808433952,
+        "rp_reduction_percent": 32.2767528239199
+      }
+    },
+    "1": {
+      "baseline": {
+        "h": 1,
+        "variant": "baseline",
+        "samples": 100,
+        "server_ms": 1129.21542589,
+        "throughput_MiBs": 906.8242834845692,
+        "rotation_ms": 87.77802976999999,
+        "projection_ms": 64.34997613,
+        "rotation_projection_ms": 152.1280059,
+        "min_budget_bits": 1,
+        "zero_budget_samples": 0,
+        "query_bytes_modeled": 14880,
+        "response_bytes_actual": 11264,
+        "stages_ms": {
+          "complete": 41.006765429999994,
+          "expand": 92.00131055,
+          "finalize": 50.12936767,
+          "fold": 122.90059763,
+          "pack": 0.48627686,
+          "prepare": 39.54119751,
+          "project": 64.34997613,
+          "rotate": 87.77802976999999,
+          "scan": 630.6714916899999,
+          "switch": 0.09616037000000001
+        }
+      },
+      "kernel": {
+        "h": 1,
+        "variant": "kernel",
+        "samples": 100,
+        "server_ms": 1104.7020163,
+        "throughput_MiBs": 926.9467733136987,
+        "rotation_ms": 85.64068364,
+        "projection_ms": 65.87641487,
+        "rotation_projection_ms": 151.51709850999998,
+        "min_budget_bits": 1,
+        "zero_budget_samples": 0,
+        "query_bytes_modeled": 14880,
+        "response_bytes_actual": 11264,
+        "stages_ms": {
+          "complete": 40.73319448,
+          "expand": 93.51488572,
+          "finalize": 50.35449319,
+          "fold": 118.51042283999999,
+          "pack": 0.48608556,
+          "prepare": 39.64262581,
+          "project": 65.87641487,
+          "rotate": 85.64068364,
+          "scan": 609.6017891,
+          "switch": 0.09583177
+        }
+      },
+      "ep2-s36": {
+        "h": 1,
+        "variant": "ep2-s36",
+        "samples": 100,
+        "server_ms": 968.75356736,
+        "throughput_MiBs": 1057.028334123173,
+        "rotation_ms": 36.64769468,
+        "projection_ms": 65.73409987,
+        "rotation_projection_ms": 102.38179455,
+        "min_budget_bits": 0,
+        "zero_budget_samples": 83,
+        "query_bytes_modeled": 14880,
+        "response_bytes_actual": 11264,
+        "stages_ms": {
+          "complete": 14.14206896,
+          "expand": 80.04763178,
+          "finalize": 50.91511993,
+          "fold": 50.508809279999994,
+          "pack": 0.39392256000000003,
+          "prepare": 39.40064914,
+          "project": 65.73409987,
+          "rotate": 36.64769468,
+          "scan": 630.6303745,
+          "switch": 0.09790483
+        }
+      },
+      "improvement": {
+        "latency_reduction_percent": 14.21003068599871,
+        "throughput_gain_percent": 16.563743756555425,
+        "rp_reduction_percent": 32.700232317973224
+      }
+    }
+  },
+  "h3_throughput_advantage_before_percent": 20.525704160580972,
+  "h3_throughput_advantage_after_percent": 18.956754174898304
+}

@@ -1,5 +1,6 @@
 #include "tree_compress.h"
 
+#include "logging.h"
 #include "utils.h"
 
 #include <stdexcept>
@@ -157,6 +158,7 @@ CompressedPathResponse compress_path_response(
   std::vector<uint64_t> out_c0 = c0_e, out_c1(n2, 0);
   // 两个待切换分量：c = 0 对应 a_e（配 s_e 的 KSK），c = 1 对应 Y a_o（配 s_o 的）。
   const std::vector<uint64_t> *components[2] = {&a_e, &ya_o};
+  TIME_START(TREE_COMPRESS_KEY_SWITCH_TIME);
   for (size_t c = 0; c < 2; ++c) {
     // base-B（B = 2^{base_log2}）数字分解：digit 变小，digit × e_ksk 的噪声
     // 才被控制在 ~d*l2*B*|e_fresh|*sqrt(n2) ~ 2^39 << Delta/2 ~ 2^44。
@@ -171,6 +173,7 @@ CompressedPathResponse compress_path_response(
                       q);
     }
   }
+  TIME_END(TREE_COMPRESS_KEY_SWITCH_TIME);
 
   // 最后一步：居中降模到小响应模数 q2（小环版的 Milestone-5 模切换）：
   // x -> round(x * q2 / q)。缩放因子 q2/q ~ 2^-36 把携带噪声压回 ~100、
@@ -187,8 +190,10 @@ CompressedPathResponse compress_path_response(
           (static_cast<uint128_t>(x) * q2 + q / 2) / q) % q2;
     }
   };
+  TIME_START(TREE_COMPRESS_MOD_SWITCH_TIME);
   rescale(out_c0);
   rescale(out_c1);
+  TIME_END(TREE_COMPRESS_MOD_SWITCH_TIME);
 
   // 组装响应：密文本体 + 解码所需的公开元数据（模数、层数、小环偏移表）。
   CompressedPathResponse response;

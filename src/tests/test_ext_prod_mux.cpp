@@ -23,7 +23,8 @@ void PirTest::test_ext_prod_mux() {
     b[i] = (3 * i + 9) % t;
   }
 
-  GSWEval data_gsw(pir_params, pir_params.get_l(), pir_params.get_base_log2());
+  GSWEval data_gsw(pir_params, pir_params.get_l(), pir_params.get_base_log2(),
+                   pir_params.get_ep_low_bits());
   std::vector<uint64_t> one(coeff_count, 0); one[0] = 1;
   std::vector<uint64_t> zero(coeff_count, 0);
   GSWCt one_gsw = data_gsw.plain_to_gsw(one, client.rlwe_sk_, rng);

@@ -1,0 +1,7 @@
+{
+  "held_at_utc": "2026-09-06T00:35:33.855937+00:00",
+  "parent_pid": 5286,
+  "current_worker_pid": 6225,
+  "current_job": "4gb tree_g32",
+  "script_commit": "2f2e353"
+}

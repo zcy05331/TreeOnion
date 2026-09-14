@@ -1,0 +1,27 @@
++---------------------------------------------------+
+|               ENCRYPTION PARAMETERS               |
++---------------------------------------------------+
+|  seal_params_.poly_modulus_degree  = 8192
+|  seal_params_.coeff_modulus().bit_count   = [42 + 58 + 58 + 60] bits
+|  seal_params_.coeff_modulus().size = 4
+|  seal_params_.plain_modulus().bit_count = 28
++---------------------------------------------------+
+BatchPIRServer: Generating synthetic balanced color buckets...
+BatchPIRServer: Bucket Statistics:
+===================
+BatchPIRServer: Number of Buckets: 26
+Max Bucket Size: 5162221
+BatchPIRServer: Synthetic buckets generated.
+BatchPIRServer: Preparing PIR servers......
+dim_size = 64
++---------------------------------------------------+
+|                 PIR PARAMETERS                    |
++---------------------------------------------------+
+|  num_entries_                  = 5162221
+|  num_rounded_entries_          = 5165056
+|  entry_size_                   = 32
+|  num_columns_per_entry_        = 10
+|  db_ptx_                       = 807040
+|  dimensions_                   = [ 64 64 1261 ]
++---------------------------------------------------+
+BatchPIRServer: Converting and merging databases. This may take some time...

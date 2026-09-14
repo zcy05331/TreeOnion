@@ -1,0 +1,37 @@
+CMake Deprecation Warning at CMakeLists.txt:1 (cmake_minimum_required):
+  Compatibility with CMake < 3.5 will be removed from a future version of
+  CMake.
+
+  Update the VERSION argument <min> value or use a ...<max> suffix to tell
+  CMake that the project does not need compatibility with older versions.
+
+
+-- The C compiler identification is GNU 13.3.0
+-- The CXX compiler identification is GNU 13.3.0
+-- Detecting C compiler ABI info
+-- Detecting C compiler ABI info - done
+-- Check for working C compiler: /usr/bin/cc - skipped
+-- Detecting C compile features
+-- Detecting C compile features - done
+-- Detecting CXX compiler ABI info
+-- Detecting CXX compiler ABI info - done
+-- Check for working CXX compiler: /usr/bin/c++ - skipped
+-- Detecting CXX compile features
+-- Detecting CXX compile features - done
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD - Success
+-- Found Threads: TRUE  
+-- Microsoft SEAL -> Version 4.0.0 detected
+-- Microsoft SEAL -> Targets available: SEAL::seal
+-- Configuring done (0.8s)
+-- Generating done (0.0s)
+-- Build files have been written to: /users/zcy05331/generic-superrecord-bench-20260904/treepir-backend-tuning-20260905/deps/TreePIR/VBPIR_TreePIR/build
+[ 12%] Building CXX object CMakeFiles/vbpir_treepir.dir/src/batchpirparams.cpp.o
+[ 25%] Building CXX object CMakeFiles/vbpir_treepir.dir/src/batchpirclient.cpp.o
+[ 37%] Building CXX object CMakeFiles/vbpir_treepir.dir/src/client.cpp.o
+[ 50%] Building CXX object CMakeFiles/vbpir_treepir.dir/src/batchpirserver.cpp.o
+[ 62%] Building CXX object CMakeFiles/vbpir_treepir.dir/src/main.cpp.o
+[ 87%] Building CXX object CMakeFiles/vbpir_treepir.dir/src/server.cpp.o
+[ 87%] Building CXX object CMakeFiles/vbpir_treepir.dir/src/pirparams.cpp.o
+[100%] Linking CXX executable bin/vbpir_treepir
+[100%] Built target vbpir_treepir

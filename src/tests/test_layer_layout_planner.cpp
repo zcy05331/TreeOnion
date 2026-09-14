@@ -1,6 +1,7 @@
 #include "tests.h"
 #include "layer_layout_planner.h"
 #include "merkle_baseline.h"
+#include "merkle_benchmark.h"
 
 #include <algorithm>
 #include <filesystem>
@@ -10,6 +11,8 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
+
+void test_layer_layout_large_tiers();
 
 namespace {
 
@@ -65,141 +68,34 @@ std::string replace_first(std::string text, const std::string &from,
   return text.replace(at, from.size(), to);
 }
 
-}  // namespace
-
-void PirTest::test_layer_layout_planner() {
-  require_applicable(paper_config_active(),
-                     paper_config_reason("the layer layout planner"));
-  print_func_name(__FUNCTION__);
-
-  // Pruned expansion geometry, checked by hand against fast_expand_qry's walk.
-  require_test(count_pruned_expansion_substitutions(1, 0) == 0, "h=0 count");
-  require_test(count_pruned_expansion_substitutions(2, 1) == 1, "h=1 count");
-  require_test(count_pruned_expansion_substitutions(3, 2) == 3, "u=3 h=2");
-  require_test(count_pruned_expansion_substitutions(2, 2) == 2,
-               "right subtree pruned at u=2 h=2");
-  require_test(count_pruned_expansion_substitutions(4, 2) == 3, "full h=2");
-
-  // H=24 fixture: the level-24 frontier is exactly h=9 and h=10.
-  const PirParams reference = PirParams().with_layout({349526, 10, true});
-  const std::vector<LayerLayoutCandidate> candidates =
-      enumerate_layer_layout_candidates(24, 96, reference);
-  require_test(!candidates.empty(), "level 24 has legal candidates");
-  for (const LayerLayoutCandidate &c : candidates) {
-    const PirParams &p = c.layout.params;
-    const LayerLayoutFeatures &f = c.features;
-    require_test(reference.scheme_compatible(p), "candidate scheme drift");
-    require_test(p.get_num_other_dims() <= reference.get_num_other_dims(),
-                 "candidate exceeds reference dimensions");
-    require_test(f.useful_expanded_ciphertexts ==
-                     p.get_fst_dim_sz() + p.get_l() * p.get_num_other_dims(),
-                 "useful expanded identity");
-    require_test(f.first_dim_query_ntts == 2 * p.get_fst_dim_sz(),
-                 "query NTT identity");
-    require_test(f.selector_rows_to_complete ==
-                     p.get_l() * p.get_num_other_dims(),
-                 "selector rows identity");
-    require_test(f.inverse_ntts == 2 * p.get_other_dim_sz(),
-                 "inverse NTT identity");
-    require_test(f.cmux_count == p.get_other_dim_sz() - 1, "cmux identity");
-    if (p.get_composite_rns().enabled) {
-      require_test(f.crt_coefficients_to_compose ==
-                       2 * p.get_poly_degree() * p.get_other_dim_sz(),
-                   "CRT compose identity");
+void require_median_sample_contract() {
+  // median_server_ms_of is the one arithmetic every measured layout passes
+  // through: the sweep stores its result and the loader recomputes it to
+  // reject a drifted profile (see the round-trip check below). Both calls go
+  // to this function, so a shared error survives the round trip; and every
+  // synthetic measurement in this file carries a single sample, which cannot
+  // tell a median from a mean or from an unsorted middle element. Pin it
+  // directly on inputs where those three answers differ.
+  {
+    // odd, unordered: median 2, mean 31, unsorted middle 1.
+    require_test(median_server_ms_of({90.0, 1.0, 2.0}) == 2.0,
+                 "median of an odd sample count is the sorted middle");
+    // even, unordered: median 2.5, mean 26.5, either middle alone 2 or 3.
+    require_test(median_server_ms_of({100.0, 1.0, 3.0, 2.0}) == 2.5,
+                 "median of an even sample count averages the two middles");
+    require_test(median_server_ms_of({7.5}) == 7.5,
+                 "median of one sample is that sample");
+    bool rejected_empty = false;
+    try {
+      median_server_ms_of({});
+    } catch (const std::invalid_argument &) {
+      rejected_empty = true;
     }
-    require_test(f.padded_plaintexts == p.get_num_pt() &&
-                     f.padding_plaintexts ==
-                         p.get_num_pt() - p.get_target_num_pt(),
-                 "padding identity");
-    require_test(f.logical_padded_bytes ==
-                     uint64_t{p.get_num_pt()} * p.get_pt_size(),
-                 "padded bytes identity");
+    require_test(rejected_empty, "median of an empty sample set is refused");
   }
-  const std::vector<LayerLayoutCandidate> frontier =
-      pareto_layer_layout_candidates(candidates);
-  require_test(frontier.size() == 2, "level 24 frontier has two candidates");
-  const LayerLayoutCandidate &h9 = candidate_with_height(frontier, 9);
-  const LayerLayoutCandidate &h10 = candidate_with_height(frontier, 10);
-  require_test(h9.features.first_dim_size == 256 &&
-                   h9.features.other_dim_size == 683 &&
-                   h9.features.padded_plaintexts == 174848 &&
-                   h9.features.useful_expanded_ciphertexts == 316 &&
-                   h9.features.cmux_count == 682,
-               "h=9 frontier candidate");
-  require_test(h10.features.first_dim_size == 512 &&
-                   h10.features.other_dim_size == 342 &&
-                   h10.features.padded_plaintexts == 175104 &&
-                   h10.features.useful_expanded_ciphertexts == 566 &&
-                   h10.features.cmux_count == 341,
-               "h=10 frontier candidate");
-  require_test(candidates[legacy_layer_layout_candidate(candidates)]
-                       .features.expansion_height == 9,
-               "legacy picks the minimal-padding h=9 layout");
+}
 
-  // Synthetic profile: h=10 measured faster than h=9 at level 24.
-  LayerLayoutProfile profile;
-  profile.environment = detect_layer_layout_environment(
-      reference, "test-commit", "Benchmark", "CONFIG_N2048_K1_COMP");
-  profile.tree_height = 24;
-  profile.nodes_per_plaintext = 96;
-  profile.warmups = 0;
-  profile.measured_trials = 1;
-  profile.trial_seed = 5723628103747520850ULL;
-  profile.measurements.push_back(synthetic_measurement(h9, 100.0));
-  profile.measurements.push_back(synthetic_measurement(h10, 90.0));
-
-  const LayerLayoutSelection permitted =
-      select_layer_layouts(profile, 24, 96, reference, 1.01);
-  require_test(permitted.expansion_heights.size() == 24, "one height per level");
-  require_test(permitted.expansion_heights[23] == 10,
-               "1% budget admits the faster h=10 layout");
-  require_test(permitted.selected_total_padded_plaintexts ==
-                   permitted.legacy_total_padded_plaintexts + 256,
-               "h=10 costs exactly 256 extra plaintexts");
-  const LayerLayoutSelection zero_budget =
-      select_layer_layouts(profile, 24, 96, reference, 1.0);
-  require_test(zero_budget.expansion_heights[23] == 9,
-               "zero padding budget keeps h=9");
-  require_test(zero_budget.selected_total_padded_plaintexts ==
-                   zero_budget.legacy_total_padded_plaintexts,
-               "zero budget keeps the legacy total");
-  // Within 2% the deterministic order (smaller scan bytes first) wins.
-  profile.measurements[1].median_server_ms = 99.0;
-  profile.measurements[1].server_samples_ms = {99.0};
-  const LayerLayoutSelection tied =
-      select_layer_layouts(profile, 24, 96, reference, 1.01);
-  require_test(tied.expansion_heights[23] == 9,
-               "2% tie rule prefers the smaller layout");
-  profile.measurements[1].median_server_ms = 90.0;
-  profile.measurements[1].server_samples_ms = {90.0};
-
-  // JSON round trip and profile validation.
-  const std::string path =
-      (std::filesystem::temp_directory_path() / "layer-layout-planner-test.json")
-          .string();
-  save_layer_layout_profile(profile, path);
-  const LayerLayoutProfile loaded = load_layer_layout_profile(path);
-  require_test(loaded.trial_seed == profile.trial_seed &&
-                   loaded.tree_height == 24 && loaded.nodes_per_plaintext == 96 &&
-                   loaded.measurements.size() == 2 &&
-                   loaded.measurements[1].features.padded_plaintexts == 175104 &&
-                   loaded.measurements[1].median_server_ms == 90.0 &&
-                   loaded.environment.cpu == profile.environment.cpu,
-               "profile JSON round trip");
-  const LayerLayoutProfileEnvironment runtime =
-      detect_layer_layout_environment(reference, "other", "Benchmark", "X");
-  require_test(describe_layer_layout_profile_mismatch(loaded, runtime, 24, 96)
-                   .empty(),
-               "same machine and scheme validate");
-  require_test(!describe_layer_layout_profile_mismatch(loaded, runtime, 22, 96)
-                    .empty(),
-               "tree height mismatch is reported");
-  LayerLayoutProfileEnvironment other_cpu = runtime;
-  other_cpu.cpu = "some other cpu";
-  require_test(!describe_layer_layout_profile_mismatch(loaded, other_cpu, 24, 96)
-                    .empty(),
-               "cpu mismatch is reported");
-
+void require_environment_mismatch_fields(const LayerLayoutProfile &loaded, const LayerLayoutProfileEnvironment &runtime) {
   // Every environment field the profile is validated on, mutated one at a
   // time, must be named in the mismatch description.
   {
@@ -242,7 +138,9 @@ void PirTest::test_layer_layout_planner() {
                      .empty(),
                  "commit/build/config labels must not block a profile");
   }
+}
 
+void require_malformed_profile_rejections(const std::string &path) {
   // Malformed profile files are rejected with a specific reason.
   {
     const std::string text = read_text(path);
@@ -304,7 +202,9 @@ void PirTest::test_layer_layout_planner() {
     }
     require_test(missing_file, "loader did not report a missing file");
   }
+}
 
+void require_selector_rejections(const LayerLayoutProfile &loaded, const PirParams &reference) {
   // Structural rejections of the selector and the enumerator.
   {
     LayerLayoutProfile drifted = loaded;
@@ -360,7 +260,9 @@ void PirTest::test_layer_layout_planner() {
                  }),
                  "profiled policy accepted a null profile");
   }
+}
 
+void require_multilevel_knapsack_selection(const LayerLayoutProfile &loaded, const PirParams &reference) {
   // Multi-level knapsack under a binding budget: levels 22, 23 and 24 each
   // get a measured legacy layout and one measured alternative that costs
   // extra padding and saves time. The budget admits some but not all
@@ -459,6 +361,177 @@ void PirTest::test_layer_layout_planner() {
                          capped.selected_total_padded_plaintexts,
                  "selection bookkeeping matches the chosen heights");
   }
+}
+
+
+}  // namespace
+
+void PirTest::test_layer_layout_planner() {
+  require_median_sample_contract();
+
+
+  require_applicable(paper_config_active(),
+                     paper_config_reason("the layer layout planner"));
+  print_func_name(__FUNCTION__);
+
+  // Pruned expansion geometry, checked by hand against fast_expand_qry's walk.
+  require_test(count_pruned_expansion_substitutions(1, 0) == 0, "h=0 count");
+  require_test(count_pruned_expansion_substitutions(2, 1) == 1, "h=1 count");
+  require_test(count_pruned_expansion_substitutions(3, 2) == 3, "u=3 h=2");
+  require_test(count_pruned_expansion_substitutions(2, 2) == 2,
+               "right subtree pruned at u=2 h=2");
+  require_test(count_pruned_expansion_substitutions(4, 2) == 3, "full h=2");
+
+  // H=24 fixture: the level-24 frontier is exactly h=9 and h=10.
+  const PirParams reference = PirParams().with_layout({349526, 10, true});
+  const std::vector<LayerLayoutCandidate> candidates =
+      enumerate_layer_layout_candidates(24, 96, reference);
+  require_test(!candidates.empty(), "level 24 has legal candidates");
+  for (const LayerLayoutCandidate &c : candidates) {
+    const PirParams &p = c.layout.params;
+    const LayerLayoutFeatures &f = c.features;
+    require_test(reference.scheme_compatible(p), "candidate scheme drift");
+    require_test(p.get_num_other_dims() <= reference.get_num_other_dims(),
+                 "candidate exceeds reference dimensions");
+    require_test(f.useful_expanded_ciphertexts ==
+                     p.get_fst_dim_sz() + p.get_l() * p.get_num_other_dims(),
+                 "useful expanded identity");
+    require_test(f.first_dim_query_ntts == 2 * p.get_fst_dim_sz(),
+                 "query NTT identity");
+    require_test(f.selector_rows_to_complete ==
+                     p.get_l() * p.get_num_other_dims(),
+                 "selector rows identity");
+    require_test(f.inverse_ntts == 2 * p.get_other_dim_sz(),
+                 "inverse NTT identity");
+    require_test(f.cmux_count == p.get_other_dim_sz() - 1, "cmux identity");
+    if (p.get_composite_rns().enabled) {
+      require_test(f.crt_coefficients_to_compose ==
+                       2 * p.get_poly_degree() * p.get_other_dim_sz(),
+                   "CRT compose identity");
+    }
+    require_test(f.padded_plaintexts == p.get_num_pt() &&
+                     f.padding_plaintexts ==
+                         p.get_num_pt() - p.get_target_num_pt(),
+                 "padding identity");
+    require_test(f.logical_padded_bytes ==
+                     uint64_t{p.get_num_pt()} * p.get_pt_size(),
+                 "padded bytes identity");
+  }
+  const std::vector<LayerLayoutCandidate> frontier =
+      pareto_layer_layout_candidates(candidates);
+  require_test(frontier.size() == 2, "level 24 frontier has two candidates");
+  const LayerLayoutCandidate &h9 = candidate_with_height(frontier, 9);
+  const LayerLayoutCandidate &h10 = candidate_with_height(frontier, 10);
+  require_test(h9.features.first_dim_size == 256 &&
+                   h9.features.other_dim_size == 683 &&
+                   h9.features.padded_plaintexts == 174848 &&
+                   h9.features.useful_expanded_ciphertexts == 316 &&
+                   h9.features.cmux_count == 682,
+               "h=9 frontier candidate");
+  require_test(h10.features.first_dim_size == 512 &&
+                   h10.features.other_dim_size == 342 &&
+                   h10.features.padded_plaintexts == 175104 &&
+                   h10.features.useful_expanded_ciphertexts == 566 &&
+                   h10.features.cmux_count == 341,
+               "h=10 frontier candidate");
+  require_test(candidates[legacy_layer_layout_candidate(candidates)]
+                       .features.expansion_height == 9,
+               "legacy picks the minimal-padding h=9 layout");
+
+  // Synthetic profile: h=10 measured faster than h=9 at level 24.
+  LayerLayoutProfile profile;
+  profile.environment = detect_layer_layout_environment(
+      reference, "test-commit", "Benchmark", "CONFIG_N2048_K1_COMP");
+  profile.tree_height = 24;
+  profile.nodes_per_plaintext = 96;
+  profile.warmups = 0;
+  profile.measured_trials = 1;
+  profile.trial_seed = 5723628103747520850ULL;
+  profile.measurements.push_back(synthetic_measurement(h9, 100.0));
+  profile.measurements.push_back(synthetic_measurement(h10, 90.0));
+
+  const LayerLayoutSelection permitted =
+      select_layer_layouts(profile, 24, 96, reference, 1.01);
+  require_test(permitted.expansion_heights.size() == 24, "one height per level");
+  require_test(permitted.expansion_heights[23] == 10,
+               "1% budget admits the faster h=10 layout");
+  require_test(permitted.selected_total_padded_plaintexts ==
+                   permitted.legacy_total_padded_plaintexts + 256,
+               "h=10 costs exactly 256 extra plaintexts");
+  const LayerLayoutSelection zero_budget =
+      select_layer_layouts(profile, 24, 96, reference, 1.0);
+  require_test(zero_budget.expansion_heights[23] == 9,
+               "zero padding budget keeps h=9");
+  require_test(zero_budget.selected_total_padded_plaintexts ==
+                   zero_budget.legacy_total_padded_plaintexts,
+               "zero budget keeps the legacy total");
+  // Measured latency is primary even when the gain is smaller than 2%.
+  profile.measurements[1].median_server_ms = 99.0;
+  profile.measurements[1].server_samples_ms = {99.0};
+  const LayerLayoutSelection faster =
+      select_layer_layouts(profile, 24, 96, reference, 1.01);
+  require_test(faster.expansion_heights[23] == 10,
+               "latency priority keeps the faster layout despite extra padding");
+  profile.measurements[1].median_server_ms = 100.0;
+  profile.measurements[1].server_samples_ms = {100.0};
+  const LayerLayoutSelection tied =
+      select_layer_layouts(profile, 24, 96, reference, 1.01);
+  require_test(tied.expansion_heights[23] == 9,
+               "only equal latency prefers the smaller layout");
+  profile.measurements[1].median_server_ms = 90.0;
+  profile.measurements[1].server_samples_ms = {90.0};
+
+  // Aggregate throughput follows the mean, even when the medians disagree.
+  LayerLayoutProfile throughput_profile = profile;
+  throughput_profile.measured_trials = 3;
+  throughput_profile.measurements[0].server_samples_ms = {1.0, 1.0, 40.0};
+  throughput_profile.measurements[0].median_server_ms = 1.0;
+  throughput_profile.measurements[1].server_samples_ms = {10.0, 10.0, 10.0};
+  throughput_profile.measurements[1].median_server_ms = 10.0;
+  const LayerLayoutSelection throughput_choice =
+      select_layer_layouts(throughput_profile, 24, 96, reference, 1.01);
+  require_test(throughput_choice.expansion_heights[23] == 10 &&
+                   throughput_choice.predicted_selected_ms == 10.0,
+               "maximum throughput chooses the lower mean, not the lower median");
+
+  // JSON round trip and profile validation.
+  const std::string path =
+      (std::filesystem::temp_directory_path() / "layer-layout-planner-test.json")
+          .string();
+  save_layer_layout_profile(profile, path);
+  const LayerLayoutProfile loaded = load_layer_layout_profile(path);
+  require_test(loaded.trial_seed == profile.trial_seed &&
+                   loaded.tree_height == 24 && loaded.nodes_per_plaintext == 96 &&
+                   loaded.measurements.size() == 2 &&
+                   loaded.measurements[1].features.padded_plaintexts == 175104 &&
+                   loaded.measurements[1].median_server_ms == 90.0 &&
+                   loaded.environment.cpu == profile.environment.cpu,
+               "profile JSON round trip");
+  const LayerLayoutProfileEnvironment runtime =
+      detect_layer_layout_environment(reference, "other", "Benchmark", "X");
+  require_test(describe_layer_layout_profile_mismatch(loaded, runtime, 24, 96)
+                   .empty(),
+               "same machine and scheme validate");
+  require_test(!describe_layer_layout_profile_mismatch(loaded, runtime, 22, 96)
+                    .empty(),
+               "tree height mismatch is reported");
+  LayerLayoutProfileEnvironment other_cpu = runtime;
+  other_cpu.cpu = "some other cpu";
+  require_test(!describe_layer_layout_profile_mismatch(loaded, other_cpu, 24, 96)
+                    .empty(),
+               "cpu mismatch is reported");
+
+  require_environment_mismatch_fields(loaded, runtime);
+
+
+  require_malformed_profile_rejections(path);
+
+
+  require_selector_rejections(loaded, reference);
+
+
+  require_multilevel_knapsack_selection(loaded, reference);
+
 
   // Policy-aware planner: profiled selection versus the frozen legacy plan.
   const std::vector<LayerLayout> legacy = plan_layer_layouts(24, 96, reference);
@@ -502,4 +575,79 @@ void PirTest::test_layer_layout_planner() {
                    1074843648ULL,
                "legacy policy keeps the frozen H=24 padded total");
   std::filesystem::remove(path);
+}
+
+// The 4 GB (H=26) and 8 GB (H=27) paper rows. run_merkle_benchmark_suite calls
+// estimate_merkle_benchmark_peak_bytes for every workload above 2^24 leaves
+// before it touches a database, and the estimate plans the layerwise tier
+// under the frozen h=10 reference of that height. The planner checks above
+// stop at H=24 and the peak-bytes check in test_merkle_benchmark_stats
+// compares 2^8 with 2^12, so a with_layout legality change at level 26 or 27
+// would first surface when the CloudLab 8gb job aborts at startup. The byte
+// totals are frozen like the H=24 padded total: the gate compares the estimate
+// against physical memory minus 2 GiB, so any drift changes which machines may
+// run a tier and what the run stores.
+//
+// Where the four numbers come from: all of them are read off this same planner
+// and estimator at the frozen h=10 reference, so they are not independent
+// truth, only a fingerprint of a plan that the published 4 GB and 8 GB rows
+// were produced with. A change in them is a regression unless the planner or
+// the estimator was deliberately changed; if it was, re-derive them from the
+// new code, and check the 2 GiB gate still admits the CloudLab machines the
+// paper rows are measured on before updating the numbers here.
+void test_layer_layout_large_tiers() {
+  require_applicable(paper_config_active(),
+                     paper_config_reason("the layer layout planner"));
+  print_func_name(__FUNCTION__);
+
+  const uint64_t estimate26 = estimate_merkle_benchmark_peak_bytes(size_t{1} << 26);
+  const uint64_t estimate27 = estimate_merkle_benchmark_peak_bytes(size_t{1} << 27);
+  require_test(estimate26 == 22913941504ULL && estimate27 == 45822181376ULL,
+               "frozen 4 GB / 8 GB peak memory estimates drifted");
+
+  const auto check_plan = [](size_t tree_height, uint64_t frozen_padded_bytes) {
+    const MerkleWorkload workload =
+        make_benchmark_workload(size_t{1} << tree_height);
+    const PirParams reference = make_benchmark_reference(workload);
+    require_test(reference.get_expan_height() == 10,
+                 "large-tier reference is not the frozen h=10 layout");
+    const std::vector<LayerLayout> plan =
+        plan_layer_layouts(tree_height, 96, reference);
+    require_test(plan.size() == tree_height, "one layout per level");
+    for (size_t level = 1; level <= tree_height; ++level) {
+      const LayerLayout &layout = plan[level - 1];
+      const PirParams &p = layout.params;
+      const size_t node_count = size_t{1} << level;
+      const std::string where =
+          "H=" + std::to_string(tree_height) + " level " + std::to_string(level);
+      require_test(layout.level == level && layout.node_count == node_count &&
+                       layout.target_num_pt ==
+                           utils::roundup_div(node_count, size_t{96}) &&
+                       p.get_target_num_pt() == layout.target_num_pt,
+                   where + ": level bookkeeping");
+      require_test(layout.direct_return == (level <= 6),
+                   where + ": direct return exactly for levels that fit one "
+                           "plaintext");
+      require_test(reference.scheme_compatible(p),
+                   where + ": layout drifted from the reference scheme");
+      require_test(p.get_num_other_dims() <= reference.get_num_other_dims() &&
+                       p.get_expan_height() <= reference.get_expan_height(),
+                   where + ": layout exceeds the reference's dimension count "
+                           "or expansion height");
+      require_test(p.get_num_pt() >= layout.target_num_pt,
+                   where + ": padded plaintext count below the level's target");
+    }
+    require_test(sum_padded_bytes(plan) == frozen_padded_bytes,
+                 "H=" + std::to_string(tree_height) +
+                     " frozen padded total drifted");
+    return plan;
+  };
+  const std::vector<LayerLayout> plan26 = check_plan(26, 4296364032ULL);
+  const std::vector<LayerLayout> plan27 = check_plan(27, 8591659008ULL);
+  BENCH_PRINT("large tiers: peak estimate 4 GB " << estimate26 << " B, 8 GB "
+              << estimate27 << " B; padded totals " << sum_padded_bytes(plan26)
+              << " / " << sum_padded_bytes(plan27) << " B, level-27 layout h="
+              << plan27.back().params.get_expan_height() << " with "
+              << plan27.back().params.get_num_other_dims()
+              << " remaining dimensions");
 }

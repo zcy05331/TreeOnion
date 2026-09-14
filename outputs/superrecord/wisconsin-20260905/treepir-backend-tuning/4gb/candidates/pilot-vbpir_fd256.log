@@ -1,0 +1,32 @@
++---------------------------------------------------+
+|               ENCRYPTION PARAMETERS               |
++---------------------------------------------------+
+|  seal_params_.poly_modulus_degree  = 8192
+|  seal_params_.coeff_modulus().bit_count   = [42 + 58 + 58 + 60] bits
+|  seal_params_.coeff_modulus().size = 4
+|  seal_params_.plain_modulus().bit_count = 28
++---------------------------------------------------+
+BatchPIRServer: Generating synthetic balanced color buckets...
+BatchPIRServer: Bucket Statistics:
+===================
+BatchPIRServer: Number of Buckets: 26
+Max Bucket Size: 5162221
+BatchPIRServer: Synthetic buckets generated.
+BatchPIRServer: Preparing PIR servers......
+dim_size = 256
++---------------------------------------------------+
+|                 PIR PARAMETERS                    |
++---------------------------------------------------+
+|  num_entries_                  = 5162221
+|  num_rounded_entries_          = 5177344
+|  entry_size_                   = 32
+|  num_columns_per_entry_        = 10
+|  db_ptx_                       = 202240
+|  dimensions_                   = [ 256 256 79 ]
++---------------------------------------------------+
+BatchPIRServer: Converting and merging databases. This may take some time...
+BatchPIRServer: Processed database 1 of 26BatchPIRServer: Processed database 2 of 26BatchPIRServer: Processed database 3 of 26BatchPIRServer: Processed database 4 of 26BatchPIRServer: Processed database 5 of 26BatchPIRServer: Processed database 6 of 26BatchPIRServer: Processed database 7 of 26BatchPIRServer: Processed database 8 of 26BatchPIRServer: Processed database 9 of 26BatchPIRServer: Processed database 10 of 26BatchPIRServer: Processed database 11 of 26BatchPIRServer: Processed database 12 of 26BatchPIRServer: Processed database 13 of 26BatchPIRServer: Processed database 14 of 26BatchPIRServer: Processed database 15 of 26BatchPIRServer: Processed database 16 of 26BatchPIRServer: Processed database 17 of 26BatchPIRServer: Processed database 18 of 26BatchPIRServer: Processed database 19 of 26BatchPIRServer: Processed database 20 of 26BatchPIRServer: Processed database 21 of 26BatchPIRServer: Processed database 22 of 26BatchPIRServer: Processed database 23 of 26BatchPIRServer: Processed database 24 of 26BatchPIRServer: Processed database 25 of 26BatchPIRServer: Processed database 26 of 26
+BatchPIRServer: Database converted to PIR DB and merged successfully!
+BatchPIRServer: Database is NTT processed!
+BatchPIRServer: PIR servers preparation complete.
+TreePIR benchmark error: Error: noise budget is zero

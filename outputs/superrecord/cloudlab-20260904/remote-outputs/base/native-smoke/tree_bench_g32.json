@@ -1,0 +1,50 @@
+{
+  "scheme": "legacy-tree-g32",
+  "leaf_count": 1024,
+  "node_entry_bits": 256,
+  "actual_logical_bytes": 65504,
+  "actual_logical_bytes_scope": "full_tree_all_nodes",
+  "warmups": 1,
+  "measured_trials": 2,
+  "trial_seed": 7,
+  "offline_setup_ms": 6.4756830000000001,
+  "diagnostic_non_comparable_32B_payload": false,
+  "mode": "mvp",
+  "communication": {
+    "modeled_query_bytes_per_trial": 14880,
+    "actual_response_bytes_per_trial": 11264,
+    "modeled_helper_key_bytes": 1607040,
+    "modeled_compression_key_bytes": 0,
+    "query_bytes_kind": "modeled",
+    "response_bytes_kind": "actual",
+    "helper_key_bytes_kind": "modeled",
+    "compression_key_bytes_kind": "modeled"
+  },
+  "stage_definitions": {
+    "query_expand": "ExpandBFV over the packed tree query",
+    "selector_completion": "RLWE-star selector rows completed to RGSW",
+    "pyramid": "alpha pyramid construction and server-domain preparation",
+    "scan_core": "composite m32 first-dimension matrix multiplication core",
+    "scan_finalize": "composite m32 CRT reconstruction and inverse NTT finalize",
+    "fold": "beta-dimension CMux folding",
+    "rotate": "private gamma rotation",
+    "project": "stride projection and BV key switching",
+    "pack": "public shifts and response accumulation",
+    "switch": "same-ring response modulus switch or compressed response ring switch",
+    "response_serialize": "actual response wire serialization outside server timing",
+    "client_decode": "client decryption and path extraction/decode",
+    "diagnostic_scan_combined": "legacy combined first-dimension scan timer; overlaps scan_core plus scan_finalize",
+    "diagnostic_response_ring_switch_key_switch": "compressed-response even/odd split plus small-ring gadget key switching; overlaps switch",
+    "diagnostic_response_ring_switch_modswitch": "compressed-response final full-q to small-q rescale; overlaps switch"
+  },
+  "metadata": {
+    "chunk_bits": "12",
+    "g": "32",
+    "hardware_target": "CloudLab Xeon 6142 AVX-512 376GiB RAM",
+    "payload_note": "g=32 carries full 32-byte nodes in 12-bit chunks"
+  },
+  "samples": [
+    {"trial": 0, "leaf": 297, "client_query_ms": 0.19336800000000001, "server_total_ms": 69.606193999999988, "stages_ms": {"fold": 0.00042900000000000002, "pack": 0.071485000000000007, "project": 11.852983, "pyramid": 3.3070599999999999, "query_expand": 14.518822999999999, "rotate": 14.015843, "scan_core": 5.0064889999999993, "scan_finalize": 2.3318219999999998, "selector_completion": 17.765059999999998, "switch": 0.61333400000000005}, "diagnostics_ms": {"scan_combined": 7.4190389999999988}, "response_serialize_ms": 0.52900700000000001, "actual_response_bytes": 11264, "client_decode_ms": 0.33365, "correct": true},
+    {"trial": 1, "leaf": 514, "client_query_ms": 0.181783, "server_total_ms": 69.653188, "stages_ms": {"fold": 0.00048000000000000001, "pack": 0.070930000000000007, "project": 11.859716000000002, "pyramid": 3.2262650000000002, "query_expand": 14.531397, "rotate": 14.108117999999999, "scan_core": 5.0263479999999996, "scan_finalize": 2.3132379999999997, "selector_completion": 17.775493000000001, "switch": 0.61322100000000002}, "diagnostics_ms": {"scan_combined": 7.4261549999999996}, "response_serialize_ms": 0.528223, "actual_response_bytes": 11264, "client_decode_ms": 0.33324900000000002, "correct": true}
+  ]
+}

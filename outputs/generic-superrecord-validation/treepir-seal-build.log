@@ -1,0 +1,160 @@
+[  7%] Building CXX object CMakeFiles/seal.dir/native/src/seal/batchencoder.cpp.o
+[  7%] Building CXX object CMakeFiles/seal.dir/native/src/seal/context.cpp.o
+[  7%] Building CXX object CMakeFiles/seal.dir/native/src/seal/ckks.cpp.o
+[ 10%] Building CXX object CMakeFiles/seal.dir/native/src/seal/ciphertext.cpp.o
+/Users/little_sun/Desktop/little_sun/26Summer/OnionPIRv2/.worktrees/generic-superrecord/.benchmarks/SEAL-4.0.0/native/src/seal/context.cpp:441:91: warning: unqualified call to 'std::move' [-Wunqualified-std-cast-call]
+  441 |         context_data_map_.emplace(make_pair(next_parms_id, make_shared<const ContextData>(move(next_context_data))));
+      |                                                                                           ^
+      |                                                                                           std::
+/Users/little_sun/Desktop/little_sun/26Summer/OnionPIRv2/.worktrees/generic-superrecord/.benchmarks/SEAL-4.0.0/native/src/seal/context.cpp:456:17: warning: unqualified call to 'std::move' [-Wunqualified-std-cast-call]
+  456 |         : pool_(move(pool)), sec_level_(sec_level)
+      |                 ^
+      |                 std::
+[ 12%] Building CXX object CMakeFiles/seal.dir/native/src/seal/decryptor.cpp.o
+/Users/little_sun/Desktop/little_sun/26Summer/OnionPIRv2/.worktrees/generic-superrecord/.benchmarks/SEAL-4.0.0/native/src/seal/decryptor.cpp:291:35: warning: unqualified call to 'std::move' [-Wunqualified-std-cast-call]
+  291 |         secret_key_array_.acquire(move(secret_key_array));
+      |                                   ^
+      |                                   std::
+[ 15%] Building CXX object CMakeFiles/seal.dir/native/src/seal/encryptionparams.cpp.o
+[ 17%] Building CXX object CMakeFiles/seal.dir/native/src/seal/encryptor.cpp.o
+2 warnings generated.
+[ 20%] Building CXX object CMakeFiles/seal.dir/native/src/seal/evaluator.cpp.o
+/Users/little_sun/Desktop/little_sun/26Summer/OnionPIRv2/.worktrees/generic-superrecord/.benchmarks/SEAL-4.0.0/native/src/seal/evaluator.cpp:808:35: warning: unqualified call to 'std::move' [-Wunqualified-std-cast-call]
+  808 |             bfv_square(encrypted, move(pool));
+      |                                   ^
+      |                                   std::
+/Users/little_sun/Desktop/little_sun/26Summer/OnionPIRv2/.worktrees/generic-superrecord/.benchmarks/SEAL-4.0.0/native/src/seal/evaluator.cpp:812:36: warning: unqualified call to 'std::move' [-Wunqualified-std-cast-call]
+  812 |             ckks_square(encrypted, move(pool));
+      |                                    ^
+      |                                    std::
+/Users/little_sun/Desktop/little_sun/26Summer/OnionPIRv2/.worktrees/generic-superrecord/.benchmarks/SEAL-4.0.0/native/src/seal/evaluator.cpp:816:35: warning: unqualified call to 'std::move' [-Wunqualified-std-cast-call]
+  816 |             bgv_square(encrypted, move(pool));
+      |                                   ^
+      |                                   std::
+/Users/little_sun/Desktop/little_sun/26Summer/OnionPIRv2/.worktrees/generic-superrecord/.benchmarks/SEAL-4.0.0/native/src/seal/evaluator.cpp:853:48: warning: unqualified call to 'std::move' [-Wunqualified-std-cast-call]
+  853 |             bfv_multiply(encrypted, encrypted, move(pool));
+      |                                                ^
+      |                                                std::
+/Users/little_sun/Desktop/little_sun/26Summer/OnionPIRv2/.worktrees/generic-superrecord/.benchmarks/SEAL-4.0.0/native/src/seal/evaluator.cpp:992:49: warning: unqualified call to 'std::move' [-Wunqualified-std-cast-call]
+  992 |             ckks_multiply(encrypted, encrypted, move(pool));
+      |                                                 ^
+      |                                                 std::
+/Users/little_sun/Desktop/little_sun/26Summer/OnionPIRv2/.worktrees/generic-superrecord/.benchmarks/SEAL-4.0.0/native/src/seal/evaluator.cpp:1054:48: warning: unqualified call to 'std::move' [-Wunqualified-std-cast-call]
+ 1054 |             bgv_multiply(encrypted, encrypted, move(pool));
+      |                                                ^
+      |                                                std::
+/Users/little_sun/Desktop/little_sun/26Summer/OnionPIRv2/.worktrees/generic-superrecord/.benchmarks/SEAL-4.0.0/native/src/seal/evaluator.cpp:1365:62: warning: unqualified call to 'std::move' [-Wunqualified-std-cast-call]
+ 1365 |             mod_switch_scale_to_next(encrypted, destination, move(pool));
+      |                                                              ^
+      |                                                              std::
+/Users/little_sun/Desktop/little_sun/26Summer/OnionPIRv2/.worktrees/generic-superrecord/.benchmarks/SEAL-4.0.0/native/src/seal/evaluator.cpp:1370:61: warning: unqualified call to 'std::move' [-Wunqualified-std-cast-call]
+ 1370 |             mod_switch_drop_to_next(encrypted, destination, move(pool));
+      |                                                             ^
+      |                                                             std::
+/Users/little_sun/Desktop/little_sun/26Summer/OnionPIRv2/.worktrees/generic-superrecord/.benchmarks/SEAL-4.0.0/native/src/seal/evaluator.cpp:1374:62: warning: unqualified call to 'std::move' [-Wunqualified-std-cast-call]
+ 1374 |             mod_switch_scale_to_next(encrypted, destination, move(pool));
+      |                                                              ^
+      |                                                              std::
+/Users/little_sun/Desktop/little_sun/26Summer/OnionPIRv2/.worktrees/generic-superrecord/.benchmarks/SEAL-4.0.0/native/src/seal/evaluator.cpp:1466:62: warning: unqualified call to 'std::move' [-Wunqualified-std-cast-call]
+ 1466 |             mod_switch_scale_to_next(encrypted, destination, move(pool));
+      |                                                              ^
+      |                                                              std::
+/Users/little_sun/Desktop/little_sun/26Summer/OnionPIRv2/.worktrees/generic-superrecord/.benchmarks/SEAL-4.0.0/native/src/seal/evaluator.cpp:1593:38: warning: unqualified call to 'std::move' [-Wunqualified-std-cast-call]
+ 1593 |             product_vec.emplace_back(move(temp));
+      |                                      ^
+      |                                      std::
+/Users/little_sun/Desktop/little_sun/26Summer/OnionPIRv2/.worktrees/generic-superrecord/.benchmarks/SEAL-4.0.0/native/src/seal/evaluator.cpp:1606:38: warning: unqualified call to 'std::move' [-Wunqualified-std-cast-call]
+ 1606 |             product_vec.emplace_back(move(temp));
+      |                                      ^
+      |                                      std::
+/Users/little_sun/Desktop/little_sun/26Summer/OnionPIRv2/.worktrees/generic-superrecord/.benchmarks/SEAL-4.0.0/native/src/seal/evaluator.cpp:1642:58: warning: unqualified call to 'std::move' [-Wunqualified-std-cast-call]
+ 1642 |         multiply_many(exp_vector, relin_keys, encrypted, move(pool));
+      |                                                          ^
+      |                                                          std::
+/Users/little_sun/Desktop/little_sun/26Summer/OnionPIRv2/.worktrees/generic-superrecord/.benchmarks/SEAL-4.0.0/native/src/seal/evaluator.cpp:1847:53: warning: unqualified call to 'std::move' [-Wunqualified-std-cast-call]
+ 1847 |             multiply_plain_normal(encrypted, plain, move(pool));
+      |                                                     ^
+      |                                                     std::
+/Users/little_sun/Desktop/little_sun/26Summer/OnionPIRv2/.worktrees/generic-superrecord/.benchmarks/SEAL-4.0.0/native/src/seal/evaluator.cpp:2355:97: warning: unqualified call to 'std::move' [-Wunqualified-std-cast-call]
+ 2355 |             apply_galois_inplace(encrypted, galois_tool->get_elt_from_step(steps), galois_keys, move(pool));
+      |                                                                                                 ^
+      |                                                                                                 std::
+[ 22%] Building CXX object CMakeFiles/seal.dir/native/src/seal/keygenerator.cpp.o
+1 warning generated.
+[ 25%] Building CXX object CMakeFiles/seal.dir/native/src/seal/kswitchkeys.cpp.o
+[ 27%] Building CXX object CMakeFiles/seal.dir/native/src/seal/memorymanager.cpp.o
+/Users/little_sun/Desktop/little_sun/26Summer/OnionPIRv2/.worktrees/generic-superrecord/.benchmarks/SEAL-4.0.0/native/src/seal/kswitchkeys.cpp:127:50: warning: unqualified call to 'std::move' [-Wunqualified-std-cast-call]
+  127 |                     new_keys[index].emplace_back(move(key));
+      |                                                  ^
+      |                                                  std::
+[ 30%] Building CXX object CMakeFiles/seal.dir/native/src/seal/modulus.cpp.o
+1 warning generated.
+[ 32%] Building CXX object CMakeFiles/seal.dir/native/src/seal/plaintext.cpp.o
+[ 35%] Building CXX object CMakeFiles/seal.dir/native/src/seal/randomgen.cpp.o
+15 warnings generated.
+[ 37%] Building CXX object CMakeFiles/seal.dir/native/src/seal/serialization.cpp.o
+[ 40%] Building CXX object CMakeFiles/seal.dir/native/src/seal/valcheck.cpp.o
+[ 42%] Building C object CMakeFiles/seal.dir/native/src/seal/util/blake2b.c.o
+[ 45%] Building C object CMakeFiles/seal.dir/native/src/seal/util/blake2xb.c.o
+[ 47%] Building CXX object CMakeFiles/seal.dir/native/src/seal/util/clipnormal.cpp.o
+[ 50%] Building CXX object CMakeFiles/seal.dir/native/src/seal/util/common.cpp.o
+[ 52%] Building CXX object CMakeFiles/seal.dir/native/src/seal/util/croots.cpp.o
+[ 55%] Building C object CMakeFiles/seal.dir/native/src/seal/util/fips202.c.o
+[ 57%] Building CXX object CMakeFiles/seal.dir/native/src/seal/util/globals.cpp.o
+[ 60%] Building CXX object CMakeFiles/seal.dir/native/src/seal/util/galois.cpp.o
+[ 62%] Building CXX object CMakeFiles/seal.dir/native/src/seal/util/hash.cpp.o
+/Users/little_sun/Desktop/little_sun/26Summer/OnionPIRv2/.worktrees/generic-superrecord/.benchmarks/SEAL-4.0.0/native/src/seal/util/croots.cpp:18:56: warning: unqualified call to 'std::move' [-Wunqualified-std-cast-call]
+   18 |             : degree_of_roots_(degree_of_roots), pool_(move(pool))
+      |                                                        ^
+      |                                                        std::
+[ 65%] Building CXX object CMakeFiles/seal.dir/native/src/seal/util/iterator.cpp.o
+/Users/little_sun/Desktop/little_sun/26Summer/OnionPIRv2/.worktrees/generic-superrecord/.benchmarks/SEAL-4.0.0/native/src/seal/util/galois.cpp:50:28: warning: unqualified call to 'std::move' [-Wunqualified-std-cast-call]
+   50 |             result.acquire(move(temp));
+      |                            ^
+      |                            std::
+1 warning generated.
+[ 67%] Building CXX object CMakeFiles/seal.dir/native/src/seal/util/mempool.cpp.o
+[ 70%] Building CXX object CMakeFiles/seal.dir/native/src/seal/util/numth.cpp.o
+[ 72%] Building CXX object CMakeFiles/seal.dir/native/src/seal/util/polyarithsmallmod.cpp.o
+/Users/little_sun/Desktop/little_sun/26Summer/OnionPIRv2/.worktrees/generic-superrecord/.benchmarks/SEAL-4.0.0/native/src/seal/util/numth.cpp:301:46: warning: unqualified call to 'std::move' [-Wunqualified-std-cast-call]
+  301 |                     destination.emplace_back(move(new_mod));
+      |                                              ^
+      |                                              std::
+1 warning generated.
+[ 75%] Building CXX object CMakeFiles/seal.dir/native/src/seal/util/rlwe.cpp.o
+[ 77%] Building CXX object CMakeFiles/seal.dir/native/src/seal/util/rns.cpp.o
+/Users/little_sun/Desktop/little_sun/26Summer/OnionPIRv2/.worktrees/generic-superrecord/.benchmarks/SEAL-4.0.0/native/src/seal/util/rns.cpp:19:21: warning: unqualified call to 'std::move' [-Wunqualified-std-cast-call]
+   19 |             : pool_(move(pool)), size_(rnsbase.size())
+      |                     ^
+      |                     std::
+/Users/little_sun/Desktop/little_sun/26Summer/OnionPIRv2/.worktrees/generic-superrecord/.benchmarks/SEAL-4.0.0/native/src/seal/util/rns.cpp:59:78: warning: unqualified call to 'std::move' [-Wunqualified-std-cast-call]
+   59 |         RNSBase::RNSBase(const RNSBase &copy, MemoryPoolHandle pool) : pool_(move(pool)), size_(copy.size_)
+      |                                                                              ^
+      |                                                                              std::
+/Users/little_sun/Desktop/little_sun/26Summer/OnionPIRv2/.worktrees/generic-superrecord/.benchmarks/SEAL-4.0.0/native/src/seal/util/rns.cpp:567:21: warning: unqualified call to 'std::move' [-Wunqualified-std-cast-call]
+  567 |             : pool_(move(pool))
+      |                     ^
+      |                     std::
+[ 80%] Building CXX object CMakeFiles/seal.dir/native/src/seal/util/scalingvariant.cpp.o
+1 warning generated.
+[ 82%] Building CXX object CMakeFiles/seal.dir/native/src/seal/util/ntt.cpp.o
+/Users/little_sun/Desktop/little_sun/26Summer/OnionPIRv2/.worktrees/generic-superrecord/.benchmarks/SEAL-4.0.0/native/src/seal/util/ntt.cpp:229:108: warning: unqualified call to 'std::move' [-Wunqualified-std-cast-call]
+  229 |         NTTTables::NTTTables(int coeff_count_power, const Modulus &modulus, MemoryPoolHandle pool) : pool_(move(pool))
+      |                                                                                                            ^
+      |                                                                                                            std::
+/Users/little_sun/Desktop/little_sun/26Summer/OnionPIRv2/.worktrees/generic-superrecord/.benchmarks/SEAL-4.0.0/native/src/seal/util/ntt.cpp:319:83: warning: unqualified call to 'std::move' [-Wunqualified-std-cast-call]
+  319 |                 : coeff_count_power_(coeff_count_power), modulus_(modulus), pool_(move(pool))
+      |                                                                                   ^
+      |                                                                                   std::
+[ 85%] Building CXX object CMakeFiles/seal.dir/native/src/seal/util/streambuf.cpp.o
+[ 87%] Building CXX object CMakeFiles/seal.dir/native/src/seal/util/uintarith.cpp.o
+2 warnings generated.
+[ 90%] Building CXX object CMakeFiles/seal.dir/native/src/seal/util/uintarithmod.cpp.o
+3 warnings generated.
+[ 92%] Building CXX object CMakeFiles/seal.dir/native/src/seal/util/uintarithsmallmod.cpp.o
+[ 95%] Building CXX object CMakeFiles/seal.dir/native/src/seal/util/uintcore.cpp.o
+[ 97%] Building CXX object CMakeFiles/seal.dir/native/src/seal/util/ztools.cpp.o
+[100%] Linking CXX static library lib/libseal-4.0.a
+/Library/Developer/CommandLineTools/usr/bin/ranlib: file: lib/libseal-4.0.a(ztools.cpp.o) has no symbols
+/Library/Developer/CommandLineTools/usr/bin/ranlib: file: lib/libseal-4.0.a(ztools.cpp.o) has no symbols
+[100%] Built target seal

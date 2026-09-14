@@ -1,0 +1,21 @@
+Running test: tree_bench
+==============================================================================
+                    test_tree_benchmark(Benchmark build)
+==============================================================================
+Noise budget after decryption: 3 (max noise: 47)
+Noise budget after decryption: 3 (max noise: 53)
+Noise budget after decryption: 3 (max noise: 51)
+tree MVP benchmark: N=2^18 leaves, L=18, N0=128, b=0, w=194, W=256
+database: 266 packed plaintexts, g=1 payload 4 MiB coefficient storage, setup 40.3302 ms
+trials: 2 measured after 1 warmup, leaves 2 distinct
+trial seed: 7
+client query avg 0.202395 ms
+server unpack (expand+convert) avg 89.1486 ms
+server path (select+rotate+project+pack) avg 127.362 ms
+server total avg 216.51 ms; samples(path):
+  path 127.037 ms
+  path 127.687 ms
+server path breakdown avg (ms): pyramid 30.415658 scan 13.139826 fold 0.000576 rotate 44.284029 project 38.584901 pack 0.132362 switch 0.610262
+  stages sum 127.168 ms of path avg 127.362 ms (remainder = glue/alloc)
+client extract avg 0.328464 ms
+communication: query 14880 B (modeled, 1 ciphertext), response 11264 B (actual wire codec, small_q=yes), helper keys 1607040 B (modeled, 11 BV + GSW)

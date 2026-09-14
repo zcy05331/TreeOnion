@@ -1,0 +1,22 @@
+[  1%] Building CXX object CMakeFiles/Onion-PIR.dir/src/tests/test_tree_superrecord_codec.cpp.o
+[  2%] Building CXX object CMakeFiles/Onion-PIR.dir/src/tests/test_tree_superrecord_e2e.cpp.o
+[  4%] Building CXX object CMakeFiles/Onion-PIR.dir/src/tests/test_tree_superrecord_benchmark.cpp.o
+[  5%] Building CXX object CMakeFiles/Onion-PIR.dir/src/tests/test_tree_superrecord_index.cpp.o
+/Users/little_sun/Desktop/little_sun/26Summer/OnionPIRv2/.worktrees/generic-superrecord/src/tests/test_tree_superrecord_benchmark.cpp:52:44: error: use of undeclared identifier 'tree_ct_add_inplace'; did you mean 'rlwe_add_inplace'?
+   52 |   for (size_t i = 0; i < repetitions; ++i) tree_ct_add_inplace(accumulator, seed, scheme);
+      |                                            ^~~~~~~~~~~~~~~~~~~
+      |                                            rlwe_add_inplace
+/Users/little_sun/Desktop/little_sun/26Summer/OnionPIRv2/.worktrees/generic-superrecord/src/includes/rlwe.h:100:6: note: 'rlwe_add_inplace' declared here
+  100 | void rlwe_add_inplace(RlweCt &a, const RlweCt &b, uint64_t q);
+      |      ^
+/Users/little_sun/Desktop/little_sun/26Summer/OnionPIRv2/.worktrees/generic-superrecord/src/tests/test_tree_superrecord_benchmark.cpp:52:83: error: no viable conversion from 'const PirParams' to 'uint64_t' (aka 'unsigned long long')
+   52 |   for (size_t i = 0; i < repetitions; ++i) tree_ct_add_inplace(accumulator, seed, scheme);
+      |                                                                                   ^~~~~~
+/Users/little_sun/Desktop/little_sun/26Summer/OnionPIRv2/.worktrees/generic-superrecord/src/includes/rlwe.h:100:60: note: passing argument to parameter 'q' here
+  100 | void rlwe_add_inplace(RlweCt &a, const RlweCt &b, uint64_t q);
+      |                                                            ^
+2 errors generated.
+make[2]: *** [CMakeFiles/Onion-PIR.dir/src/tests/test_tree_superrecord_benchmark.cpp.o] Error 1
+make[2]: *** Waiting for unfinished jobs....
+make[1]: *** [CMakeFiles/Onion-PIR.dir/all] Error 2
+make: *** [all] Error 2
