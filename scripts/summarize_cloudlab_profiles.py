@@ -146,6 +146,9 @@ def expected_trials(data: dict[str, Any], requested: int | None) -> int | None:
     return None
 
 
+# Profile validation
+
+
 def validate_merkle(data: dict[str, Any], path: Path, trials: int | None, leaf_count: int | None) -> None:
     workload = data.get("workload", {})
     if leaf_count is not None and workload.get("leaf_count") != leaf_count:
@@ -313,6 +316,9 @@ def validate_profile(data: dict[str, Any], path: Path, trials: int | None, leaf_
     else:
         raise ProfileError(f"{path}: unrecognized profile schema")
     return family
+
+
+# Validated profiles to individual sample rows
 
 
 def collect_merkle(data: dict[str, Any], path: Path, scale: str, peak: int | None) -> list[Row]:
@@ -503,6 +509,9 @@ def collect_rows(path: Path, root: Path | None = None, trials: int | None = None
     return []
 
 
+# Sample aggregation and report output
+
+
 def summarize(values: list[float]) -> dict[str, float | int]:
     ordered = sorted(values)
     p95_index = max(0, math.ceil(0.95 * len(ordered)) - 1)
@@ -515,7 +524,7 @@ def summarize(values: list[float]) -> dict[str, float | int]:
     }
 
 
-def write_outputs(root: Path, rows: list[Row]) -> None:
+def write_sample_csv(root: Path, rows: list[Row]) -> None:
     csv_path = root / "stage_samples.csv"
     fieldnames = ["scale", "case", "family", "variant", "sample_index", "stage", "kind",
                   "value", "unit", "basis", "source_file", "peak_rss_bytes"]
@@ -524,6 +533,9 @@ def write_outputs(root: Path, rows: list[Row]) -> None:
         writer.writeheader()
         writer.writerows(rows)
 
+
+def summarize_rows(rows: list[Row]) -> list[Row]:
+    """Group samples without combining distinct layouts, units, or bases."""
     grouped: dict[tuple[str, str, str, str, str, str, str], list[float]] = defaultdict(list)
     peaks: dict[tuple[str, str, str, str], list[int]] = defaultdict(list)
     for row in rows:
@@ -549,18 +561,15 @@ def write_outputs(root: Path, rows: list[Row]) -> None:
             entry["peak_rss_bytes"] = max(peaks[peak_key])
         summaries.append(entry)
 
-    json_path = root / "profile_summary.json"
-    json_path.write_text(json.dumps({
-        "schema_version": 1,
-        "source_rows": len(rows),
-        "summaries": summaries,
-    }, indent=2, sort_keys=True) + "\n")
+    return summaries
 
+
+def write_summary_markdown(root: Path, source_rows: int, summaries: list[Row]) -> None:
     md_path = root / "PROFILE_SUMMARY.md"
     lines = [
         "# Profile Summary",
         "",
-        f"- Source samples: {len(rows)}",
+        f"- Source samples: {source_rows}",
         f"- Summary rows: {len(summaries)}",
         "",
         "| scale | case | variant | stage | unit | basis | count | mean | median | p95 | stdev | peak RSS bytes |",
@@ -585,6 +594,20 @@ def write_outputs(root: Path, rows: list[Row]) -> None:
             f"{entry.get('peak_rss_bytes', '')} |"
         )
     md_path.write_text("\n".join(lines) + "\n")
+
+
+def write_outputs(root: Path, rows: list[Row]) -> None:
+    write_sample_csv(root, rows)
+    summaries = summarize_rows(rows)
+
+    json_path = root / "profile_summary.json"
+    json_path.write_text(json.dumps({
+        "schema_version": 1,
+        "source_rows": len(rows),
+        "summaries": summaries,
+    }, indent=2, sort_keys=True) + "\n")
+
+    write_summary_markdown(root, len(rows), summaries)
 
 
 def directory_files(root: Path) -> list[Path]:
@@ -614,6 +637,23 @@ def parse_args() -> argparse.Namespace:
     return args
 
 
+def collect_directory_rows(root: Path, trials: int | None, flat_trials: int | None) -> tuple[list[Row], list[Path]]:
+    rows: list[Row] = []
+    skipped: list[Path] = []
+    for path in directory_files(root):
+        try:
+            file_trials = flat_trials if path.stem == "flat" and flat_trials is not None else trials
+            rows.extend(collect_rows(path, root, file_trials))
+        except ProfileError:
+            if infer_family(load_json(path)) is None:
+                skipped.append(path)
+                continue
+            raise
+    if not rows:
+        raise ProfileError(f"{root}: no profile samples found")
+    return rows, skipped
+
+
 def main() -> int:
     args = parse_args()
     try:
@@ -624,19 +664,7 @@ def main() -> int:
             return 0
 
         root = args.directory
-        rows: list[Row] = []
-        skipped: list[Path] = []
-        for path in directory_files(root):
-            try:
-                trials = args.flat_trials if path.stem == "flat" and args.flat_trials is not None else args.trials
-                rows.extend(collect_rows(path, root, trials))
-            except ProfileError:
-                if infer_family(load_json(path)) is None:
-                    skipped.append(path)
-                    continue
-                raise
-        if not rows:
-            raise ProfileError(f"{root}: no profile samples found")
+        rows, skipped = collect_directory_rows(root, args.trials, args.flat_trials)
         write_outputs(root, rows)
         print(f"wrote {root / 'stage_samples.csv'}")
         print(f"wrote {root / 'profile_summary.json'}")

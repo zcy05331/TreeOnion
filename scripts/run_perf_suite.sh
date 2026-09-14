@@ -194,34 +194,38 @@ record() {  # record <单元> ok|fail|skip [原因]
   esac
 }
 
-if [[ "${OS}" == "Linux" ]]; then
-  CPU_METADATA="$(awk -F': *' '/^model name/{print $2; exit}' /proc/cpuinfo)"
-  lscpu > "${OUT_DIR}/00_cpu.txt" 2>&1 || true
-  OS_METADATA="$(uname -a)"
-else
-  CPU_METADATA="$(sysctl -n machdep.cpu.brand_string)"
-  sysctl machdep.cpu hw.ncpu hw.memsize > "${OUT_DIR}/00_cpu.txt" 2>&1 || true
-  OS_METADATA="$(sw_vers | tr '\n' ';')"
-fi
-COMPILER_METADATA="$(${CXX_LAUNCH[@]+"${CXX_LAUNCH[@]}"} \
-  "${CXX:-c++}" --version 2>/dev/null | sed -n 1p || echo unknown)"
-CMAKE_METADATA="$(cmake --version | sed -n 1p)"
+write_run_metadata() {
+  if [[ "${OS}" == "Linux" ]]; then
+    CPU_METADATA="$(awk -F': *' '/^model name/{print $2; exit}' /proc/cpuinfo)"
+    lscpu > "${OUT_DIR}/00_cpu.txt" 2>&1 || true
+    OS_METADATA="$(uname -a)"
+  else
+    CPU_METADATA="$(sysctl -n machdep.cpu.brand_string)"
+    sysctl machdep.cpu hw.ncpu hw.memsize > "${OUT_DIR}/00_cpu.txt" 2>&1 || true
+    OS_METADATA="$(sw_vers | tr '\n' ';')"
+  fi
+  COMPILER_METADATA="$(${CXX_LAUNCH[@]+"${CXX_LAUNCH[@]}"} \
+    "${CXX:-c++}" --version 2>/dev/null | sed -n 1p || echo unknown)"
+  CMAKE_METADATA="$(cmake --version | sed -n 1p)"
 
-{
-  echo "commit:      ${COMMIT} (${BRANCH})"
-  echo "utc:         ${STAMP}"
-  echo "os:          ${OS_METADATA}"
-  echo "cpu:         ${CPU_METADATA}  mem=${MEM_BYTES}B"
-  echo "arch:        ${ARCH} rosetta=${ROSETTA}"
-  echo "compiler:    ${COMPILER_METADATA}"
-  echo "cmake:       ${CMAKE_METADATA}"
-  echo "hexl:        ${HEXL_CMAKE_DIR} NOAVX512=${NOAVX512}"
-  echo "config:      ${ACTIVE_CONFIG}"
-  echo "knobs:       trials=${EXPERIMENTS} warmup=${WARMUPS}" \
-       "seed=${TRIAL_SEED} scales='${SCALES}' case=${BENCHMARK_CASE}" \
-       "skip_build=${SKIP_BUILD}"
-  git status --short
-} > "${OUT_DIR}/00_meta.txt"
+  {
+    echo "commit:      ${COMMIT} (${BRANCH})"
+    echo "utc:         ${STAMP}"
+    echo "os:          ${OS_METADATA}"
+    echo "cpu:         ${CPU_METADATA}  mem=${MEM_BYTES}B"
+    echo "arch:        ${ARCH} rosetta=${ROSETTA}"
+    echo "compiler:    ${COMPILER_METADATA}"
+    echo "cmake:       ${CMAKE_METADATA}"
+    echo "hexl:        ${HEXL_CMAKE_DIR} NOAVX512=${NOAVX512}"
+    echo "config:      ${ACTIVE_CONFIG}"
+    echo "knobs:       trials=${EXPERIMENTS} warmup=${WARMUPS}" \
+         "seed=${TRIAL_SEED} scales='${SCALES}' case=${BENCHMARK_CASE}" \
+         "skip_build=${SKIP_BUILD}"
+    git status --short
+  } > "${OUT_DIR}/00_meta.txt"
+}
+
+write_run_metadata
 
 run_bin() {  # run_bin <日志名> <参数...>; 单元名 = 日志名去 .txt; 失败不终止套件
   local log="${OUT_DIR}/$1"; local unit="${1%.txt}"; shift
@@ -234,44 +238,54 @@ run_bin() {  # run_bin <日志名> <参数...>; 单元名 = 日志名去 .txt; �
   fi
 }
 
-# ---------------- 模式选择 ----------------
-MODES=("$@")
-if [[ ${#MODES[@]} -eq 0 ]]; then
-  MODES=(merkle tree tree-g1 compress cuckoo superrecord)
-fi
+select_modes() {
+  MODES=("$@")
+  if [[ ${#MODES[@]} -eq 0 ]]; then
+    MODES=(merkle tree tree-g1 compress cuckoo superrecord)
+  fi
+}
+
 has_mode() { local m; for m in "${MODES[@]}"; do [[ "$m" == "$1" ]] && return 0; done; return 1; }
-for MODE in "${MODES[@]}"; do
-  case "${MODE}" in merkle|tree|tree-g1|compress|cuckoo|superrecord) ;;
-    *) echo "未知模式: ${MODE}(可选 merkle tree tree-g1 compress cuckoo superrecord)" >&2; exit 2 ;;
-  esac
-done
 
-# merkle 主档叶数取 SCALES 的首个档位; 套件把主档上限设在 2^24, 4gb 只能经
-# --run-optional-4gb 追加, 所以 SCALES 必须以 256mb 或 1gb 开头。
-read -ra SCALE_LIST <<< "${SCALES}"
-PRIMARY_POW="$(scale_leaf_pow "${SCALE_LIST[0]}")"
-if [[ "${PRIMARY_POW}" -gt 24 ]]; then
-  echo "merkle 主档上限 2^24: SCALES 需以 256mb 或 1gb 开头(4gb 经 flag 追加)" >&2
-  exit 2
-fi
-WANT_4GB=0
-case " ${SCALES} " in *" 4gb "*) WANT_4GB=1 ;; esac
+validate_modes() {
+  local MODE
+  for MODE in "${MODES[@]}"; do
+    case "${MODE}" in merkle|tree|tree-g1|compress|cuckoo|superrecord) ;;
+      *) echo "未知模式: ${MODE}(可选 merkle tree tree-g1 compress cuckoo superrecord)" >&2; exit 2 ;;
+    esac
+  done
+}
 
-# ---------------- 构建一次 ----------------
-build_binary
-test -x "${BINARY}" || { echo "缺少 ${BINARY}" >&2; exit 1; }
-if [[ "${ROSETTA}" == "1" ]]; then
-  file "${BINARY}" | grep -q 'x86_64' || { echo "二进制不是 x86_64" >&2; exit 1; }
-fi
+select_scales() {
+  # merkle 主档叶数取 SCALES 的首个档位; 套件把主档上限设在 2^24, 4gb 只能经
+  # --run-optional-4gb 追加, 所以 SCALES 必须以 256mb 或 1gb 开头。
+  read -ra SCALE_LIST <<< "${SCALES}"
+  PRIMARY_POW="$(scale_leaf_pow "${SCALE_LIST[0]}")"
+  if [[ "${PRIMARY_POW}" -gt 24 ]]; then
+    echo "merkle 主档上限 2^24: SCALES 需以 256mb 或 1gb 开头(4gb 经 flag 追加)" >&2
+    exit 2
+  fi
+  WANT_4GB=0
+  case " ${SCALES} " in *" 4gb "*) WANT_4GB=1 ;; esac
+}
 
-# ---------------- 执行 ----------------
-run_bin cpu_info.txt --test cpu_info
+ensure_benchmark_binary() {
+  build_binary
+  test -x "${BINARY}" || { echo "缺少 ${BINARY}" >&2; exit 1; }
+  if [[ "${ROSETTA}" == "1" ]]; then
+    file "${BINARY}" | grep -q 'x86_64' || { echo "二进制不是 x86_64" >&2; exit 1; }
+  fi
+}
 
-# merkle 套件一次调用覆盖两档: 主档 = SCALES 首个档位(256mb/1gb,
-# --experiments 次), SCALES 含 4gb 时加 --run-optional-4gb 让同一进程再测
-# 2^26 档(套件内固定 4 次测量, 内存不够则套件自记 skipped_resource_limit,
-# 本脚本从 merkle.json 读回该状态计入 00_status.txt)
-if has_mode merkle; then
+run_merkle_stage() {
+  if ! has_mode merkle; then
+    return 0
+  fi
+
+  # merkle 套件一次调用覆盖两档: 主档 = SCALES 首个档位(256mb/1gb,
+  # --experiments 次), SCALES 含 4gb 时加 --run-optional-4gb 让同一进程再测
+  # 2^26 档(套件内固定 4 次测量, 内存不够则套件自记 skipped_resource_limit,
+  # 本脚本从 merkle.json 读回该状态计入 00_status.txt)
   MERKLE_ARGS=(--test merkle_benchmarks
     --leaf-count $((1 << PRIMARY_POW)) --warmup "${WARMUPS}"
     --experiments "${EXPERIMENTS}" --trial-seed "${TRIAL_SEED}"
@@ -308,14 +322,20 @@ if has_mode merkle; then
       record merkle_4gb fail "optional row status missing"
     fi
   fi
-fi
+}
 
-# 压缩门无 DB 档位, 只跑一次
-if has_mode compress; then
+run_compress_stage() {
+  if ! has_mode compress; then
+    return 0
+  fi
+
+  # 压缩门无 DB 档位, 只跑一次
   run_bin compress.txt --test tree_compress
-fi
+}
 
-for SCALE in ${SCALES}; do
+run_scale_stage() {  # run_scale_stage <scale>
+  local SCALE="$1"
+  local LEAF_POW
   LEAF_POW="$(scale_leaf_pow "${SCALE}")"
   echo "=================== 档位 ${SCALE}(L=${LEAF_POW}) ==================="
   SCALE_ARGS=(--leaf-count $((1 << LEAF_POW)) --experiments "${EXPERIMENTS}"
@@ -340,19 +360,43 @@ for SCALE in ${SCALES}; do
         "${SCALE_ARGS[@]}"
     fi
   fi
-done
+}
 
-# ---------------- 完整性汇总 ----------------
-echo
-echo "==> 结果目录: ${OUT_DIR}"
-ls -1 "${OUT_DIR}"
-echo "==> 单元状态(${STATUS_FILE}):"
-cat "${STATUS_FILE}"
-if [[ "${FAIL_COUNT}" -gt 0 ]]; then
-  echo "==> 未完成: ${FAIL_COUNT} 个单元失败, ${SKIP_COUNT} 个被跳过" >&2
-  exit 1
-elif [[ "${SKIP_COUNT}" -gt 0 ]]; then
-  echo "==> 矩阵不完整: ${SKIP_COUNT} 个请求的单元被资源门跳过" >&2
-  exit 3
-fi
-echo "==> 完成: 全部单元 ok"
+run_scaled_stages() {
+  local SCALE
+  for SCALE in ${SCALES}; do
+    run_scale_stage "${SCALE}"
+  done
+}
+
+summarize_results() {
+  # ---------------- 完整性汇总 ----------------
+  echo
+  echo "==> 结果目录: ${OUT_DIR}"
+  ls -1 "${OUT_DIR}"
+  echo "==> 单元状态(${STATUS_FILE}):"
+  cat "${STATUS_FILE}"
+  if [[ "${FAIL_COUNT}" -gt 0 ]]; then
+    echo "==> 未完成: ${FAIL_COUNT} 个单元失败, ${SKIP_COUNT} 个被跳过" >&2
+    exit 1
+  elif [[ "${SKIP_COUNT}" -gt 0 ]]; then
+    echo "==> 矩阵不完整: ${SKIP_COUNT} 个请求的单元被资源门跳过" >&2
+    exit 3
+  fi
+  echo "==> 完成: 全部单元 ok"
+}
+
+# ---------------- 模式选择 ----------------
+select_modes "$@"
+validate_modes
+select_scales
+
+# ---------------- 构建一次 ----------------
+ensure_benchmark_binary
+
+# ---------------- 执行 ----------------
+run_bin cpu_info.txt --test cpu_info
+run_merkle_stage
+run_compress_stage
+run_scaled_stages
+summarize_results

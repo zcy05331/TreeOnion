@@ -18,19 +18,26 @@ void PirTest::test_tree_superrecord_index() {
   print_func_name(__FUNCTION__);
   PirParams scheme;
   const bool composite = scheme.get_composite_rns().enabled;
+  const size_t n = scheme.get_poly_degree();
+  const size_t c = payload_bits(scheme);
+  // Retain two-plane fixtures: rho = 8 spans two responses, while rho = 1
+  // spans ten. The original n = 2048 entry sizes stay unchanged.
+  const size_t two_chunk_g = n / 8;
+  const size_t two_chunk_entry_bits = std::max(size_t{4096}, c * two_chunk_g + 1);
+  const size_t large_entry_bits = std::max(size_t{30000}, c * n + 1);
 
   struct Shape {
     size_t E, N, h, G, b, max_responses;
     size_t expected_chunks;
   };
   const std::vector<Shape> shapes = {
-      {13, 64, 3, 2, 0, 1, 1},       // two planes, N0 = 1, S_L = 22
-      {256, 256, 3, 64, 1, 1, 1},    // Bundle3, N0 = 2
-      {256, 1024, 3, 64, 2, 1, 1},   // Bundle3, rows 4 x N0 3 (ragged pyramid)
+      {13, 64, 3, 2, 0, 1, 1},       // N0 = 1, S_L = 22
+      {256, 256, 3, 64, 1, 1, 1},    // Bundle3 with one beta bit
+      {256, n / 2, 3, 64, 2, 1, 1},   // Bundle3, rows 4 x N0 3 (ragged pyramid)
       {13, 8, 8, 4, 0, 4, 1},        // all leaves in one bundle: zero selectors
       {40, 128, 5, 8, 0, 1, 1},      // non-power-of-two h with S_L = 26
-      {4096, 16, 1, 256, 0, 2, 2},   // P = 2, H = 5, rho = 8: two chunks
-      {30000, 16, 1, 2048, 2, 16, 10},  // one entry above a full plaintext
+      {two_chunk_entry_bits, 16, 1, two_chunk_g, 0, 2, 2},   // P = 2, H = 5, rho = 8: two chunks
+      {large_entry_bits, 16, 1, n, 2, 16, 10},  // one entry above a full plaintext
   };
   for (const Shape &shape : shapes) {
     // The candidate itself is kept so its metrics can be checked against the
@@ -48,6 +55,9 @@ void PirTest::test_tree_superrecord_index() {
     const size_t rho = s.records_per_plaintext;
     require_test(s.response_ciphertexts == shape.expected_chunks,
                  "response chunk count for the shape");
+    if (shape.expected_chunks > 1) {
+      require_test(s.plane_count == 2, "multi-response fixtures retain two planes");
+    }
 
     // ---- index algebra for every leaf and level ----
     for (size_t leaf = 0; leaf < shape.N; ++leaf) {
@@ -152,7 +162,7 @@ void PirTest::test_tree_superrecord_index() {
         }
       }
     }
-    if (shape.N == 1024) {
+    if (shape.N == n / 2) {
       require_test(orientation_observable,
                    "the 4 x 3 leaf matrix must expose the orientation");
     }

@@ -13,19 +13,7 @@ using tree_superrecord_test::pick_candidate;
 using tree_superrecord_test::test_policy;
 using tree_superrecord_test::throws_invalid;
 
-// Scheme identity, policy validation, the finite (h, G, P, N0, b, h_q)
-// enumeration with its pinned Bundle3 widths, the shared LevelPlan builder,
-// projection-aware key heights, expansion-node counts, memory estimates and
-// caps, Pareto dominance, exact-plan deduplication, mandatory controls,
-// measured-stage calibration, candidate freezing, and a whole-enumeration
-// freeze/index sweep (design sections 4, 5, 9, 11, 19-21).
-void PirTest::test_tree_superrecord_planner() {
-  print_func_name(__FUNCTION__);
-  constexpr size_t n = DBConsts::PolyDegree;
-  const size_t log_n = std::bit_width(n) - 1;
-  PirParams scheme;
-  const size_t c = tree_superrecord_test::payload_bits(scheme);
-
+void require_scheme_identity_contract(const PirParams &scheme, size_t c, size_t log_n, size_t n) {
   // ---- scheme identity is the single compatibility source ----
   {
     const PirSchemeIdentity id = scheme.scheme_identity();
@@ -60,7 +48,9 @@ void PirTest::test_tree_superrecord_planner() {
                  }),
                  "fingerprint height above log2 n must be rejected");
   }
+}
 
+void require_policy_validation_contract(const PirParams &scheme, size_t log_n) {
   // ---- policy validation ----
   {
     PlannerInput ok = make_input(scheme, 256, size_t{1} << 10, test_policy());
@@ -94,21 +84,9 @@ void PirTest::test_tree_superrecord_planner() {
     require_test(throws_invalid([&] { validate_planner_input(bad); }),
                  "fixed key height above log2 n must be rejected");
   }
+}
 
-  // ---- expansion node counts and pyramid rows ----
-  require_test(populated_expansion_node_count(480, 512) == 961 &&
-                   populated_expansion_node_count(821, 1024) == 1651 &&
-                   populated_expansion_node_count(25, 32) == 55,
-               "populated expansion node pins");
-  require_test(ragged_pyramid_row_lengths(342) ==
-                   std::vector<size_t>{342, 171, 86, 43, 22, 11, 6, 3, 2, 1},
-               "ragged pyramid rows for N0 = 342");
-  require_test(ragged_pyramid_row_lengths(1) == std::vector<size_t>{1},
-               "N0 = 1 pyramid is one row");
-  require_test(conservative_scratch_rlwe_count(scheme.get_l()) ==
-                   2 * scheme.get_l() + 2,
-               "scratch liveness maximum is the selector completion row");
-
+void require_bundle3_golden_planner_contract(const PirParams &scheme, size_t c, size_t log_n) {
   // ---- Bundle3 golden enumeration at N = 2^24 (design section 9.2) ----
   if (c == 12) {
     PlannerPolicy policy = test_policy();
@@ -519,15 +497,20 @@ void PirTest::test_tree_superrecord_planner() {
                 << frontier.size() << ", best predicted: "
                 << describe_candidate(ranked.front()));
   }
+}
 
+void require_finite_h_enumeration_bounds(const PirParams &scheme, size_t c) {
   // ---- finite h enumeration and its bounds (design section 19.4) ----
   {
-    // N = 2^6 (H = 7), one response: for G = 64 the response cap gives
-    // P_max = floor(32 / 7) = 4 and h_max = floor(4 * c * 64 / 256).
+    // N = 2^6 gives seven path levels. One response holds floor(rho / 7)
+    // planes; leaf count and policy can cap h before that payload bound.
     PlannerPolicy policy = test_policy(1, 64);
     const std::vector<Candidate> all =
         enumerate_candidates(make_input(scheme, 256, size_t{1} << 6, policy));
-    const size_t h_resp = (4 * c * 64) / 256;
+    const size_t rho = scheme.get_poly_degree() / 64;
+    const size_t max_planes = rho / 7;
+    const size_t h_resp = std::min(
+        {policy.max_bundle_arity, size_t{64}, (max_planes * c * 64) / 256});
     size_t max_h = 0;
     for (const Candidate &cand : all) {
       if (cand.shape.record_coeffs == 64) {
@@ -573,7 +556,9 @@ void PirTest::test_tree_superrecord_planner() {
       require_test(cand.shape.bundle_arity <= 2, "bundle cap clamps h");
     }
   }
+}
 
+void require_candidate_freeze_index_sweep(const PirParams &scheme) {
   // ---- every emitted candidate freezes and indexes end to end ----
   {
     // The benchmark freezes every row the enumerator emits. Sweeping the
@@ -626,7 +611,9 @@ void PirTest::test_tree_superrecord_planner() {
     BENCH_PRINT("enumerator/index sweep: " << swept << " candidates frozen, "
                 << aligned16 << " with alignment 16 (" << rounded << " rounded)");
   }
+}
 
+void require_memory_cap_filtering(const PirParams &scheme) {
   // ---- memory caps drop exactly the candidates above the cap ----
   {
     // SUPERRECORD_MEMORY_BYTES feeds both caps; a swapped comparison
@@ -679,7 +666,9 @@ void PirTest::test_tree_superrecord_planner() {
               &PlannerPolicy::max_validation_resident_bytes,
               "validation-resident cap");
   }
+}
 
+void require_mandatory_control_argmins(const PirParams &scheme) {
   // ---- mandatory controls carry both argmin rows ----
   {
     // The benchmark labels these rows minimum-optimized-steady-state /
@@ -743,7 +732,9 @@ void PirTest::test_tree_superrecord_planner() {
       }
     }
   }
+}
 
+void require_projection_aware_key_height(const PirParams &scheme, size_t log_n) {
   // ---- projection-aware key height (design section 4.2) ----
   if (log_n == 11) {
     // G = 1 at L = 24 needs projection depth 11 even though the packed query
@@ -780,7 +771,9 @@ void PirTest::test_tree_superrecord_planner() {
     }
     require_test(saw_g1_specific, "G=1 exists under candidate-specific keys");
   }
+}
 
+void require_required_policy_examples(const PirParams &scheme, size_t n) {
   // ---- required policy examples (design section 29) ----
   {
     const std::vector<Candidate> e160_all = enumerate_candidates(
@@ -789,26 +782,86 @@ void PirTest::test_tree_superrecord_planner() {
     require_test(e160.has_value() && e160->shape.plane_count == 1 &&
                      e160->shape.response_ciphertexts == 1,
                  "E=160, h=4, G=64 uses one response at H=25");
+    // Keep rho = 16 so the 25-level path requires two responses in every ring.
+    const size_t two_response_g = n / 16;
     const std::vector<Candidate> two = enumerate_candidates(
         make_input(scheme, 512, size_t{1} << 24, test_policy(2, 8)));
-    const std::optional<Candidate> e512 = pick_candidate(two, 3, 128, 8);
+    const std::optional<Candidate> e512 = pick_candidate(two, 3, two_response_g, 8);
     require_test(e512.has_value() && e512->shape.response_ciphertexts == 2,
-                 "E=512, h=3, G=128 uses two responses at H=25");
+                 "E=512, h=3, rho=16 uses two responses at H=25");
     const std::vector<Candidate> one = enumerate_candidates(
         make_input(scheme, 512, size_t{1} << 24, test_policy(1, 8)));
     bool absent = true;
     for (const Candidate &cand : one) {
-      if (cand.shape.bundle_arity == 3 && cand.shape.record_coeffs == 128) {
+      if (cand.shape.bundle_arity == 3 && cand.shape.record_coeffs == two_response_g) {
         absent = false;
       }
     }
     require_test(absent, "the 512-bit point is absent under one response");
+    const size_t c = tree_superrecord_test::payload_bits(scheme);
+    const size_t large_entry_bits = std::max(size_t{30000}, c * n + 1);
     const std::vector<Candidate> large = enumerate_candidates(
-        make_input(scheme, 30000, size_t{1} << 4, test_policy(16, 1)));
+        make_input(scheme, large_entry_bits, size_t{1} << 4, test_policy(16, 1)));
     const std::optional<Candidate> big = pick_candidate(large, 1, n, 4);
-    require_test(big.has_value() && n == 2048 && big->shape.record_coeffs == 2048 &&
+    require_test(big.has_value() && big->shape.record_coeffs == n &&
                      big->shape.plane_count == 2 &&
                      big->shape.response_ciphertexts == 10,
-                 "E=30000, h=1, G=2048 gives P=2 and 10 responses");
+                 "an entry above one full plaintext gives P=2 and 10 responses");
   }
+}
+
+
+// Scheme identity, policy validation, the finite (h, G, P, N0, b, h_q)
+// enumeration with its pinned Bundle3 widths, the shared LevelPlan builder,
+// projection-aware key heights, expansion-node counts, memory estimates and
+// caps, Pareto dominance, exact-plan deduplication, mandatory controls,
+// measured-stage calibration, candidate freezing, and a whole-enumeration
+// freeze/index sweep (design sections 4, 5, 9, 11, 19-21).
+void PirTest::test_tree_superrecord_planner() {
+  print_func_name(__FUNCTION__);
+  constexpr size_t n = DBConsts::PolyDegree;
+  const size_t log_n = std::bit_width(n) - 1;
+  PirParams scheme;
+  const size_t c = tree_superrecord_test::payload_bits(scheme);
+
+  require_scheme_identity_contract(scheme, c, log_n, n);
+
+
+  require_policy_validation_contract(scheme, log_n);
+
+
+  // ---- expansion node counts and pyramid rows ----
+  require_test(populated_expansion_node_count(480, 512) == 961 &&
+                   populated_expansion_node_count(821, 1024) == 1651 &&
+                   populated_expansion_node_count(25, 32) == 55,
+               "populated expansion node pins");
+  require_test(ragged_pyramid_row_lengths(342) ==
+                   std::vector<size_t>{342, 171, 86, 43, 22, 11, 6, 3, 2, 1},
+               "ragged pyramid rows for N0 = 342");
+  require_test(ragged_pyramid_row_lengths(1) == std::vector<size_t>{1},
+               "N0 = 1 pyramid is one row");
+  require_test(conservative_scratch_rlwe_count(scheme.get_l()) ==
+                   2 * scheme.get_l() + 2,
+               "scratch liveness maximum is the selector completion row");
+
+  require_bundle3_golden_planner_contract(scheme, c, log_n);
+
+
+  require_finite_h_enumeration_bounds(scheme, c);
+
+
+  require_candidate_freeze_index_sweep(scheme);
+
+
+  require_memory_cap_filtering(scheme);
+
+
+  require_mandatory_control_argmins(scheme);
+
+
+  require_projection_aware_key_height(scheme, log_n);
+
+
+  require_required_policy_examples(scheme, n);
+
 }

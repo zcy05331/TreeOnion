@@ -26,5 +26,8 @@ add_library(sealpirplus_core STATIC
 target_include_directories(sealpirplus_core PUBLIC "${INSTRUMENTED_SEALPIR_DIR}")
 target_link_libraries(sealpirplus_core PUBLIC SEAL::seal)
 
-add_executable(treepir_sealpir_adapter treepir_sealpir_adapter.cpp)
+add_executable(treepir_sealpir_adapter
+  treepir_sealpir_adapter.cpp
+  adapter_input.cpp
+  adapter_report.cpp)
 target_link_libraries(treepir_sealpir_adapter PRIVATE sealpirplus_core)

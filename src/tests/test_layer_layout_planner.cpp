@@ -68,9 +68,7 @@ std::string replace_first(std::string text, const std::string &from,
   return text.replace(at, from.size(), to);
 }
 
-}  // namespace
-
-void PirTest::test_layer_layout_planner() {
+void require_median_sample_contract() {
   // median_server_ms_of is the one arithmetic every measured layout passes
   // through: the sweep stores its result and the loader recomputes it to
   // reject a drifted profile (see the round-trip check below). Both calls go
@@ -95,6 +93,282 @@ void PirTest::test_layer_layout_planner() {
     }
     require_test(rejected_empty, "median of an empty sample set is refused");
   }
+}
+
+void require_environment_mismatch_fields(const LayerLayoutProfile &loaded, const LayerLayoutProfileEnvironment &runtime) {
+  // Every environment field the profile is validated on, mutated one at a
+  // time, must be named in the mismatch description.
+  {
+    using Env = LayerLayoutProfileEnvironment;
+    const std::vector<std::pair<std::string, std::function<void(Env &)>>>
+        mutations = {
+            {"poly_degree", [](Env &e) { e.poly_degree += 1; }},
+            {"log_q", [](Env &e) { e.log_q += 1; }},
+            {"log_t", [](Env &e) { e.log_t += 1; }},
+            {"log_q_prime", [](Env &e) { e.log_q_prime += 1; }},
+            {"L_EP", [](Env &e) { e.l_ep += 1; }},
+            {"L_KEY", [](Env &e) { e.l_key += 1; }},
+            {"L_KS", [](Env &e) { e.l_ks += 1; }},
+            {"composite_first_dim",
+             [](Env &e) { e.composite_first_dim = !e.composite_first_dim; }},
+            {"architecture", [](Env &e) { e.architecture += "-other"; }},
+            {"cpu", [](Env &e) { e.cpu += " other"; }},
+            {"compiler", [](Env &e) { e.compiler += " other"; }},
+            {"hexl_version", [](Env &e) { e.hexl_version += ".1"; }},
+        };
+    for (const auto &[field, mutate] : mutations) {
+      Env other = runtime;
+      mutate(other);
+      const std::string description =
+          describe_layer_layout_profile_mismatch(loaded, other, 24, 96);
+      require_test(description.find(field) != std::string::npos,
+                   "mismatch description does not name " + field);
+    }
+    require_test(describe_layer_layout_profile_mismatch(loaded, runtime, 24, 95)
+                         .find("nodes_per_plaintext") != std::string::npos,
+                 "nodes per plaintext mismatch is reported");
+    // commit, build type and config are informational: the same machine and
+    // scheme validate whatever they say.
+    Env relabelled = runtime;
+    relabelled.commit = "elsewhere";
+    relabelled.build_type = "Debug";
+    relabelled.config = "renamed";
+    require_test(describe_layer_layout_profile_mismatch(loaded, relabelled, 24,
+                                                         96)
+                     .empty(),
+                 "commit/build/config labels must not block a profile");
+  }
+}
+
+void require_malformed_profile_rejections(const std::string &path) {
+  // Malformed profile files are rejected with a specific reason.
+  {
+    const std::string text = read_text(path);
+    const std::string bad_path =
+        (std::filesystem::temp_directory_path() / "layer-layout-bad.json")
+            .string();
+    require_test(load_fails_with(bad_path,
+                                 replace_first(text, "\"tree_height\": 24",
+                                               "\"tree_heigh\": 24"),
+                                 "missing key"),
+                 "loader accepted a missing key");
+    require_test(load_fails_with(bad_path,
+                                 replace_first(text, "\"tree_height\": 24",
+                                               "\"tree_height\": \"24\""),
+                                 "expected a number"),
+                 "loader accepted a string where a number is required");
+    require_test(load_fails_with(bad_path,
+                                 replace_first(text, "layer-layout-profile-v1",
+                                               "layer-layout-profile-v0"),
+                                 "unsupported"),
+                 "loader accepted an unknown schema version");
+    require_test(load_fails_with(bad_path, text + "x", "trailing"),
+                 "loader accepted trailing characters");
+    {
+      const size_t at = text.find("\"server_samples_ms\": [");
+      require_test(at != std::string::npos, "profile text lacks samples");
+      const size_t open = text.find('[', at);
+      const size_t close = text.find(']', open);
+      const std::string no_samples =
+          text.substr(0, open + 1) + text.substr(close);
+      require_test(load_fails_with(bad_path, no_samples, "no samples"),
+                   "loader accepted a measurement without samples");
+    }
+    {
+      // The selector optimises these numbers: a negative sample and a
+      // stored median that disagrees with its samples are both refused.
+      const size_t at = text.find("\"server_samples_ms\": [");
+      const size_t open = text.find('[', at);
+      const std::string negative =
+          text.substr(0, open + 1) + "-1.0, " + text.substr(open + 1);
+      require_test(load_fails_with(bad_path, negative, "non-negative"),
+                   "loader accepted a negative sample");
+      const std::string key = "\"median_server_ms\": ";
+      const size_t value = text.find(key) + key.size();
+      const size_t end = text.find(',', value);
+      require_test(value != std::string::npos && end != std::string::npos,
+                   "profile text lacks a median");
+      const std::string drifted_median =
+          text.substr(0, value) + "0.5" + text.substr(end);
+      require_test(load_fails_with(bad_path, drifted_median, "does not match"),
+                   "loader accepted a median that is not the samples' median");
+    }
+    std::filesystem::remove(bad_path);
+    bool missing_file = false;
+    try {
+      (void)load_layer_layout_profile(bad_path);
+    } catch (const std::runtime_error &) {
+      missing_file = true;
+    }
+    require_test(missing_file, "loader did not report a missing file");
+  }
+}
+
+void require_selector_rejections(const LayerLayoutProfile &loaded, const PirParams &reference) {
+  // Structural rejections of the selector and the enumerator.
+  {
+    LayerLayoutProfile drifted = loaded;
+    drifted.measurements[1].features.padded_plaintexts += 1;
+    bool rejected_shape = false;
+    try {
+      (void)select_layer_layouts(drifted, 24, 96, reference, 1.01);
+    } catch (const std::invalid_argument &) {
+      rejected_shape = true;
+    }
+    require_test(rejected_shape,
+                 "selector accepted a measurement of an illegal layout");
+
+    LayerLayoutProfile only_alternative = loaded;
+    only_alternative.measurements.erase(only_alternative.measurements.begin());
+    require_test(only_alternative.measurements.size() == 1 &&
+                     only_alternative.measurements[0].features
+                             .expansion_height == 10,
+                 "fixture keeps only the h=10 measurement");
+    bool infeasible = false;
+    try {
+      (void)select_layer_layouts(only_alternative, 24, 96, reference, 1.0);
+    } catch (const std::runtime_error &) {
+      infeasible = true;
+    }
+    require_test(infeasible,
+                 "selector found a plan although no measured option fits");
+
+    const auto rejects = [](auto &&fn) {
+      try {
+        fn();
+      } catch (const std::invalid_argument &) {
+        return true;
+      }
+      return false;
+    };
+    require_test(rejects([&] {
+                   (void)enumerate_layer_layout_candidates(0, 96, reference);
+                 }),
+                 "enumerator accepted level 0");
+    require_test(rejects([&] {
+                   (void)enumerate_layer_layout_candidates(24, 0, reference);
+                 }),
+                 "enumerator accepted zero nodes per plaintext");
+    require_test(rejects([&] {
+                   (void)select_layer_layouts(loaded, 24, 96, reference, 0.5);
+                 }),
+                 "selector accepted a budget below 1.0");
+    LayerPlannerConfig no_profile;
+    no_profile.policy = LayerLayoutPolicy::profiled;
+    require_test(rejects([&] {
+                   (void)plan_layer_layouts(24, 96, reference, no_profile);
+                 }),
+                 "profiled policy accepted a null profile");
+  }
+}
+
+void require_multilevel_knapsack_selection(const LayerLayoutProfile &loaded, const PirParams &reference) {
+  // Multi-level knapsack under a binding budget: levels 22, 23 and 24 each
+  // get a measured legacy layout and one measured alternative that costs
+  // extra padding and saves time. The budget admits some but not all
+  // alternatives; the DP's choice must match a brute-force search over the
+  // eight subsets, and the unconstrained budget must take every alternative.
+  {
+    struct Level {
+      size_t level;
+      size_t legacy_height, alt_height;
+      size_t extra;
+      double saving;
+    };
+    std::vector<Level> levels;
+    LayerLayoutProfile multi = loaded;
+    multi.measurements.clear();
+    const std::vector<double> savings = {12.0, 8.0, 10.0};
+    for (size_t level = 22; level <= 24; ++level) {
+      const std::vector<LayerLayoutCandidate> cands =
+          enumerate_layer_layout_candidates(level, 96, reference);
+      const std::vector<LayerLayoutCandidate> front =
+          pareto_layer_layout_candidates(cands);
+      const LayerLayoutCandidate &leg =
+          cands[legacy_layer_layout_candidate(cands)];
+      const LayerLayoutCandidate *alt = nullptr;
+      for (const LayerLayoutCandidate &c : front) {
+        if (c.features.padded_plaintexts > leg.features.padded_plaintexts &&
+            (!alt || c.features.padded_plaintexts >
+                         alt->features.padded_plaintexts)) {
+          alt = &c;
+        }
+      }
+      require_test(alt != nullptr,
+                   "level has no frontier alternative with extra padding");
+      const double saving = savings[level - 22];
+      multi.measurements.push_back(synthetic_measurement(leg, 100.0));
+      multi.measurements.push_back(
+          synthetic_measurement(*alt, 100.0 - saving));
+      levels.push_back({level, leg.features.expansion_height,
+                        alt->features.expansion_height,
+                        alt->features.padded_plaintexts -
+                            leg.features.padded_plaintexts,
+                        saving});
+    }
+    const LayerLayoutSelection all_in =
+        select_layer_layouts(multi, 24, 96, reference, 2.0);
+    for (const Level &l : levels) {
+      require_test(all_in.expansion_heights[l.level - 1] == l.alt_height,
+                   "unconstrained budget must take every faster layout");
+    }
+    require_test(all_in.predicted_legacy_ms == 300.0 &&
+                     all_in.predicted_selected_ms == 270.0,
+                 "predicted times sum the chosen medians");
+
+    // Cap the extra plaintexts to the two cheapest alternatives together
+    // minus one, so at most those two (or one expensive one) fit.
+    std::vector<size_t> extras;
+    for (const Level &l : levels) extras.push_back(l.extra);
+    std::sort(extras.begin(), extras.end());
+    const size_t cap = extras[0] + extras[1] - 1;
+    const uint64_t legacy_total = all_in.legacy_total_padded_plaintexts;
+    const double budget = 1.0 + (static_cast<double>(cap) + 0.5) /
+                                    static_cast<double>(legacy_total);
+    const LayerLayoutSelection capped =
+        select_layer_layouts(multi, 24, 96, reference, budget);
+    double best_time = 300.0;
+    for (unsigned mask = 0; mask < 8; ++mask) {
+      size_t used = 0;
+      double time = 300.0;
+      for (size_t i = 0; i < 3; ++i) {
+        if (mask & (1U << i)) {
+          used += levels[i].extra;
+          time -= levels[i].saving;
+        }
+      }
+      if (used <= cap) best_time = std::min(best_time, time);
+    }
+    require_test(best_time > 270.0, "budget must be binding");
+    require_test(capped.predicted_selected_ms == best_time,
+                 "DP must match the brute-force optimum under the budget");
+    require_test(capped.selected_total_padded_plaintexts <=
+                     legacy_total + cap,
+                 "DP must respect the padded-plaintext cap");
+    double chosen_time = 300.0;
+    size_t chosen_extra = 0;
+    for (const Level &l : levels) {
+      const size_t h = capped.expansion_heights[l.level - 1];
+      require_test(h == l.legacy_height || h == l.alt_height,
+                   "DP chose an unmeasured layout");
+      if (h == l.alt_height) {
+        chosen_time -= l.saving;
+        chosen_extra += l.extra;
+      }
+    }
+    require_test(chosen_time == capped.predicted_selected_ms &&
+                     chosen_extra + legacy_total ==
+                         capped.selected_total_padded_plaintexts,
+                 "selection bookkeeping matches the chosen heights");
+  }
+}
+
+
+}  // namespace
+
+void PirTest::test_layer_layout_planner() {
+  require_median_sample_contract();
+
 
   require_applicable(paper_config_active(),
                      paper_config_reason("the layer layout planner"));
@@ -247,265 +521,17 @@ void PirTest::test_layer_layout_planner() {
                     .empty(),
                "cpu mismatch is reported");
 
-  // Every environment field the profile is validated on, mutated one at a
-  // time, must be named in the mismatch description.
-  {
-    using Env = LayerLayoutProfileEnvironment;
-    const std::vector<std::pair<std::string, std::function<void(Env &)>>>
-        mutations = {
-            {"poly_degree", [](Env &e) { e.poly_degree += 1; }},
-            {"log_q", [](Env &e) { e.log_q += 1; }},
-            {"log_t", [](Env &e) { e.log_t += 1; }},
-            {"log_q_prime", [](Env &e) { e.log_q_prime += 1; }},
-            {"L_EP", [](Env &e) { e.l_ep += 1; }},
-            {"L_KEY", [](Env &e) { e.l_key += 1; }},
-            {"L_KS", [](Env &e) { e.l_ks += 1; }},
-            {"composite_first_dim",
-             [](Env &e) { e.composite_first_dim = !e.composite_first_dim; }},
-            {"architecture", [](Env &e) { e.architecture += "-other"; }},
-            {"cpu", [](Env &e) { e.cpu += " other"; }},
-            {"compiler", [](Env &e) { e.compiler += " other"; }},
-            {"hexl_version", [](Env &e) { e.hexl_version += ".1"; }},
-        };
-    for (const auto &[field, mutate] : mutations) {
-      Env other = runtime;
-      mutate(other);
-      const std::string description =
-          describe_layer_layout_profile_mismatch(loaded, other, 24, 96);
-      require_test(description.find(field) != std::string::npos,
-                   "mismatch description does not name " + field);
-    }
-    require_test(describe_layer_layout_profile_mismatch(loaded, runtime, 24, 95)
-                         .find("nodes_per_plaintext") != std::string::npos,
-                 "nodes per plaintext mismatch is reported");
-    // commit, build type and config are informational: the same machine and
-    // scheme validate whatever they say.
-    Env relabelled = runtime;
-    relabelled.commit = "elsewhere";
-    relabelled.build_type = "Debug";
-    relabelled.config = "renamed";
-    require_test(describe_layer_layout_profile_mismatch(loaded, relabelled, 24,
-                                                         96)
-                     .empty(),
-                 "commit/build/config labels must not block a profile");
-  }
+  require_environment_mismatch_fields(loaded, runtime);
 
-  // Malformed profile files are rejected with a specific reason.
-  {
-    const std::string text = read_text(path);
-    const std::string bad_path =
-        (std::filesystem::temp_directory_path() / "layer-layout-bad.json")
-            .string();
-    require_test(load_fails_with(bad_path,
-                                 replace_first(text, "\"tree_height\": 24",
-                                               "\"tree_heigh\": 24"),
-                                 "missing key"),
-                 "loader accepted a missing key");
-    require_test(load_fails_with(bad_path,
-                                 replace_first(text, "\"tree_height\": 24",
-                                               "\"tree_height\": \"24\""),
-                                 "expected a number"),
-                 "loader accepted a string where a number is required");
-    require_test(load_fails_with(bad_path,
-                                 replace_first(text, "layer-layout-profile-v1",
-                                               "layer-layout-profile-v0"),
-                                 "unsupported"),
-                 "loader accepted an unknown schema version");
-    require_test(load_fails_with(bad_path, text + "x", "trailing"),
-                 "loader accepted trailing characters");
-    {
-      const size_t at = text.find("\"server_samples_ms\": [");
-      require_test(at != std::string::npos, "profile text lacks samples");
-      const size_t open = text.find('[', at);
-      const size_t close = text.find(']', open);
-      const std::string no_samples =
-          text.substr(0, open + 1) + text.substr(close);
-      require_test(load_fails_with(bad_path, no_samples, "no samples"),
-                   "loader accepted a measurement without samples");
-    }
-    {
-      // The selector optimises these numbers: a negative sample and a
-      // stored median that disagrees with its samples are both refused.
-      const size_t at = text.find("\"server_samples_ms\": [");
-      const size_t open = text.find('[', at);
-      const std::string negative =
-          text.substr(0, open + 1) + "-1.0, " + text.substr(open + 1);
-      require_test(load_fails_with(bad_path, negative, "non-negative"),
-                   "loader accepted a negative sample");
-      const std::string key = "\"median_server_ms\": ";
-      const size_t value = text.find(key) + key.size();
-      const size_t end = text.find(',', value);
-      require_test(value != std::string::npos && end != std::string::npos,
-                   "profile text lacks a median");
-      const std::string drifted_median =
-          text.substr(0, value) + "0.5" + text.substr(end);
-      require_test(load_fails_with(bad_path, drifted_median, "does not match"),
-                   "loader accepted a median that is not the samples' median");
-    }
-    std::filesystem::remove(bad_path);
-    bool missing_file = false;
-    try {
-      (void)load_layer_layout_profile(bad_path);
-    } catch (const std::runtime_error &) {
-      missing_file = true;
-    }
-    require_test(missing_file, "loader did not report a missing file");
-  }
 
-  // Structural rejections of the selector and the enumerator.
-  {
-    LayerLayoutProfile drifted = loaded;
-    drifted.measurements[1].features.padded_plaintexts += 1;
-    bool rejected_shape = false;
-    try {
-      (void)select_layer_layouts(drifted, 24, 96, reference, 1.01);
-    } catch (const std::invalid_argument &) {
-      rejected_shape = true;
-    }
-    require_test(rejected_shape,
-                 "selector accepted a measurement of an illegal layout");
+  require_malformed_profile_rejections(path);
 
-    LayerLayoutProfile only_alternative = loaded;
-    only_alternative.measurements.erase(only_alternative.measurements.begin());
-    require_test(only_alternative.measurements.size() == 1 &&
-                     only_alternative.measurements[0].features
-                             .expansion_height == 10,
-                 "fixture keeps only the h=10 measurement");
-    bool infeasible = false;
-    try {
-      (void)select_layer_layouts(only_alternative, 24, 96, reference, 1.0);
-    } catch (const std::runtime_error &) {
-      infeasible = true;
-    }
-    require_test(infeasible,
-                 "selector found a plan although no measured option fits");
 
-    const auto rejects = [](auto &&fn) {
-      try {
-        fn();
-      } catch (const std::invalid_argument &) {
-        return true;
-      }
-      return false;
-    };
-    require_test(rejects([&] {
-                   (void)enumerate_layer_layout_candidates(0, 96, reference);
-                 }),
-                 "enumerator accepted level 0");
-    require_test(rejects([&] {
-                   (void)enumerate_layer_layout_candidates(24, 0, reference);
-                 }),
-                 "enumerator accepted zero nodes per plaintext");
-    require_test(rejects([&] {
-                   (void)select_layer_layouts(loaded, 24, 96, reference, 0.5);
-                 }),
-                 "selector accepted a budget below 1.0");
-    LayerPlannerConfig no_profile;
-    no_profile.policy = LayerLayoutPolicy::profiled;
-    require_test(rejects([&] {
-                   (void)plan_layer_layouts(24, 96, reference, no_profile);
-                 }),
-                 "profiled policy accepted a null profile");
-  }
+  require_selector_rejections(loaded, reference);
 
-  // Multi-level knapsack under a binding budget: levels 22, 23 and 24 each
-  // get a measured legacy layout and one measured alternative that costs
-  // extra padding and saves time. The budget admits some but not all
-  // alternatives; the DP's choice must match a brute-force search over the
-  // eight subsets, and the unconstrained budget must take every alternative.
-  {
-    struct Level {
-      size_t level;
-      size_t legacy_height, alt_height;
-      size_t extra;
-      double saving;
-    };
-    std::vector<Level> levels;
-    LayerLayoutProfile multi = loaded;
-    multi.measurements.clear();
-    const std::vector<double> savings = {12.0, 8.0, 10.0};
-    for (size_t level = 22; level <= 24; ++level) {
-      const std::vector<LayerLayoutCandidate> cands =
-          enumerate_layer_layout_candidates(level, 96, reference);
-      const std::vector<LayerLayoutCandidate> front =
-          pareto_layer_layout_candidates(cands);
-      const LayerLayoutCandidate &leg =
-          cands[legacy_layer_layout_candidate(cands)];
-      const LayerLayoutCandidate *alt = nullptr;
-      for (const LayerLayoutCandidate &c : front) {
-        if (c.features.padded_plaintexts > leg.features.padded_plaintexts &&
-            (!alt || c.features.padded_plaintexts >
-                         alt->features.padded_plaintexts)) {
-          alt = &c;
-        }
-      }
-      require_test(alt != nullptr,
-                   "level has no frontier alternative with extra padding");
-      const double saving = savings[level - 22];
-      multi.measurements.push_back(synthetic_measurement(leg, 100.0));
-      multi.measurements.push_back(
-          synthetic_measurement(*alt, 100.0 - saving));
-      levels.push_back({level, leg.features.expansion_height,
-                        alt->features.expansion_height,
-                        alt->features.padded_plaintexts -
-                            leg.features.padded_plaintexts,
-                        saving});
-    }
-    const LayerLayoutSelection all_in =
-        select_layer_layouts(multi, 24, 96, reference, 2.0);
-    for (const Level &l : levels) {
-      require_test(all_in.expansion_heights[l.level - 1] == l.alt_height,
-                   "unconstrained budget must take every faster layout");
-    }
-    require_test(all_in.predicted_legacy_ms == 300.0 &&
-                     all_in.predicted_selected_ms == 270.0,
-                 "predicted times sum the chosen medians");
 
-    // Cap the extra plaintexts to the two cheapest alternatives together
-    // minus one, so at most those two (or one expensive one) fit.
-    std::vector<size_t> extras;
-    for (const Level &l : levels) extras.push_back(l.extra);
-    std::sort(extras.begin(), extras.end());
-    const size_t cap = extras[0] + extras[1] - 1;
-    const uint64_t legacy_total = all_in.legacy_total_padded_plaintexts;
-    const double budget = 1.0 + (static_cast<double>(cap) + 0.5) /
-                                    static_cast<double>(legacy_total);
-    const LayerLayoutSelection capped =
-        select_layer_layouts(multi, 24, 96, reference, budget);
-    double best_time = 300.0;
-    for (unsigned mask = 0; mask < 8; ++mask) {
-      size_t used = 0;
-      double time = 300.0;
-      for (size_t i = 0; i < 3; ++i) {
-        if (mask & (1U << i)) {
-          used += levels[i].extra;
-          time -= levels[i].saving;
-        }
-      }
-      if (used <= cap) best_time = std::min(best_time, time);
-    }
-    require_test(best_time > 270.0, "budget must be binding");
-    require_test(capped.predicted_selected_ms == best_time,
-                 "DP must match the brute-force optimum under the budget");
-    require_test(capped.selected_total_padded_plaintexts <=
-                     legacy_total + cap,
-                 "DP must respect the padded-plaintext cap");
-    double chosen_time = 300.0;
-    size_t chosen_extra = 0;
-    for (const Level &l : levels) {
-      const size_t h = capped.expansion_heights[l.level - 1];
-      require_test(h == l.legacy_height || h == l.alt_height,
-                   "DP chose an unmeasured layout");
-      if (h == l.alt_height) {
-        chosen_time -= l.saving;
-        chosen_extra += l.extra;
-      }
-    }
-    require_test(chosen_time == capped.predicted_selected_ms &&
-                     chosen_extra + legacy_total ==
-                         capped.selected_total_padded_plaintexts,
-                 "selection bookkeeping matches the chosen heights");
-  }
+  require_multilevel_knapsack_selection(loaded, reference);
+
 
   // Policy-aware planner: profiled selection versus the frozen legacy plan.
   const std::vector<LayerLayout> legacy = plan_layer_layouts(24, 96, reference);

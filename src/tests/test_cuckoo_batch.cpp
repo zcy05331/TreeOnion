@@ -363,26 +363,7 @@ void require_valid_placement(
   require_test(placed == expected, "every batch item is placed exactly once");
 }
 
-}  // namespace
-
-// Correctness gate at H = 13: bucket membership, deterministic cuckoo
-// placement, and a full encrypted batch round recovering every sibling.
-void PirTest::test_cuckoo_batch() {
-  require_applicable(paper_config_active(),
-                     paper_config_reason("the cuckoo batch baseline"));
-  print_func_name(__FUNCTION__);
-  const size_t tree_height = 13;
-  const size_t leaf_count = size_t{1} << tree_height;
-  const size_t item_count = 2 * (leaf_count - 1);
-  const CuckooBatchParams params =
-      make_cuckoo_batch_params(item_count, tree_height, 0x63756b31ULL);
-  require_test(params.num_buckets == (3 * tree_height + 1) / 2,
-               "1.5x bucket sizing");
-
-  const PirParams reference =
-      make_benchmark_reference(make_benchmark_workload(leaf_count));
-  std::vector<CuckooBucket> buckets =
-      build_cuckoo_buckets(params, reference);
+void require_bucket_layouts_use_shared_selector(const std::vector<CuckooBucket> &buckets, const PirParams &reference) {
   for (const CuckooBucket &bucket : buckets) {
     const TargetPlaintextLayout shared =
         select_target_plaintext_layout(bucket.target_num_pt, reference);
@@ -397,7 +378,9 @@ void PirTest::test_cuckoo_batch() {
                          shared.params.get_num_other_dims(),
                  "cuckoo buckets use the shared target-plaintext selector");
   }
+}
 
+void require_bucket_membership_positions(const std::vector<CuckooBucket> &buckets, const CuckooBatchParams &params, size_t item_count) {
   // Membership: every sampled ordinal is present in each hashed bucket, and
   // positions are consistent with the sorted member lists.
   for (uint32_t ordinal = 0; ordinal < item_count;
@@ -410,9 +393,13 @@ void PirTest::test_cuckoo_batch() {
                    "position rank addresses the ordinal");
     }
   }
+}
 
-  PirClient client(reference);
-  SharedPirSessionKeys keys = client.create_session_keys();
+void require_cuckoo_encrypted_batch_recovery(
+    const std::vector<CuckooBucket> &buckets,
+    const CuckooBatchParams &params, PirClient &client,
+    const SharedPirSessionKeys &keys, size_t tree_height,
+    size_t leaf_count) {
   std::vector<std::unique_ptr<PirServer>> servers;
   servers.reserve(buckets.size());
   for (const CuckooBucket &bucket : buckets) {
@@ -469,7 +456,13 @@ void PirTest::test_cuckoo_batch() {
     }
   }
   require_test(profile_checked, "profile transparency fixture executed");
+}
 
+void require_cuckoo_parameter_and_placement_validation(
+    const std::vector<CuckooBucket> &buckets,
+    const CuckooBatchParams &params, const PirParams &reference,
+    PirClient &client, const SharedPirSessionKeys &keys, size_t tree_height,
+    size_t leaf_count, size_t item_count) {
   // Parameter and placement validation.
   require_test(throws_invalid_argument([&] {
                  (void)make_cuckoo_batch_params(0, tree_height, 1);
@@ -576,6 +569,9 @@ void PirTest::test_cuckoo_batch() {
     }
     require_test(recovered == 20, "every item of the k = 20 batch recovered");
   }
+}
+
+void require_cuckoo_reference_shapes() {
   {
     const PirParams h24_reference =
         make_benchmark_reference(make_benchmark_workload(size_t{1} << 24));
@@ -594,6 +590,9 @@ void PirTest::test_cuckoo_batch() {
                      h27_reference.get_num_other_dims() == 13,
                  "8 GB benchmark reference shape");
   }
+}
+
+void require_representative_forced_layout_decodes() {
   {
     const PirParams wide_reference =
         make_benchmark_reference(make_benchmark_workload(size_t{1} << 24));
@@ -628,7 +627,9 @@ void PirTest::test_cuckoo_batch() {
           "representative last plaintext");
     }
   }
+}
 
+void require_cloudlab_cuckoo_schedule_placement() {
   {
     const size_t schedule_height = 24;
     const size_t schedule_leaf_count = size_t{1} << schedule_height;
@@ -664,6 +665,47 @@ void PirTest::test_cuckoo_batch() {
       }
     }
   }
+}
+
+
+}  // namespace
+
+// Correctness gate at H = 13: bucket membership, deterministic cuckoo
+// placement, and a full encrypted batch round recovering every sibling.
+void PirTest::test_cuckoo_batch() {
+  require_applicable(paper_config_active(),
+                     paper_config_reason("the cuckoo batch baseline"));
+  print_func_name(__FUNCTION__);
+  const size_t tree_height = 13;
+  const size_t leaf_count = size_t{1} << tree_height;
+  const size_t item_count = 2 * (leaf_count - 1);
+  const CuckooBatchParams params =
+      make_cuckoo_batch_params(item_count, tree_height, 0x63756b31ULL);
+  require_test(params.num_buckets == (3 * tree_height + 1) / 2,
+               "1.5x bucket sizing");
+
+  const PirParams reference =
+      make_benchmark_reference(make_benchmark_workload(leaf_count));
+  std::vector<CuckooBucket> buckets =
+      build_cuckoo_buckets(params, reference);
+  require_bucket_layouts_use_shared_selector(buckets, reference);
+
+  require_bucket_membership_positions(buckets, params, item_count);
+
+  PirClient client(reference);
+  SharedPirSessionKeys keys = client.create_session_keys();
+  require_cuckoo_encrypted_batch_recovery(buckets, params, client, keys,
+                                          tree_height, leaf_count);
+
+  require_cuckoo_parameter_and_placement_validation(
+      buckets, params, reference, client, keys, tree_height, leaf_count,
+      item_count);
+
+  require_cuckoo_reference_shapes();
+
+  require_representative_forced_layout_decodes();
+
+  require_cloudlab_cuckoo_schedule_placement();
 }
 
 // Timed batch retrieval at the comparison workload. Flags select the leaf

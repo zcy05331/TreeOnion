@@ -263,6 +263,18 @@ def analyze_and_write(raw_path: pathlib.Path, analysis_path: pathlib.Path, repor
     return analysis
 
 
+def prepare_entry_outputs(entry_dir: pathlib.Path) -> tuple[pathlib.Path, pathlib.Path, pathlib.Path, pathlib.Path]:
+    """Reserve the same artifact names for new and reused entry measurements."""
+    entry_dir.mkdir(parents=True, exist_ok=True)
+    raw_path = entry_dir / "raw.json"
+    process_path = process_path_for(raw_path)
+    log_path = log_path_for(raw_path)
+    analysis_path = entry_dir / "analysis.json"
+    if any(path.exists() for path in (raw_path, process_path, log_path, analysis_path)):
+        raise EntrySweepError(f"refusing to overwrite existing entry output in {entry_dir}")
+    return raw_path, process_path, log_path, analysis_path
+
+
 def run_entry(
     entry_dir: pathlib.Path,
     binary: pathlib.Path,
@@ -271,13 +283,7 @@ def run_entry(
     source_commit: str | None = None,
     run_func: Callable[..., dict[str, Any]] = run_measured,
 ) -> dict[str, Any]:
-    entry_dir.mkdir(parents=True, exist_ok=True)
-    raw_path = entry_dir / "raw.json"
-    process_path = process_path_for(raw_path)
-    log_path = log_path_for(raw_path)
-    analysis_path = entry_dir / "analysis.json"
-    if any(path.exists() for path in (raw_path, process_path, log_path, analysis_path)):
-        raise EntrySweepError(f"refusing to overwrite existing entry output in {entry_dir}")
+    raw_path, process_path, log_path, analysis_path = prepare_entry_outputs(entry_dir)
     command = command_for(binary, plan)
     process = run_func(command, log_path=log_path, env=env_for(plan, raw_path, source_commit), cwd=ROOT)
     process_path.write_text(json.dumps(process, indent=2, allow_nan=False) + "\n")
@@ -289,13 +295,7 @@ def run_entry(
 
 
 def reuse_entry(entry_dir: pathlib.Path, source_raw: pathlib.Path, plan: dict[str, int]) -> dict[str, Any]:
-    entry_dir.mkdir(parents=True, exist_ok=True)
-    raw_dest = entry_dir / "raw.json"
-    process_dest = process_path_for(raw_dest)
-    log_dest = log_path_for(raw_dest)
-    analysis_path = entry_dir / "analysis.json"
-    if any(path.exists() for path in (raw_dest, process_dest, log_dest, analysis_path)):
-        raise EntrySweepError(f"refusing to overwrite existing entry output in {entry_dir}")
+    raw_dest, process_dest, log_dest, analysis_path = prepare_entry_outputs(entry_dir)
     source_raw = source_raw.resolve()
     source_process = process_path_for(source_raw)
     validate_generic_raw(source_raw, source_process, plan)
@@ -347,6 +347,34 @@ def build_manifest(output_dir: pathlib.Path, entries: list[int], binary: pathlib
     }
 
 
+def run_manifest_cases(manifest, manifest_path, binary, reuse_32b, source_commit) -> int:
+    """Run or reuse each case, preserving progress even when another case fails."""
+    failures = 0
+    for case in manifest["cases"]:
+        plan = {key: case[key] for key in ("entry_bytes", "entry_bits", "leaf_count", "tree_height", "logical_db_bytes", "actual_tree_bytes", "max_responses")}
+        entry_dir = pathlib.Path(case["entry_dir"])
+        case["state"] = "reusing" if plan["entry_bytes"] == 32 and reuse_32b is not None else "running"
+        write_manifest(manifest_path, manifest)
+        try:
+            if plan["entry_bytes"] == 32 and reuse_32b is not None:
+                result = reuse_entry(entry_dir, reuse_32b, plan)
+                case["state"] = "reused"
+            else:
+                result = run_entry(entry_dir, binary, plan, source_commit=source_commit)
+                case["state"] = "complete"
+            case.update({k: v for k, v in result.items() if k != "analysis"})
+            best = mean_first_selection(load_json(pathlib.Path(case["raw_file"])), result["analysis"])
+            case["best_overall"] = best["best_overall"]
+            case["best_h1"] = best["best_h1"]
+            case["best_h3"] = best["best_h3"]
+        except Exception as exc:
+            failures += 1
+            case["state"] = "failed"
+            case["error"] = str(exc)
+        write_manifest(manifest_path, manifest)
+    return failures
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--binary", type=pathlib.Path, help="Onion-PIR benchmark binary for new entry sizes")
@@ -378,29 +406,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Plan: {manifest_path}")
         return 0
 
-    failures = 0
-    for case in manifest["cases"]:
-        plan = {key: case[key] for key in ("entry_bytes", "entry_bits", "leaf_count", "tree_height", "logical_db_bytes", "actual_tree_bytes", "max_responses")}
-        entry_dir = pathlib.Path(case["entry_dir"])
-        case["state"] = "reusing" if plan["entry_bytes"] == 32 and args.reuse_32b is not None else "running"
-        write_manifest(manifest_path, manifest)
-        try:
-            if plan["entry_bytes"] == 32 and args.reuse_32b is not None:
-                result = reuse_entry(entry_dir, args.reuse_32b, plan)
-                case["state"] = "reused"
-            else:
-                result = run_entry(entry_dir, binary, plan, source_commit=source_commit)
-                case["state"] = "complete"
-            case.update({k: v for k, v in result.items() if k != "analysis"})
-            best = mean_first_selection(load_json(pathlib.Path(case["raw_file"])), result["analysis"])
-            case["best_overall"] = best["best_overall"]
-            case["best_h1"] = best["best_h1"]
-            case["best_h3"] = best["best_h3"]
-        except Exception as exc:
-            failures += 1
-            case["state"] = "failed"
-            case["error"] = str(exc)
-        write_manifest(manifest_path, manifest)
+    failures = run_manifest_cases(manifest, manifest_path, binary, args.reuse_32b, source_commit)
     manifest["state"] = "failed" if failures else "complete"
     write_manifest(manifest_path, manifest)
     print(f"Artifacts: {output_dir}")

@@ -66,17 +66,18 @@ expect_rejected() {  # expect_rejected <binary> <log> <message> <argv...>
     echo "FAILED: '$*' was rejected without '$MESSAGE'" >&2; tail -n 3 "$LOG" >&2; exit 1; }
 }
 
-run_suite() {  # run_suite <binary>
-  local BIN="$1"
-  local TAG; TAG="$(basename "$(dirname "$BIN")")"
-  local W="$WORK/$TAG"; mkdir -p "$W"
-  local ABS_BIN; ABS_BIN="$(cd "$(dirname "$BIN")" && pwd)/$(basename "$BIN")"
+run_in_process_suite() {  # run_in_process_suite <binary> <tag> <work-dir>
+  local BIN="$1" TAG="$2" W="$3"
 
   step "[$TAG] in-process regression suite (--test all)"
   "$BIN" --test all --experiments 3 --warmup 1 > "$W/all.log" 2>&1 || {
     tail -n 40 "$W/all.log"; echo "FAILED: --test all ($BIN)" >&2; exit 1; }
   grep -q "Regression suite: .* tests passed" "$W/all.log"
   sed -n '/^Regression suite:/,$p' "$W/all.log"
+}
+
+assert_pir_iterations() {  # assert_pir_iterations <tag> <work-dir>
+  local TAG="$1" W="$2"
 
   # main.cpp runs experiments + warmup iterations and sets TimerLogger's warm-up
   # count from the same flag. Dropping either leaves WARMUP_ITERATIONS above the
@@ -103,15 +104,13 @@ run_suite() {  # run_suite <binary>
   grep -Eq '^Server throughput: [0-9]+(\.[0-9]+)? MB/s' "$W/pir.log" || {
     echo "FAILED: server throughput is not a finite number" >&2
     grep -n '^Server throughput' "$W/pir.log" >&2; exit 1; }
+}
 
-  if grep -q "^NOT APPLICABLE merkle_integration" "$W/all.log"; then
-    echo "[$TAG] Merkle suite not applicable to this build; CLI section skipped"
-    return 0
-  fi
+run_merkle_cli_contracts() {  # run_merkle_cli_contracts <binary> <tag> <work-dir> <profile-path>
+  local BIN="$1" TAG="$2" W="$3" PROFILE="$4"
 
   # CLI end to end at 2^8 leaves (H = 8): the sweep writes a profile file,
   # the suite loads it from disk and reports the profiled policy in its JSON.
-  local PROFILE="$W/profile-h8.json"
   step "[$TAG] layer_layout_sweep -> $PROFILE"
   # --layer-padding-budget 1.25, not the 1.01 both main.cpp and
   # LayerLayoutSweepOptions default to: with the default the echoed value is the
@@ -187,6 +186,10 @@ run_suite() {  # run_suite <binary>
     echo "FAILED: drifted profile median was accepted" >&2; exit 1
   fi
   grep -q "does not match" "$W/drifted.log"
+}
+
+run_cloudlab_profile_chain() {  # run_cloudlab_profile_chain <binary> <tag> <work-dir> <profile-path>
+  local BIN="$1" TAG="$2" W="$3" PROFILE="$4"
 
   # ---- the CloudLab chains, replayed at 2^8 leaves -------------------------
   # Every Python test in scripts/tests hand-writes its benchmark fixtures and
@@ -322,6 +325,10 @@ with open(sys.argv[2]) as handle:
 assert sources, "no stage samples collected"
 assert not any(s.endswith("-process.json") for s in sources), sources
 PY
+}
+
+run_tree_json_contracts() {  # run_tree_json_contracts <binary> <tag> <work-dir>
+  local BIN="$1" TAG="$2" W="$3"
 
   step "[$TAG] tree benchmark JSON stages, correctness and communication"
   BENCHMARK_OUTPUT_JSON="$W/tree_compress.json" "$BIN" --test tree_compress_bench \
@@ -377,6 +384,10 @@ PY
     echo "FAILED: a flag-less tree_bench_g32 run no longer measures its default 16 trials" >&2
     exit 1
   fi
+}
+
+run_python_driver_contracts() {  # run_python_driver_contracts <binary> <tag> <work-dir> <abs-binary>
+  local BIN="$1" TAG="$2" W="$3" ABS_BIN="$4"
 
   # Both binary-backed modules default to the Rosetta build directory, so on a
   # campaign host that builds into build-native they skip themselves and their
@@ -388,6 +399,10 @@ PY
   ( cd "$ROOT" && ONIONPIR_BENCH_BIN="$ABS_BIN" \
       python3 -m unittest scripts.tests.test_benchmark_json_contract \
                           scripts.tests.test_gadget_configs_e2e )
+}
+
+run_argument_validation() {  # run_argument_validation <binary> <tag> <work-dir>
+  local BIN="$1" TAG="$2" W="$3"
 
   step "[$TAG] argument validation"
   if "$BIN" --test merkle_benchmarks --layer-layout-policy profiled \
@@ -436,6 +451,28 @@ PY
   # only for that path (stderr may carry macOS lscpu noise, so only the exit
   # code is checked).
   "$BIN" --test cpu_info --no-compress > "$W/nocompress.log" 2>&1
+}
+
+run_suite() {  # run_suite <binary>
+  local BIN="$1"
+  local TAG; TAG="$(basename "$(dirname "$BIN")")"
+  local W="$WORK/$TAG"; mkdir -p "$W"
+  local ABS_BIN; ABS_BIN="$(cd "$(dirname "$BIN")" && pwd)/$(basename "$BIN")"
+
+  run_in_process_suite "$BIN" "$TAG" "$W"
+  assert_pir_iterations "$TAG" "$W"
+
+  if grep -q "^NOT APPLICABLE merkle_integration" "$W/all.log"; then
+    echo "[$TAG] Merkle suite not applicable to this build; CLI section skipped"
+    return 0
+  fi
+
+  local PROFILE="$W/profile-h8.json"
+  run_merkle_cli_contracts "$BIN" "$TAG" "$W" "$PROFILE"
+  run_cloudlab_profile_chain "$BIN" "$TAG" "$W" "$PROFILE"
+  run_tree_json_contracts "$BIN" "$TAG" "$W"
+  run_python_driver_contracts "$BIN" "$TAG" "$W" "$ABS_BIN"
+  run_argument_validation "$BIN" "$TAG" "$W"
 }
 
 for BIN in "${BINS[@]}"; do

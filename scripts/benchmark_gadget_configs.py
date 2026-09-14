@@ -235,6 +235,144 @@ def run_order(labels, rounds):
     return [labels, list(reversed(labels))]
 
 
+def round_command_and_environment(args, binary, label, sources, packings, raw, expansion_height):
+    h, G, P, N0, b = args.shape
+    env = os.environ.copy()
+    for key in ("SUPERRECORD_PLAN_ONLY", "SUPERRECORD_CANDIDATE_INDEX"):
+        env.pop(key, None)
+    env.update(
+        {
+            "SUPERRECORD_ENTRY_BITS": "256",
+            "SUPERRECORD_BUNDLE_ARITIES": str(h),
+            "SUPERRECORD_MAX_ARITY": str(h),
+            "SUPERRECORD_SKIP_LEGACY": "1",
+            "SUPERRECORD_MAX_FRONTIER": "0",
+            "SUPERRECORD_H1_FRONTIER": "1" if h == 1 else "0",
+            "SUPERRECORD_EXPANSION_HEIGHTS": str(expansion_height),
+            "SUPERRECORD_ALPHA_ALIGNMENTS": "16",
+            "SUPERRECORD_MAX_RESPONSES": "1",
+            "SUPERRECORD_FIXED_KEY_HEIGHT": "11",
+            "SUPERRECORD_MEMORY_BYTES": str(args.memory_gib * 2**30),
+            "SUPERRECORD_MIN_NOISE_MARGIN": "0",
+            "SUPERRECORD_PIN_SHAPE": f"{h},{G},{P},{N0},{b}",
+            "SUPERRECORD_OUTPUT_JSON": str(raw),
+        }
+    )
+    if label in sources:
+        env["SUPERRECORD_COMMIT"] = sources[label]
+    if label in packings:
+        env["SUPERRECORD_RESPONSE_PACKING"] = packings[label]
+    command = [
+        str(binary.resolve()),
+        "--test",
+        "tree_superrecord_bench",
+        "--leaf-count",
+        str(args.leaf_count),
+        "--experiments",
+        str(args.experiments),
+        "--warmup",
+        "3",
+        "--trial-seed",
+        "7",
+    ]
+    return command, env
+
+
+def run_candidate_round(args, binaries, sources, packings, out, expansion_height,
+                        manifest, save, round_id, label):
+    """Persist one round and return its accepted candidate and process record."""
+    name = f"round{round_id}-{label}"
+    raw = out / f"{name}.json"
+    command, env = round_command_and_environment(
+        args, binaries[label], label, sources, packings, raw, expansion_height
+    )
+    row = {
+        "name": name,
+        "label": label,
+        "state": "running",
+        "command": command,
+        "source": sources.get(label),
+        "environment": {key: value for key, value in env.items() if key.startswith("SUPERRECORD_")},
+    }
+    manifest["runs"].append(row)
+    save()
+    process = run_measured(command, log_path=out / f"{name}.log", env=env)
+    process_path = out / f"{name}-process.json"
+    process_path.write_text(json.dumps(process, indent=2) + "\n")
+    process_record = {**process, "path": str(process_path), "raw": str(raw)}
+    if process["exit_code"] != 0:
+        row["state"] = "failed"
+        row["error"] = "benchmark process returned nonzero exit"
+        row["process"] = process
+        save()
+        return None, process_record
+    try:
+        data = json.loads(raw.read_text())
+        candidate = validate_profile(
+            data,
+            raw,
+            args.experiments,
+            args.leaf_count,
+            args.shape,
+            expansion_height,
+            packings.get(label),
+        )
+    except Exception as error:
+        row["state"] = "failed"
+        row["error"] = str(error)
+        save()
+        return None, process_record
+    row["state"] = "complete"
+    row["mean_server_ms"] = fmean(sample["server_total_ms"] for sample in candidate["samples"])
+    row["mean_rotation_projection_ms"] = fmean(finite_stage_sum(sample, ("rotate", "project"), raw) for sample in candidate["samples"])
+    row["mean_response_processing_ms"] = fmean(
+        response_processing_ms(sample, candidate["_driver_response_packing"], raw)
+        for sample in candidate["samples"]
+    )
+    row["response_packing"] = candidate["_driver_response_packing"]
+    save()
+    print(json.dumps(row), flush=True)
+    return candidate, process_record
+
+
+def compare_completed_rounds(binaries, rounds, completed, process_records, label_failures, runs):
+    """Reject incomplete or mismatched labels before pooling their samples."""
+    rejected_labels = dict(label_failures)
+    for label in binaries:
+        if label not in completed:
+            rejected_labels.setdefault(label, "no completed rounds")
+        elif len(completed[label]) != rounds:
+            rejected_labels.setdefault(label, "incomplete completed rounds")
+    valid_labels = [label for label in binaries if label in completed and label not in rejected_labels]
+    reference = completed[valid_labels[0]][0] if valid_labels else None
+    if reference is not None:
+        for label in list(valid_labels):
+            for candidate in completed[label]:
+                try:
+                    check_comparable(reference, candidate, label)
+                except Exception as error:
+                    rejected_labels[label] = str(error)
+                    break
+    valid_labels = [label for label in binaries if label in completed and label not in rejected_labels]
+    if not valid_labels:
+        raise RuntimeError("no valid benchmark results completed")
+    summary = {}
+    for label in valid_labels:
+        candidates = completed[label]
+        merged = copy_candidate_with_samples(candidates)
+        summary[label] = summarize_candidate(merged, process_records.get(label, []))
+    state = "complete_with_failures" if rejected_labels else "complete"
+    comparison = {
+        "state": state,
+        "completed_labels": valid_labels,
+        "failed_runs": [run for run in runs if run["state"] == "failed"],
+        "rejected_labels": rejected_labels,
+        "layout": comparable_layout(completed[valid_labels[0]][0]),
+        "summary": summary,
+    }
+    return comparison
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--binary", action="append", type=parse_label_path, required=True)
@@ -293,130 +431,20 @@ def main():
     try:
         for round_id, order in enumerate(run_order(list(binaries.keys()), args.rounds)):
             for label in order:
-                name = f"round{round_id}-{label}"
-                raw = out / f"{name}.json"
-                env = os.environ.copy()
-                for key in ("SUPERRECORD_PLAN_ONLY", "SUPERRECORD_CANDIDATE_INDEX"):
-                    env.pop(key, None)
-                env.update(
-                    {
-                        "SUPERRECORD_ENTRY_BITS": "256",
-                        "SUPERRECORD_BUNDLE_ARITIES": str(h),
-                        "SUPERRECORD_MAX_ARITY": str(h),
-                        "SUPERRECORD_SKIP_LEGACY": "1",
-                        "SUPERRECORD_MAX_FRONTIER": "0",
-                        "SUPERRECORD_H1_FRONTIER": "1" if h == 1 else "0",
-                        "SUPERRECORD_EXPANSION_HEIGHTS": str(expansion_height),
-                        "SUPERRECORD_ALPHA_ALIGNMENTS": "16",
-                        "SUPERRECORD_MAX_RESPONSES": "1",
-                        "SUPERRECORD_FIXED_KEY_HEIGHT": "11",
-                        "SUPERRECORD_MEMORY_BYTES": str(args.memory_gib * 2**30),
-                        "SUPERRECORD_MIN_NOISE_MARGIN": "0",
-                        "SUPERRECORD_PIN_SHAPE": f"{h},{G},{P},{N0},{b}",
-                        "SUPERRECORD_OUTPUT_JSON": str(raw),
-                    }
+                candidate, process_record = run_candidate_round(
+                    args, binaries, sources, packings, out, expansion_height,
+                    manifest, save, round_id, label,
                 )
-                if label in sources:
-                    env["SUPERRECORD_COMMIT"] = sources[label]
-                if label in packings:
-                    env["SUPERRECORD_RESPONSE_PACKING"] = packings[label]
-                command = [
-                    str(binaries[label].resolve()),
-                    "--test",
-                    "tree_superrecord_bench",
-                    "--leaf-count",
-                    str(args.leaf_count),
-                    "--experiments",
-                    str(args.experiments),
-                    "--warmup",
-                    "3",
-                    "--trial-seed",
-                    "7",
-                ]
-                row = {
-                    "name": name,
-                    "label": label,
-                    "state": "running",
-                    "command": command,
-                    "source": sources.get(label),
-                    "environment": {key: value for key, value in env.items() if key.startswith("SUPERRECORD_")},
-                }
-                manifest["runs"].append(row)
-                save()
-                process = run_measured(command, log_path=out / f"{name}.log", env=env)
-                process_path = out / f"{name}-process.json"
-                process_path.write_text(json.dumps(process, indent=2) + "\n")
-                process_records.setdefault(label, []).append({**process, "path": str(process_path), "raw": str(raw)})
-                if process["exit_code"] != 0:
-                    row["state"] = "failed"
-                    row["error"] = "benchmark process returned nonzero exit"
-                    row["process"] = process
+                process_records.setdefault(label, []).append(process_record)
+                if candidate is None:
                     label_failures.setdefault(label, "one or more rounds failed")
-                    save()
-                    continue
-                try:
-                    data = json.loads(raw.read_text())
-                    candidate = validate_profile(
-                        data,
-                        raw,
-                        args.experiments,
-                        args.leaf_count,
-                        args.shape,
-                        expansion_height,
-                        packings.get(label),
-                    )
-                except Exception as error:
-                    row["state"] = "failed"
-                    row["error"] = str(error)
-                    label_failures.setdefault(label, "one or more rounds failed")
-                    save()
-                    continue
-                completed.setdefault(label, []).append(candidate)
-                row["state"] = "complete"
-                row["mean_server_ms"] = fmean(sample["server_total_ms"] for sample in candidate["samples"])
-                row["mean_rotation_projection_ms"] = fmean(finite_stage_sum(sample, ("rotate", "project"), raw) for sample in candidate["samples"])
-                row["mean_response_processing_ms"] = fmean(
-                    response_processing_ms(sample, candidate["_driver_response_packing"], raw)
-                    for sample in candidate["samples"]
-                )
-                row["response_packing"] = candidate["_driver_response_packing"]
-                save()
-                print(json.dumps(row), flush=True)
-        rejected_labels = dict(label_failures)
-        for label in binaries:
-            if label not in completed:
-                rejected_labels.setdefault(label, "no completed rounds")
-            elif len(completed[label]) != args.rounds:
-                rejected_labels.setdefault(label, "incomplete completed rounds")
-        valid_labels = [label for label in binaries if label in completed and label not in rejected_labels]
-        reference = completed[valid_labels[0]][0] if valid_labels else None
-        if reference is not None:
-            for label in list(valid_labels):
-                for candidate in completed[label]:
-                    try:
-                        check_comparable(reference, candidate, label)
-                    except Exception as error:
-                        rejected_labels[label] = str(error)
-                        break
-        valid_labels = [label for label in binaries if label in completed and label not in rejected_labels]
-        if not valid_labels:
-            raise RuntimeError("no valid benchmark results completed")
-        summary = {}
-        for label in valid_labels:
-            candidates = completed[label]
-            merged = copy_candidate_with_samples(candidates)
-            summary[label] = summarize_candidate(merged, process_records.get(label, []))
-        state = "complete_with_failures" if rejected_labels else "complete"
-        comparison = {
-            "state": state,
-            "completed_labels": valid_labels,
-            "failed_runs": [run for run in manifest["runs"] if run["state"] == "failed"],
-            "rejected_labels": rejected_labels,
-            "layout": comparable_layout(completed[valid_labels[0]][0]),
-            "summary": summary,
-        }
+                else:
+                    completed.setdefault(label, []).append(candidate)
+        comparison = compare_completed_rounds(
+            binaries, args.rounds, completed, process_records, label_failures, manifest["runs"]
+        )
         (out / "comparison.json").write_text(json.dumps(comparison, indent=2) + "\n")
-        manifest["state"] = state
+        manifest["state"] = comparison["state"]
         save()
     except Exception as error:
         manifest["state"] = "failed"

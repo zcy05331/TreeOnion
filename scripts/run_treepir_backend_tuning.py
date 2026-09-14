@@ -225,56 +225,10 @@ def command_for_candidate(candidate: Candidate, *, vbpir: Path, sealpir: Path, h
             "--trials", str(trials), "--pir-d", str(candidate.params["pir_d"])]
 
 
-def run_one_height(args: argparse.Namespace, height: int, runner: Callable[..., dict[str, Any]]) -> bool:
-    scale = scale_for_height(height)
-    leaf_count = 1 << height
-    run_root = args.run_root
-    source = run_root / "source"
-    folder = run_root / "outputs" / "treepir-backend-tuning" / scale
-    tuning_dir = folder / "candidates"
-    folder.mkdir(parents=True, exist_ok=True)
-    tuning_dir.mkdir(parents=True, exist_ok=True)
-
-    env = os.environ.copy()
-    env["RUN_ROOT"] = str(run_root)
-    env["TREEPIR_DATA_DIR"] = str(run_root / "deps" / "TreePIR" / "VBPIR_TreePIR")
-
-    vbpir = args.vbpir_bin or run_root / "deps" / "TreePIR" / "VBPIR_TreePIR" / "build" / "bin" / "vbpir_treepir"
-    sealpir = args.sealpir_binary or source / "build-treepir-sealpir" / "treepir_sealpir_adapter"
-    onion = args.onion_bin or source / "build-native" / "Onion-PIR"
-
-    schedule_json = tuning_dir / "schedule-treepir-tuned.json"
-    schedule_process = runner(
-        [str(onion), "--test", "tree_superrecord_bench", "--leaf-count", str(leaf_count),
-         "--experiments", str(args.trials), "--warmup", str(args.warmups), "--trial-seed", str(args.trial_seed)],
-        log_path=schedule_json.with_suffix(".log"),
-        output_path=schedule_json,
-        env={**env, "SUPERRECORD_PLAN_ONLY": "1", "SUPERRECORD_SKIP_LEGACY": "1",
-             "SUPERRECORD_BUNDLE_ARITIES": "1,3", "SUPERRECORD_MAX_ARITY": "3",
-             "SUPERRECORD_OUTPUT_JSON": str(schedule_json)},
-    )
-    if not process_ok(schedule_process):
-        print(f"{scale}: schedule generation failed", file=sys.stderr)
-        return False
-    leaves = validate_leaf_schedule(schedule_json, trials=args.trials, warmups=args.warmups, leaf_count=leaf_count)
-    leaf_file = folder / "treepir-leaves-tuned.txt"
-    write_leaf_file(leaf_file, leaves)
-
-    index_json = tuning_dir / "vbpir-index-only.json"
-    index_process = runner(
-        [str(vbpir), "--height", str(height), "--leaf-file", str(leaf_file), "--warmup", str(args.warmups),
-         "--trials", str(args.trials), "--output", str(index_json), "--validate-index-only"],
-        log_path=index_json.with_suffix(".log"),
-        output_path=index_json,
-        env=env,
-    )
-    if not process_ok(index_process):
-        print(f"{scale}: VBPIR index-only run failed", file=sys.stderr)
-        return False
-    validate_index_only(index_json, height=height, trials=args.trials, warmups=args.warmups, leaves=leaves)
-
+def run_pilot_candidates(args, height, runner, *, tuning_dir, leaves, leaf_file,
+                         index_json, vbpir, sealpir, env) -> list[CandidateResult]:
+    """Evaluate each backend on the pilot prefix of the shared leaf schedule."""
     candidate_results: list[CandidateResult] = []
-    candidate_by_label = {candidate.label: candidate for candidate in candidates_for_height(height)}
     pilot_leaves = leaves[:args.warmups + args.pilot_trials]
     for candidate in candidates_for_height(height):
         output = tuning_dir / f"pilot-{candidate.label}.json"
@@ -290,8 +244,12 @@ def run_one_height(args: argparse.Namespace, height: int, runner: Callable[..., 
                                                           trials=args.pilot_trials, warmups=args.warmups,
                                                           leaves=pilot_leaves))
 
-    best = select_best_candidate(candidate_results)
-    selected_candidate = candidate_by_label[best.label]
+    return candidate_results
+
+
+def run_formal_candidate(args, height, runner, *, folder, tuning_dir, scale, leaves, leaf_file,
+                         index_json, vbpir, sealpir, env, best, selected_candidate, candidate_results) -> bool:
+    """Validate the selected backend on the full schedule before publishing it."""
     final_json = folder / "formal.json"
     final_log = folder / "formal.log"
     final_process = folder / "formal-process.json"
@@ -334,6 +292,84 @@ def run_one_height(args: argparse.Namespace, height: int, runner: Callable[..., 
     }, indent=2) + "\n")
     print(f"{scale}: selected {best.label} mean_server_ms={best.mean_server_ms:.3f}")
     return True
+
+
+def prepare_leaf_schedule(args, height, runner, *, folder, tuning_dir, scale,
+                          leaf_count, onion, vbpir, env):
+    """Generate shared leaves and validate their VBPIR index mapping before pilots."""
+    schedule_json = tuning_dir / "schedule-treepir-tuned.json"
+    schedule_process = runner(
+        [str(onion), "--test", "tree_superrecord_bench", "--leaf-count", str(leaf_count),
+         "--experiments", str(args.trials), "--warmup", str(args.warmups), "--trial-seed", str(args.trial_seed)],
+        log_path=schedule_json.with_suffix(".log"),
+        output_path=schedule_json,
+        env={**env, "SUPERRECORD_PLAN_ONLY": "1", "SUPERRECORD_SKIP_LEGACY": "1",
+             "SUPERRECORD_BUNDLE_ARITIES": "1,3", "SUPERRECORD_MAX_ARITY": "3",
+             "SUPERRECORD_OUTPUT_JSON": str(schedule_json)},
+    )
+    if not process_ok(schedule_process):
+        print(f"{scale}: schedule generation failed", file=sys.stderr)
+        return None
+    leaves = validate_leaf_schedule(schedule_json, trials=args.trials, warmups=args.warmups, leaf_count=leaf_count)
+    leaf_file = folder / "treepir-leaves-tuned.txt"
+    write_leaf_file(leaf_file, leaves)
+
+    index_json = tuning_dir / "vbpir-index-only.json"
+    index_process = runner(
+        [str(vbpir), "--height", str(height), "--leaf-file", str(leaf_file), "--warmup", str(args.warmups),
+         "--trials", str(args.trials), "--output", str(index_json), "--validate-index-only"],
+        log_path=index_json.with_suffix(".log"),
+        output_path=index_json,
+        env=env,
+    )
+    if not process_ok(index_process):
+        print(f"{scale}: VBPIR index-only run failed", file=sys.stderr)
+        return None
+    validate_index_only(index_json, height=height, trials=args.trials, warmups=args.warmups, leaves=leaves)
+
+    return leaves, leaf_file, index_json
+
+
+def run_one_height(args: argparse.Namespace, height: int, runner: Callable[..., dict[str, Any]]) -> bool:
+    scale = scale_for_height(height)
+    leaf_count = 1 << height
+    run_root = args.run_root
+    source = run_root / "source"
+    folder = run_root / "outputs" / "treepir-backend-tuning" / scale
+    tuning_dir = folder / "candidates"
+    folder.mkdir(parents=True, exist_ok=True)
+    tuning_dir.mkdir(parents=True, exist_ok=True)
+
+    env = os.environ.copy()
+    env["RUN_ROOT"] = str(run_root)
+    env["TREEPIR_DATA_DIR"] = str(run_root / "deps" / "TreePIR" / "VBPIR_TreePIR")
+
+    vbpir = args.vbpir_bin or run_root / "deps" / "TreePIR" / "VBPIR_TreePIR" / "build" / "bin" / "vbpir_treepir"
+    sealpir = args.sealpir_binary or source / "build-treepir-sealpir" / "treepir_sealpir_adapter"
+    onion = args.onion_bin or source / "build-native" / "Onion-PIR"
+
+    prepared = prepare_leaf_schedule(
+        args, height, runner, folder=folder, tuning_dir=tuning_dir, scale=scale,
+        leaf_count=leaf_count, onion=onion, vbpir=vbpir, env=env,
+    )
+    if prepared is None:
+        return False
+    leaves, leaf_file, index_json = prepared
+
+    candidate_by_label = {candidate.label: candidate for candidate in candidates_for_height(height)}
+    candidate_results = run_pilot_candidates(
+        args, height, runner, tuning_dir=tuning_dir, leaves=leaves, leaf_file=leaf_file,
+        index_json=index_json, vbpir=vbpir, sealpir=sealpir, env=env,
+    )
+
+    best = select_best_candidate(candidate_results)
+    selected_candidate = candidate_by_label[best.label]
+    return run_formal_candidate(
+        args, height, runner, folder=folder, tuning_dir=tuning_dir, scale=scale,
+        leaves=leaves, leaf_file=leaf_file, index_json=index_json, vbpir=vbpir,
+        sealpir=sealpir, env=env, best=best, selected_candidate=selected_candidate,
+        candidate_results=candidate_results,
+    )
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:

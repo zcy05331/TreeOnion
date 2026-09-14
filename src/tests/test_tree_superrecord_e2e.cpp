@@ -201,6 +201,13 @@ void PirTest::test_tree_superrecord_e2e() {
   PirParams scheme;
   PirClient client(scheme);
   const bool composite = scheme.get_composite_rns().enabled;
+  const size_t n = scheme.get_poly_degree();
+  const size_t c = payload_bits(scheme);
+  // Retain two-plane fixtures: rho = 8 spans two responses, while rho = 1
+  // spans ten. The original n = 2048 entry sizes stay unchanged.
+  const size_t two_chunk_g = n / 8;
+  const size_t two_chunk_entry_bits = std::max(size_t{4096}, c * two_chunk_g + 1);
+  const size_t large_entry_bits = std::max(size_t{30000}, c * n + 1);
 
   struct Shape {
     size_t E, N, h, G, b, max_responses, expected_chunks;
@@ -208,17 +215,21 @@ void PirTest::test_tree_superrecord_e2e() {
   const std::vector<Shape> shapes = {
       {13, 64, 3, 2, 0, 1, 1},
       {256, 256, 3, 64, 0, 1, 1},
-      {256, 1024, 3, 64, 2, 1, 1},
+      {256, n / 2, 3, 64, 2, 1, 1},
       {13, 8, 8, 4, 0, 4, 1},
       {40, 128, 5, 8, 0, 1, 1},
-      {4096, 16, 1, 256, 0, 2, 2},
-      {30000, 16, 1, 2048, 2, 16, 10},
+      {two_chunk_entry_bits, 16, 1, two_chunk_g, 0, 2, 2},
+      {large_entry_bits, 16, 1, n, 2, 16, 10},
   };
   for (const Shape &shape : shapes) {
     const TreeParams params = plan_for(scheme, shape.E, shape.N, shape.h,
                                        shape.G, shape.b,
                                        test_policy(shape.max_responses, 128));
     const CandidateShape &s = params.shape;
+    if (shape.expected_chunks > 1) {
+      require_test(s.plane_count == 2, "multi-response fixtures retain two planes");
+    }
+
     const size_t L = s.tree_height;
     const EntrySource source = [&](size_t level, size_t node) {
       return synthetic_entry(shape.E, level, node);

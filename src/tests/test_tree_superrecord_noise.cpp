@@ -64,9 +64,15 @@ void PirTest::test_tree_superrecord_noise() {
   const TargetNoiseCase target_case{.leaf = params.shape.leaf_count - 1,
                                     .source = source,
                                     .label = "noise-test"};
+  // Full-Q noise_budget is a first-limb diagnostic. Multi-limb fixtures use
+  // the existing correctness-only policy; K = 1 retains its positive margin.
+  const double required_margin = scheme.K() == 1 ? 1.0 : 0.0;
   const CandidateNoiseResult passed = run_target_shape_noise_gate(
       client, server, session, params, scheme,
-      std::span<const TargetNoiseCase>(&target_case, 1), 1.0);
+      std::span<const TargetNoiseCase>(&target_case, 1), required_margin);
+  require_test(passed.decrypts_correctly &&
+                   passed.observed_key_coverage_matches_tag,
+               "target fixture decrypts correctly with its registered key coverage");
   require_test(noise_result_unlocks_candidate(passed, params,
                                               client.get_client_id()),
                "target-tag noise gate unlocks its own plan");
@@ -96,7 +102,7 @@ void PirTest::test_tree_superrecord_noise() {
     min_checkpoint_margin = std::min(min_checkpoint_margin, checkpoint.margin);
   }
   require_test(passed.minimum_margin == min_checkpoint_margin &&
-                   passed.minimum_margin >= 1.0,
+                   passed.minimum_margin >= required_margin,
                "minimum_margin is the minimum checkpoint margin");
   CandidateNoiseResult at_boundary = passed;
   at_boundary.min_noise_margin = passed.minimum_margin;

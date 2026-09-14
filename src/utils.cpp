@@ -1,93 +1,9 @@
 #include "utils.h"
-#include "hexl/hexl.hpp"
+
 #include <bit>
-#include <cassert>
-#include <cstring>
-#include <fstream>
 #include <limits>
-#include <memory>
 #include <stdexcept>
 #include <unordered_map>
-
-namespace {
-// Optional custom 2N-th root for a single (N, q). Set once by
-// utils::register_ntt_root during PirParams construction, then read-only.
-// Used for composite q = q1*q2 since HEXL's default ctor can't search for a
-// root when q is non-prime.
-size_t g_custom_N = 0;
-uint64_t g_custom_q = 0;
-uint64_t g_custom_root = 0;
-
-// Function-static cache of HEXL NTT objects keyed by (N, q). This is not
-// thread_local and has no lock; current benchmark code treats single-threaded
-// execution as the safety boundary. Most (N, q) used here are prime moduli;
-// HEXL's default ctor searches for a primitive root. Composite q falls back
-// to the registered custom root.
-intel::hexl::NTT &get_ntt(size_t N, uint64_t q) {
-  struct Key {
-    size_t N; uint64_t q;
-    bool operator==(const Key &o) const noexcept { return N == o.N && q == o.q; }
-  };
-  struct Hash {
-    size_t operator()(const Key &k) const noexcept {
-      return std::hash<size_t>()(k.N) ^ (std::hash<uint64_t>()(k.q) * 0x9E3779B97F4A7C15ULL);
-    }
-  };
-  static std::unordered_map<Key, std::unique_ptr<intel::hexl::NTT>, Hash> cache;
-  auto it = cache.find({N, q});
-  if (it != cache.end()) return *it->second;
-  auto ntt = (N == g_custom_N && q == g_custom_q)
-                 ? std::make_unique<intel::hexl::NTT>(N, q, g_custom_root)
-                 : std::make_unique<intel::hexl::NTT>(N, q);
-  auto ins = cache.emplace(Key{N, q}, std::move(ntt));
-  return *ins.first->second;
-}
-} // namespace
-
-void utils::register_ntt_root(size_t N, uint64_t q, uint64_t root) {
-  if (g_custom_N != 0 &&
-      (g_custom_N != N || g_custom_q != q || g_custom_root != root)) {
-    throw std::invalid_argument(
-        "register_ntt_root: a different (N, q, root) is already registered");
-  }
-  g_custom_N = N;
-  g_custom_q = q;
-  g_custom_root = root;
-}
-
-void utils::automorphism_coeff(const uint64_t *in, size_t N, uint32_t k,
-                               uint64_t q, uint64_t *out) {
-  // X -> X^k maps ciphertexts from secret s to secret σ_k(s). Query expansion
-  // applies the matching BvKeySwitchKey afterward to return to the original
-  // secret; this helper only performs the polynomial automorphism.
-  const size_t two_n = 2 * N;
-  for (size_t i = 0; i < N; i++) {
-    size_t dest = (static_cast<uint64_t>(i) * k) % two_n;
-    if (dest < N) {
-      out[dest] = in[i];
-    } else {
-      out[dest - N] = (in[i] == 0) ? 0 : (q - in[i]);
-    }
-  }
-}
-
-void utils::automorphism_ntt(const uint64_t *in, size_t N, uint32_t k,
-                              uint64_t q, uint64_t *out) {
-  // NTT → coeff → automorphism → NTT. Two extra transforms, only used in keygen.
-  // Input/output domain remains NTT; the coefficient-form automorphism is internal.
-  std::vector<uint64_t> coeff(in, in + N);
-  ntt_inv(coeff.data(), N, q);
-  automorphism_coeff(coeff.data(), N, k, q, out);
-  ntt_fwd(out, N, q);
-}
-
-void utils::ntt_fwd(uint64_t *data, size_t N, uint64_t q) {
-  get_ntt(N, q).ComputeForward(data, data, 1, 1);
-}
-
-void utils::ntt_inv(uint64_t *data, size_t N, uint64_t q) {
-  get_ntt(N, q).ComputeInverse(data, data, 1, 1);
-}
 
 // Extended Euclidean algorithm: given a, b > 0, returns (gcd, s) such that
 // s * a + t * b = gcd.  We only return s since that's the Bezout coefficient
@@ -163,46 +79,6 @@ bool utils::try_invert_uint_mod(uint64_t value, uint64_t modulus, uint64_t &resu
 }
 
 
-void utils::negacyclic_shift_poly_coeffmod(const uint64_t *poly, size_t coeff_count,
-                                           size_t shift, uint64_t modulus,
-                                           uint64_t *result) {
-  if (shift == 0) {
-    std::memcpy(result, poly, coeff_count * sizeof(uint64_t));
-    return;
-  }
-
-  uint64_t index_raw = shift;
-  const uint64_t coeff_count_mod_mask = static_cast<uint64_t>(coeff_count) - 1;
-  for (size_t i = 0; i < coeff_count; i++, poly++, index_raw++) {
-    uint64_t index = index_raw & coeff_count_mod_mask;  // shifted index, possibly wrapping around
-    if (!(index_raw & static_cast<uint64_t>(coeff_count)) || !*poly) {
-      // for those entries that are not wrapped around
-      result[index] = *poly;
-    } else {
-      // For wrapped around entries, we fill in additive inverse.
-      result[index] = modulus - *poly;
-    }
-  }
-}
-
-std::string utils::uint128_to_string(uint128_t value) {
-    // Split the 128-bit value into two 64-bit parts
-    uint64_t high = value >> 64;
-    uint64_t low = static_cast<uint64_t>(value);
-
-    std::ostringstream oss;
-
-    // Print the high part, if it's non-zero, to avoid leading zeros
-    if (high != 0) {
-        oss << high << " * 2^64 + " << low;
-    } else {
-        oss << low;
-    }
-    return oss.str();
-}
-
-
-
 std::vector<std::vector<uint64_t>> utils::gsw_gadget(size_t l, uint64_t base_log2,
                 const std::vector<uint64_t> &rns_mods, size_t low_bits) {
   if (l == 0) {
@@ -228,11 +104,6 @@ std::vector<std::vector<uint64_t>> utils::gsw_gadget(size_t l, uint64_t base_log
   return gadget;
 }
 
-/**
- * @brief Generate the smallest prime that is at least bit_width bits long.
- * @param bit_width >= 2 and <= 64
- * @return std::uint64_t  
- */
 uint64_t utils::crt_combine(uint64_t w1, uint64_t q1,
                              uint64_t w2, uint64_t q2) {
   // Garner: w = w1 + q1 * ((w2 - w1) * q1^{-1} mod q2) ∈ [0, q1*q2).
@@ -244,6 +115,11 @@ uint64_t utils::crt_combine(uint64_t w1, uint64_t q1,
   return static_cast<uint64_t>(static_cast<uint128_t>(q1) * k + w1);
 }
 
+/**
+ * @brief Generate the smallest prime that is at least bit_width bits long.
+ * @param bit_width >= 2 and <= 64
+ * @return std::uint64_t
+ */
 std::uint64_t utils::generate_prime(size_t bit_width) {
   if (bit_width < 2) throw std::invalid_argument("Bit width must be at least 2.");
 
@@ -292,54 +168,6 @@ std::vector<uint64_t> utils::generate_ntt_friendly_primes(
   }
   return out;
 }
-
-// New functions for plaintext handling
-void utils::print_plaintext(const RlwePt &plaintext, const size_t count) {
-  const size_t coeff_count = plaintext.coeff_count();
-  for (size_t i = 0; i < std::min(count, coeff_count); ++i) {
-    std::cout << plaintext.data[i] << ", ";
-  }
-  std::cout << std::endl;
-}
-
-bool utils::plaintext_is_equal(const RlwePt &plaintext1, const RlwePt &plaintext2) {
-  const size_t coeff_count1 = plaintext1.coeff_count();
-  const size_t coeff_count2 = plaintext2.coeff_count();
-
-  if (coeff_count1 != coeff_count2) {
-    std::cerr << "Plaintexts have different coefficient counts" << std::endl;
-    return false;
-  }
-
-  for (size_t i = 0; i < coeff_count1; i++) {
-    if (plaintext1.data[i] != plaintext2.data[i]) {
-      std::cerr << "Plaintexts are not equal at coefficient " << i << std::endl;
-      return false;
-    }
-  }
-  return true;
-}
-
-void utils::print_progress(size_t current, size_t total) {
-    float progress = static_cast<float>(current) / total;
-    size_t bar_width = 70;
-
-    // Move the cursor to the beginning and clear the line.
-    std::cout << "\r\033[K[";
-
-    size_t pos = static_cast<size_t>(bar_width * progress);
-    for (size_t i = 0; i < bar_width; ++i) {
-        if (i < pos)
-            std::cout << "=";
-        else if (i == pos)
-            std::cout << ">";
-        else
-            std::cout << " ";
-    }
-    std::cout << "] " << size_t(progress * 100.0) << " %";
-    std::cout.flush();
-}
-
 
 size_t utils::next_pow_of_2(const size_t n) {
   size_t p = 1;
@@ -405,48 +233,6 @@ std::pair<size_t, size_t> utils::calculate_db_shape(
     }
   }
   throw std::runtime_error("Failed to calculate database shape");
-}
-
-// ---------------------------------------------------------------------------
-// Polynomial noise / randomness samplers
-// ---------------------------------------------------------------------------
-
-void utils::sample_gaussian(uint64_t *out, size_t N, uint64_t q, double sigma,
-                             std::mt19937_64 &rng) {
-  std::normal_distribution<double> dist(0.0, sigma);
-  for (size_t i = 0; i < N; i++) {
-    int64_t e = std::llround(dist(rng));
-    if (e >= 0) {
-      out[i] = static_cast<uint64_t>(e) % q;
-    } else {
-      uint64_t abs_e = static_cast<uint64_t>(-e) % q;
-      out[i] = (abs_e == 0) ? 0 : (q - abs_e);
-    }
-  }
-}
-
-void utils::sample_uniform_poly(uint64_t *out, size_t N, uint64_t q,
-                                 std::mt19937_64 &rng) {
-  // Rejection sampling to avoid modular bias.
-  const uint64_t limit = (~uint64_t{0}) - ((~uint64_t{0}) % q);
-  for (size_t i = 0; i < N; i++) {
-    uint64_t r;
-    do { r = rng(); } while (r >= limit);
-    out[i] = r % q;
-  }
-}
-
-void utils::sample_ternary(uint64_t *out, size_t N, uint64_t q,
-                            std::mt19937_64 &rng) {
-  // Each coefficient is independently and uniformly in {0, 1, 2}.
-  // Map: 0 → 0, 1 → 1, 2 → q-1 (represents -1 mod q).
-  std::uniform_int_distribution<int> dist(0, 2);
-  for (size_t i = 0; i < N; i++) {
-    int v = dist(rng);
-    if (v == 0)      out[i] = 0;
-    else if (v == 1) out[i] = 1;
-    else             out[i] = q - 1;
-  }
 }
 
 uint64_t utils::rescale(uint64_t a, uint64_t inp_mod, uint64_t out_mod) {

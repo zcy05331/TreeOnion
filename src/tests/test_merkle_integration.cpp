@@ -92,21 +92,7 @@ uint64_t padded_plaintexts_of(const std::vector<LayerLayout> &plan) {
   return total;
 }
 
-}  // namespace
-
-void PirTest::test_merkle_integration() {
-  require_applicable(paper_config_active(),
-                     paper_config_reason("the Merkle benchmark suite"));
-  // H=8 cheaply covers first, last, and interior leaves through codec, query,
-  // server evaluation, response wire round-trip, and decryption.
-  const MerkleWorkload small{size_t{1} << 8, 8, 32};
-  const size_t small_target = utils::roundup_div(
-      2 * (small.leaf_count - 1), size_t{96});
-  PirParams small_reference =
-      PirParams().with_layout({small_target, 3, true});
-  const BenchmarkTrialPlan small_trials{
-      {}, {0, small.leaf_count - 1, small.leaf_count / 2}};
-
+std::shared_ptr<LayerLayoutProfile> require_h8_path_and_profiled_layerwise(const MerkleWorkload &small, const PirParams &small_reference, const BenchmarkTrialPlan &small_trials) {
   BenchmarkCaseExecution standard =
       run_standard_case(small, small_reference, small_trials);
   require_test(standard.result.correctness_passed,
@@ -233,7 +219,10 @@ void PirTest::test_merkle_integration() {
                      fallback.measured_paths == legacy_ref.measured_paths,
                  "case runner fallback must produce the legacy plan");
   }
+  return profile8;
+}
 
+std::shared_ptr<LayerLayoutProfile> require_h16_multidimensional_profiled_layerwise() {
   // H=16 forces remaining-dimension RGSW MUX work; a small-only fixture could
   // otherwise pass while testing only the first-dimension path.
   const MerkleWorkload multidimensional{size_t{1} << 16, 16, 32};
@@ -298,7 +287,10 @@ void PirTest::test_merkle_integration() {
     require_test(profiled_padded <= legacy_padded * 1.01 + 1,
                  "H=16 profiled plan respects the padding budget");
   }
+  return profile16;
+}
 
+void require_suite_profile_routing(const MerkleWorkload &small, const std::shared_ptr<LayerLayoutProfile> &profile8, const std::shared_ptr<LayerLayoutProfile> &profile16) {
   // The benchmark suite with profiles loaded from disk, one per tree height:
   // the suite must pick the profile whose height matches the workload even
   // when the primary profile is the other one, reject a run with no matching
@@ -357,6 +349,35 @@ void PirTest::test_merkle_integration() {
                      fallback.cases[0].layer_layout_policy == "legacy",
                  "suite fallback must report the legacy policy");
   }
+}
+
+
+}  // namespace
+
+void PirTest::test_merkle_integration() {
+  require_applicable(paper_config_active(),
+                     paper_config_reason("the Merkle benchmark suite"));
+  // H=8 cheaply covers first, last, and interior leaves through codec, query,
+  // server evaluation, response wire round-trip, and decryption.
+  const MerkleWorkload small{size_t{1} << 8, 8, 32};
+  const size_t small_target = utils::roundup_div(
+      2 * (small.leaf_count - 1), size_t{96});
+  PirParams small_reference =
+      PirParams().with_layout({small_target, 3, true});
+  const BenchmarkTrialPlan small_trials{
+      {}, {0, small.leaf_count - 1, small.leaf_count / 2}};
+
+  std::shared_ptr<LayerLayoutProfile> profile8 =
+      require_h8_path_and_profiled_layerwise(small, small_reference,
+                                             small_trials);
+
+
+  std::shared_ptr<LayerLayoutProfile> profile16 =
+      require_h16_multidimensional_profiled_layerwise();
+
+
+  require_suite_profile_routing(small, profile8, profile16);
+
 }
 
 // The profiled blocks of test_merkle_integration take their profiles from a

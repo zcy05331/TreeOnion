@@ -2,6 +2,11 @@
 
 > **WARNING:** Note that this repository is for research purpose. Do not use this in production directly.
 
+For implementation navigation, see the [C++ source map](src/README.md) and
+[script and verification guide](scripts/README.md). They describe the client,
+server, database, planning, benchmark and reporting boundaries and the local
+regression entry points.
+
 ### Preliminaries
 
 We ran our code on a `Intel(R) Xeon(R) Platinum 8358 CPU @ 2.60GHz` (Ice Lake, 32 cores per socket, AVX-512). AVX2 and AVX-512 are used to accelerate the first-dimension matrix multiply and NTT-related computation.
@@ -29,7 +34,7 @@ python run.py [options]
 |---|---|
 | `-c NAME`, `--config NAME` | Build configuration (default: `k1_comp`). See available configs below |
 | `-v`, `--verbose` | Build in Debug mode (enables `DEBUG_PRINT` at compile time) |
-| `--no-compress` | Run PIR without query compression/decompression |
+| `--no-compress` | Accepted legacy flag; the current implementation uses the same packed-query path |
 | `-t NAME`, `--test NAME` | Test to run (default: `pir`). See available tests below |
 | `-n N`, `--experiments N` | Number of experiment iterations (default: 5) |
 | `-w N`, `--warmup N` | Number of warmup iterations (default: 3) |

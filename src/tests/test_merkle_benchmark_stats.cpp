@@ -15,9 +15,7 @@ void test_merkle_server_phases();
 void test_merkle_trial_schedule();
 void test_merkle_single_sample_stats();
 
-void PirTest::test_merkle_benchmark_stats() {
-  require_applicable(paper_config_active(),
-                     paper_config_reason("the Merkle benchmark suite"));
+void require_trial_plan_and_basic_statistics() {
   BenchmarkTrialPlan distinct_queries =
       make_benchmark_trial_plan(8, 3, 5, 0x123456789abcdef0ULL);
   std::vector<size_t> all_query_ids = distinct_queries.warmup_leaf_indices;
@@ -52,7 +50,9 @@ void PirTest::test_merkle_benchmark_stats() {
                    std::abs(*basic_statistics.sample_variance -
                             (5.0 / 3.0)) < 1e-12,
                "sample variance");
+}
 
+BenchmarkReport make_and_check_report_statistics_fixture() {
   PirParams reference = PirParams().with_layout({349526, 10, true});
   // Freeze v2 seed-compressed request/helper models independently of the
   // response serializer, whose byte count is measured at runtime.
@@ -196,7 +196,11 @@ void PirTest::test_merkle_benchmark_stats() {
   }
   require_test(rejected_count_mismatch,
                "accepted mismatched PIR call and response counts");
+  return report;
+}
 
+void require_case_selection_cli_and_resource_guards(const BenchmarkReport &report) {
+  PirParams reference = PirParams().with_layout({349526, 10, true});
   MerkleBenchmarkOptions standard_only_options;
   standard_only_options.leaf_count = 256;
   standard_only_options.warmups = 0;
@@ -352,6 +356,19 @@ void PirTest::test_merkle_benchmark_stats() {
   }
   require_test(rejected_too_large_primary,
                "accepted a primary workload above 2^27 leaves");
+}
+
+void PirTest::test_merkle_benchmark_stats() {
+  require_applicable(paper_config_active(),
+                     paper_config_reason("the Merkle benchmark suite"));
+  require_trial_plan_and_basic_statistics();
+
+
+  const BenchmarkReport fixture_report = make_and_check_report_statistics_fixture();
+
+
+  require_case_selection_cli_and_resource_guards(fixture_report);
+
 }
 
 // server_phase_ms is read out of the process-wide TimerLogger by

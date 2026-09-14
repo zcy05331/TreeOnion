@@ -1,14 +1,12 @@
 #include "tree_superrecord_planner.h"
 
 #include "rlwe.h"
+#include "tree_superrecord_first_dimension.h"
 
 #include <algorithm>
 #include <bit>
-#include <chrono>
 #include <cmath>
 #include <limits>
-#include <numeric>
-#include <random>
 #include <sstream>
 #include <tuple>
 
@@ -40,203 +38,89 @@ size_t ct_mod_width(const PirSchemeIdentity &identity) {
   return width;
 }
 
-std::vector<uint64_t> first_dim_limb_moduli(const PirSchemeIdentity &identity) {
-  if (identity.composite_first_dim) {
-    return {identity.composite_q1, identity.composite_q2};
-  }
-  return identity.rns_moduli;
-}
-
-size_t first_dim_limb_bytes(const PirSchemeIdentity &identity) {
-  return identity.composite_first_dim ? sizeof(uint32_t) : sizeof(uint64_t);
-}
-
-FirstDimShapeKey first_dim_shape_key(const LevelPlan &plan,
-                                     const PirSchemeIdentity &identity,
-                                     uint64_t limb_modulus,
-                                     const ParetoContext &context) {
-  FirstDimShapeKey key;
-  key.matrix_rows = plan.matrix_rows;
-  key.matrix_cols = plan.matrix_cols;
-  key.cols_mod_simd_width = plan.matrix_cols % 16;
-  key.limb_modulus = limb_modulus;
-  if (identity.composite_first_dim) {
-    key.dispatch =
-        select_matmul32_dispatch(plan.matrix_cols, limb_modulus, context.avx512);
-  }
-  return key;
-}
-
 FirstDimShapeKey first_dim_shape_key_assuming_avx(
     const LevelPlan &plan, const PirSchemeIdentity &identity,
     uint64_t limb_modulus) {
   ParetoContext context;
   context.avx512 = {true, true};
-  return first_dim_shape_key(plan, identity, limb_modulus, context);
+  return first_dimension_internal::shape_key(plan, identity, limb_modulus,
+                                             context);
 }
 
-std::vector<FirstDimShapeKey> first_dim_shape_keys(
-    const Candidate &candidate, const ParetoContext &context) {
-  std::vector<FirstDimShapeKey> keys;
-  const std::vector<LevelPlan> plans = build_level_plans(candidate.shape);
-  const std::vector<uint64_t> moduli =
-      first_dim_limb_moduli(candidate.scheme.identity);
-  keys.reserve(candidate.shape.plane_count * plans.size() * moduli.size());
-  for (const LevelPlan &plan : plans) {
-    for (size_t plane = 0; plane < candidate.shape.plane_count; ++plane) {
-      (void)plane;
-      for (uint64_t modulus : moduli) {
-        keys.push_back(first_dim_shape_key(plan, candidate.scheme.identity,
-                                           modulus, context));
-      }
-    }
-  }
-  return keys;
-}
-
-void fill_u32_mod(std::vector<uint32_t> &values, uint64_t modulus,
-                  uint64_t seed) {
-  std::mt19937_64 rng(seed);
-  for (uint32_t &value : values) {
-    value = static_cast<uint32_t>(rng() % modulus);
-  }
-}
-
-double measure_scan_bandwidth(const FirstDimShapeKey &key,
-                              size_t ring_degree,
-                              const ParetoContext &context,
-                              const CostCalibrationOptions &options) {
-  const size_t rows = key.matrix_rows;
-  const size_t cols = key.matrix_cols;
-  require(rows > 0 && cols > 0 && ring_degree > 0,
-          "scan calibration shape must be nonempty");
-  const size_t a_per_level = checked_mul(rows, cols, "calibration A level");
-  const size_t b_per_level =
-      checked_mul(cols, size_t{2}, "calibration B level");
-  const size_t out_per_level =
-      checked_mul(rows, size_t{2}, "calibration output level");
-  const size_t bytes_per_level =
-      checked_add(checked_add(checked_mul(a_per_level, sizeof(uint32_t),
-                                          "calibration A bytes"),
-                              checked_mul(b_per_level, sizeof(uint32_t),
-                                          "calibration B bytes"),
-                              "calibration bytes"),
-                  checked_mul(out_per_level, sizeof(uint64_t),
-                              "calibration output bytes"),
-                  "calibration bytes");
-  const size_t tile_levels = std::max(
-      size_t{1},
-      std::min(ring_degree,
-               options.max_working_set_bytes_per_call / bytes_per_level));
-  std::vector<uint32_t> A(checked_mul(tile_levels, a_per_level,
-                                      "calibration A"));
-  std::vector<uint32_t> B(checked_mul(tile_levels, b_per_level,
-                                      "calibration B"));
-  std::vector<uint64_t> out(checked_mul(tile_levels, out_per_level,
-                                        "calibration output"));
-  fill_u32_mod(A, key.limb_modulus, options.seed ^ key.limb_modulus ^
-                                      (rows << 8) ^ cols);
-  fill_u32_mod(B, key.limb_modulus, options.seed ^ 0xBADC0FFEEULL ^
-                                      key.limb_modulus ^ cols);
-  const size_t trials = std::max(size_t{1}, options.trials_per_shape);
-  const auto start = std::chrono::steady_clock::now();
-  for (size_t trial = 0; trial < trials; ++trial) {
-    level_mat_mat_32_dispatch(A.data(), B.data(), out.data(), rows, cols,
-                              tile_levels, key.limb_modulus, context.avx512);
-  }
-  const double elapsed_ms =
-      std::chrono::duration<double, std::milli>(
-          std::chrono::steady_clock::now() - start)
-          .count();
-  volatile uint64_t sink = std::accumulate(out.begin(), out.end(), uint64_t{0});
-  (void)sink;
-  const double bytes =
-      static_cast<double>(rows) * static_cast<double>(cols) *
-      static_cast<double>(tile_levels) *
-      static_cast<double>(sizeof(uint32_t)) *
-      static_cast<double>(trials);
-  if (!(std::isfinite(elapsed_ms) && elapsed_ms > 0)) return 0;
-  return bytes / elapsed_ms;
-}
-
-// Structural metrics of one accepted shape (design sections 11, 12.2, 19.2,
-// 20). Every count is exact; every byte figure is a coefficient/object
-// estimate rather than process memory.
-CandidateMetrics compute_metrics(const CandidateShape &shape,
-                                 std::span<const LevelPlan> plans,
-                                 const PirSchemeIdentity &identity) {
-  CandidateMetrics m;
-  const size_t n = shape.ring_degree;
-  const size_t K = identity.rns_moduli.size();
-  const size_t P = shape.plane_count;
-  const bool composite = identity.composite_first_dim;
-  // Bytes per stored NTT coefficient: two u32 limbs on the composite path,
-  // K u64 limbs on the plain NTT view.
-  const size_t bytes_per_coeff = composite ? 2 * sizeof(uint32_t)
-                                           : K * sizeof(uint64_t);
+struct ResourceMetricContext {
   size_t max_rows = 0;
-  for (const LevelPlan &plan : plans) {
-    m.logical_plaintexts = checked_add(
-        m.logical_plaintexts,
-        checked_mul(P, plan.logical_plaintexts_per_plane, "logical plaintexts"),
-        "logical plaintexts");
-    const size_t level_cells =
-        checked_mul(P, plan.padded_plaintexts_per_plane, "matrix cells");
-    m.physical_matrix_cells =
-        checked_add(m.physical_matrix_cells, level_cells, "matrix cells");
-    m.first_dim_output_ciphertexts += P * plan.matrix_rows;
-    m.fold_cmux_count += P * (plan.matrix_rows - 1);
-    m.rotate_cmux_count += P * plan.rotation_bit_count;
-    m.projection_keyswitch_count += P * plan.projection_depth;
-    for (uint64_t modulus : first_dim_limb_moduli(identity)) {
-      const FirstDimShapeKey key =
-          first_dim_shape_key_assuming_avx(plan, identity, modulus);
-      const size_t bytes = checked_mul(
-          checked_mul(P, plan.padded_plaintexts_per_plane, "scan cells"),
-          checked_mul(n, first_dim_limb_bytes(identity), "scan coefficient"),
-          "scan bytes");
-      if (key.dispatch == MatMul32Dispatch::Avx512Lazy) {
-        m.avx512_eligible_level_plane_limbs += P;
-        m.avx512_eligible_scan_bytes =
-            checked_add(m.avx512_eligible_scan_bytes, bytes, "avx scan bytes");
-      } else {
-        m.scalar_u128_required_level_plane_limbs += P;
-        m.scalar_u128_required_scan_bytes = checked_add(
-            m.scalar_u128_required_scan_bytes, bytes, "scalar scan bytes");
-      }
-    }
-    max_rows = std::max(max_rows, plan.matrix_rows);
-  }
-  require(m.first_dim_output_ciphertexts ==
-              m.fold_cmux_count + P * shape.path_levels,
-          "first-dimension output count must equal folds plus P*H");
-  const size_t cell_bytes =
-      checked_mul(n, bytes_per_coeff, "plaintext view bytes");
-  m.optimized_bytes = checked_mul(m.physical_matrix_cells, cell_bytes,
-                                  "optimized database bytes");
-  m.physical_scan_bytes = m.optimized_bytes;
-  m.canonical_bytes = checked_mul(
-      m.physical_matrix_cells, checked_mul(n, sizeof(uint64_t), "canonical"),
-      "canonical database bytes");
-  m.coefficient_payload_bytes = m.optimized_bytes;
+};
 
+void accumulate_level_resource_metrics(CandidateMetrics &m,
+                                       ResourceMetricContext &metric_context,
+                                       const CandidateShape &shape,
+                                       const LevelPlan &plan,
+                                       const PirSchemeIdentity &identity) {
+  const size_t n = shape.ring_degree;
+  const size_t P = shape.plane_count;
+  m.logical_plaintexts = checked_add(
+      m.logical_plaintexts,
+      checked_mul(P, plan.logical_plaintexts_per_plane, "logical plaintexts"),
+      "logical plaintexts");
+  const size_t level_cells =
+      checked_mul(P, plan.padded_plaintexts_per_plane, "matrix cells");
+  m.physical_matrix_cells =
+      checked_add(m.physical_matrix_cells, level_cells, "matrix cells");
+  m.first_dim_output_ciphertexts += P * plan.matrix_rows;
+  m.fold_cmux_count += P * (plan.matrix_rows - 1);
+  m.rotate_cmux_count += P * plan.rotation_bit_count;
+  m.projection_keyswitch_count += P * plan.projection_depth;
+  for (uint64_t modulus : first_dimension_internal::limb_moduli(identity)) {
+    const FirstDimShapeKey key =
+        first_dim_shape_key_assuming_avx(plan, identity, modulus);
+    const size_t bytes = checked_mul(
+        checked_mul(P, plan.padded_plaintexts_per_plane, "scan cells"),
+        checked_mul(n, first_dimension_internal::limb_bytes(identity),
+                    "scan coefficient"),
+        "scan bytes");
+    if (key.dispatch == MatMul32Dispatch::Avx512Lazy) {
+      m.avx512_eligible_level_plane_limbs += P;
+      m.avx512_eligible_scan_bytes =
+          checked_add(m.avx512_eligible_scan_bytes, bytes, "avx scan bytes");
+    } else {
+      m.scalar_u128_required_level_plane_limbs += P;
+      m.scalar_u128_required_scan_bytes = checked_add(
+          m.scalar_u128_required_scan_bytes, bytes, "scalar scan bytes");
+    }
+  }
+  metric_context.max_rows = std::max(metric_context.max_rows, plan.matrix_rows);
+}
+
+void compute_alpha_resource_metrics(CandidateMetrics &m,
+                                    const CandidateShape &shape) {
+  const size_t n = shape.ring_degree;
   const std::vector<size_t> rows = ragged_pyramid_row_lengths(shape.N0);
   for (size_t len : rows) m.alpha_pyramid_ciphertexts += len;
   m.alpha_pyramid_upper_outputs = m.alpha_pyramid_ciphertexts - shape.N0;
   m.alpha_pyramid_additions = shape.N0 - 1;
   m.alpha_pyramid_carries =
       m.alpha_pyramid_upper_outputs - m.alpha_pyramid_additions;
-  // The m32 path lifts row 0 once and adds/copies all upper rows in NTT form.
-  m.alpha_ntt_ciphertexts = composite ? shape.N0 : m.alpha_pyramid_ciphertexts;
   m.alpha_split_logical_coefficients = m.alpha_pyramid_ciphertexts * 2 * n;
+}
+
+void complete_alpha_resource_metrics(CandidateMetrics &m,
+                                     const CandidateShape &shape,
+                                     bool composite) {
+  m.alpha_ntt_ciphertexts = composite ? shape.N0 : m.alpha_pyramid_ciphertexts;
   m.alpha_split_u32_outputs =
       composite ? m.alpha_split_logical_coefficients * 2 : 0;
+}
 
+void compute_expansion_resource_metrics(CandidateMetrics &m,
+                                        const CandidateShape &shape) {
   m.populated_expansion_nodes = populated_expansion_node_count(
       shape.query_width, shape.expansion_capacity);
   m.expansion_heap_object_slots = 2 * shape.expansion_capacity;
   m.expansion_return_object_slots = shape.query_width;
+}
 
+void compute_overfetch_resource_metrics(CandidateMetrics &m,
+                                        const CandidateShape &shape) {
   m.worst_case_retrieved_bundle_bits_per_level =
       shape.bundle_arity * shape.entry_bits;
   m.worst_case_extra_overfetch_bits_per_level =
@@ -248,10 +132,14 @@ CandidateMetrics compute_metrics(const CandidateShape &shape,
       shape.path_levels * m.worst_case_retrieved_bundle_bits_per_level;
   m.worst_case_extra_overfetch_bits =
       shape.path_levels * m.worst_case_extra_overfetch_bits_per_level;
-  // plane_capacity_bits, padding_bits_per_bundle and the slot ratios need c,
-  // which only the enumerator knows; it fills them after this call.
+}
 
-  // Query-evaluation PirServer constructor buffers (design section 20.4).
+void compute_query_eval_resource_metrics(CandidateMetrics &m,
+                                         const CandidateShape &shape,
+                                         const PirSchemeIdentity &identity) {
+  const size_t n = shape.ring_degree;
+  const size_t K = identity.rns_moduli.size();
+  const bool composite = identity.composite_first_dim;
   const size_t query_server_db_elements = checked_mul(
       checked_mul(shape.N0, n, "query server elements"), K, "query server");
   if (composite) {
@@ -269,7 +157,34 @@ CandidateMetrics compute_metrics(const CandidateShape &shape,
   m.query_eval_server_internal_bytes_estimate = checked_add(
       m.query_eval_server_database_bytes_estimate,
       m.query_eval_server_intermediate_bytes_estimate, "query server bytes");
+}
 
+void compute_eval_key_resource_metrics(CandidateMetrics &m,
+                                       const CandidateShape &shape,
+                                       const PirSchemeIdentity &identity) {
+  const size_t n = shape.ring_degree;
+  const size_t full_q = rlwe_bytes(identity);
+  const size_t per_poly_bytes = ceil_div(n * ct_mod_width(identity), 8);
+  const size_t seeded_bfv_bytes = 32 + per_poly_bytes;
+  m.modeled_seeded_bv_key_bytes =
+      shape.registered_key_height * identity.bv_ks_rows * (per_poly_bytes + 32);
+  m.modeled_seeded_completion_key_bytes =
+      2 * identity.completion_key_gadget_rows * seeded_bfv_bytes;
+  m.modeled_per_client_eval_key_bytes =
+      m.modeled_seeded_bv_key_bytes + m.modeled_seeded_completion_key_bytes;
+  m.eval_key_coefficient_payload_bytes_estimate =
+      (shape.registered_key_height * identity.bv_ks_rows +
+       2 * identity.completion_key_gadget_rows) *
+      full_q;
+}
+
+void compute_resident_resource_metrics(CandidateMetrics &m,
+                                       const CandidateShape &shape,
+                                       const PirSchemeIdentity &identity,
+                                       const ResourceMetricContext &context) {
+  const size_t n = shape.ring_degree;
+  const size_t P = shape.plane_count;
+  const bool composite = identity.composite_first_dim;
   const size_t full_q = rlwe_bytes(identity);
   const size_t rgsw_bytes = 2 * identity.selector_gadget_rows * full_q;
   const size_t expansion_payload =
@@ -282,7 +197,7 @@ CandidateMetrics compute_metrics(const CandidateShape &shape,
       composite ? m.alpha_pyramid_ciphertexts * 2 * n * 2 * sizeof(uint32_t)
                 : 0;
   const size_t selector_bytes = shape.selector_bits * rgsw_bytes;
-  const size_t first_dim_candidate_bytes = P * max_rows * full_q;
+  const size_t first_dim_candidate_bytes = P * context.max_rows * full_q;
   const size_t response_work_bytes = shape.response_ciphertexts * full_q;
   const size_t crypto_scratch =
       conservative_scratch_rlwe_count(identity.selector_gadget_rows) * full_q;
@@ -296,19 +211,6 @@ CandidateMetrics compute_metrics(const CandidateShape &shape,
   }
   m.temporary_working_set_estimate = working;
 
-  const size_t per_poly_bytes = ceil_div(n * ct_mod_width(identity), 8);
-  const size_t seeded_bfv_bytes = 32 + per_poly_bytes;
-  m.modeled_seeded_bv_key_bytes =
-      shape.registered_key_height * identity.bv_ks_rows * (per_poly_bytes + 32);
-  m.modeled_seeded_completion_key_bytes =
-      2 * identity.completion_key_gadget_rows * seeded_bfv_bytes;
-  m.modeled_per_client_eval_key_bytes =
-      m.modeled_seeded_bv_key_bytes + m.modeled_seeded_completion_key_bytes;
-  m.eval_key_coefficient_payload_bytes_estimate =
-      (shape.registered_key_height * identity.bv_ks_rows +
-       2 * identity.completion_key_gadget_rows) *
-      full_q;
-
   m.validation_resident_bytes_estimate =
       checked_add(checked_add(m.canonical_bytes, m.optimized_bytes, "resident"),
                   checked_add(m.temporary_working_set_estimate,
@@ -321,6 +223,52 @@ CandidateMetrics compute_metrics(const CandidateShape &shape,
                               m.eval_key_coefficient_payload_bytes_estimate,
                               "steady state"),
                   "steady-state estimate");
+}
+
+// Structural metrics of one accepted shape (design sections 11, 12.2, 19.2,
+// 20). Every count is exact; every byte figure is a coefficient/object
+// estimate rather than process memory.
+CandidateMetrics compute_metrics(const CandidateShape &shape,
+                                 std::span<const LevelPlan> plans,
+                                 const PirSchemeIdentity &identity) {
+  CandidateMetrics m;
+  ResourceMetricContext metric_context;
+  const size_t n = shape.ring_degree;
+  const size_t K = identity.rns_moduli.size();
+  const size_t P = shape.plane_count;
+  const bool composite = identity.composite_first_dim;
+  // Bytes per stored NTT coefficient: two u32 limbs on the composite path,
+  // K u64 limbs on the plain NTT view.
+  const size_t bytes_per_coeff = composite ? 2 * sizeof(uint32_t)
+                                           : K * sizeof(uint64_t);
+  for (const LevelPlan &plan : plans) {
+    accumulate_level_resource_metrics(m, metric_context, shape, plan, identity);
+  }
+  require(m.first_dim_output_ciphertexts ==
+              m.fold_cmux_count + P * shape.path_levels,
+          "first-dimension output count must equal folds plus P*H");
+  const size_t cell_bytes =
+      checked_mul(n, bytes_per_coeff, "plaintext view bytes");
+  m.optimized_bytes = checked_mul(m.physical_matrix_cells, cell_bytes,
+                                  "optimized database bytes");
+  m.physical_scan_bytes = m.optimized_bytes;
+  m.canonical_bytes = checked_mul(
+      m.physical_matrix_cells, checked_mul(n, sizeof(uint64_t), "canonical"),
+      "canonical database bytes");
+  m.coefficient_payload_bytes = m.optimized_bytes;
+
+  compute_alpha_resource_metrics(m, shape);
+  // The m32 path lifts row 0 once and adds/copies all upper rows in NTT form.
+  complete_alpha_resource_metrics(m, shape, composite);
+  compute_expansion_resource_metrics(m, shape);
+  compute_overfetch_resource_metrics(m, shape);
+  // plane_capacity_bits, padding_bits_per_bundle and the slot ratios need c,
+  // which only the enumerator knows; it fills them after this call.
+
+  // Query-evaluation PirServer constructor buffers (design section 20.4).
+  compute_query_eval_resource_metrics(m, shape, identity);
+  compute_eval_key_resource_metrics(m, shape, identity);
+  compute_resident_resource_metrics(m, shape, identity, metric_context);
   m.matrix_padding_amplification =
       static_cast<double>(m.physical_matrix_cells) /
       static_cast<double>(m.logical_plaintexts);
@@ -687,158 +635,12 @@ FirstDimDispatchSignature first_dim_dispatch_signature(
     const Candidate &candidate, const ParetoContext &context) {
   FirstDimDispatchSignature signature;
   const std::vector<FirstDimShapeKey> keys =
-      first_dim_shape_keys(candidate, context);
+      first_dimension_internal::shape_keys(candidate, context);
   signature.limb_dispatch.reserve(keys.size());
   for (const FirstDimShapeKey &key : keys) {
     signature.limb_dispatch.push_back(key.dispatch);
   }
   return signature;
-}
-
-void apply_measured_control_timing(CostCalibration &calibration,
-                                   const Candidate &candidate,
-                                   const TreeServerTiming &timing) {
-  const CandidateShape &s = candidate.shape;
-  const CandidateMetrics &m = candidate.metrics;
-  const auto per_unit = [](double ms, size_t units) {
-    return units == 0 ? 0.0 : ms / static_cast<double>(units);
-  };
-  const double query_expand_ms = stage_ms(timing.query_expand);
-  if (query_expand_ms > 0 && m.populated_expansion_nodes > 0) {
-    calibration.expand_intercept_ms = 0;
-    calibration.expand_per_populated_node_ms =
-        per_unit(query_expand_ms, m.populated_expansion_nodes);
-  }
-  const double selector_ms = stage_ms(timing.selector_completion);
-  if (selector_ms > 0 && s.selector_bits > 0) {
-    calibration.to_rgsw_per_selector_ms = per_unit(selector_ms, s.selector_bits);
-  }
-  const double finalize_ms = stage_ms(timing.first_dim_finalize);
-  if (finalize_ms > 0 && m.first_dim_output_ciphertexts > 0) {
-    calibration.first_dim_output_ciphertext_ms =
-        per_unit(finalize_ms, m.first_dim_output_ciphertexts);
-  }
-  const double fold_rotate_ms =
-      stage_ms(timing.beta_fold) + stage_ms(timing.private_rotate);
-  if (fold_rotate_ms > 0 && m.fold_cmux_count + m.rotate_cmux_count > 0) {
-    calibration.cmux_ms =
-        per_unit(fold_rotate_ms, m.fold_cmux_count + m.rotate_cmux_count);
-  }
-  const double projection_ms = stage_ms(timing.projection);
-  if (projection_ms > 0 && m.projection_keyswitch_count > 0) {
-    calibration.substitution_ms =
-        per_unit(projection_ms, m.projection_keyswitch_count);
-  }
-  const double pack_ms = stage_ms(timing.path_pack);
-  if (pack_ms > 0 && s.plane_count * s.path_levels > 0) {
-    calibration.path_item_pack_ms =
-        per_unit(pack_ms, s.plane_count * s.path_levels);
-  }
-  const double switch_ms = stage_ms(timing.modulus_switch);
-  if (switch_ms > 0 && s.response_ciphertexts > 0) {
-    calibration.modulus_switch_ms =
-        per_unit(switch_ms, s.response_ciphertexts);
-  }
-}
-
-CostCalibration calibrate_cost_model(
-    std::span<const Candidate> candidates,
-    const CostCalibration &base_calibration, const ParetoContext &context,
-    const CostCalibrationOptions &options) {
-  require(options.trials_per_shape > 0,
-          "scan calibration needs at least one trial per shape");
-  require(options.max_working_set_bytes_per_call > 0,
-          "scan calibration needs a positive memory cap");
-  CostCalibration calibration = base_calibration;
-  for (const Candidate &candidate : candidates) {
-    const std::vector<FirstDimShapeKey> keys =
-        first_dim_shape_keys(candidate, context);
-    for (const FirstDimShapeKey &key : keys) {
-      if (calibration.scan_bandwidth_bytes_per_ms.contains(key)) continue;
-      if (key.dispatch != MatMul32Dispatch::Avx512Lazy &&
-          key.dispatch != MatMul32Dispatch::ScalarU128) {
-        continue;
-      }
-      const double bandwidth = measure_scan_bandwidth(
-          key, candidate.shape.ring_degree, context, options);
-      if (std::isfinite(bandwidth) && bandwidth > 0) {
-        calibration.scan_bandwidth_bytes_per_ms[key] = bandwidth;
-      }
-    }
-  }
-  return calibration;
-}
-
-double predict_server_ms(const Candidate &candidate,
-                         const CostCalibration &cal,
-                         const ParetoContext &context) {
-  const CandidateShape &s = candidate.shape;
-  const CandidateMetrics &m = candidate.metrics;
-  double ms = cal.expand_intercept_ms;
-  ms += cal.expand_per_populated_node_ms *
-        static_cast<double>(m.populated_expansion_nodes);
-  ms += cal.expand_per_level_ms * static_cast<double>(s.expansion_height);
-  ms += cal.to_rgsw_per_selector_ms * static_cast<double>(s.selector_bits);
-  ms += cal.alpha_pyramid_add_ms *
-        static_cast<double>(m.alpha_pyramid_additions);
-  ms += cal.alpha_carry_copy_ms * static_cast<double>(m.alpha_pyramid_carries);
-  ms += cal.alpha_ntt_per_ciphertext_ms *
-        static_cast<double>(m.alpha_ntt_ciphertexts);
-  ms += cal.alpha_split_per_u32_output_ms *
-        static_cast<double>(m.alpha_split_u32_outputs);
-  const std::vector<LevelPlan> plans = build_level_plans(s);
-  const std::vector<uint64_t> moduli =
-      first_dim_limb_moduli(candidate.scheme.identity);
-  for (const LevelPlan &plan : plans) {
-    for (size_t plane = 0; plane < s.plane_count; ++plane) {
-      (void)plane;
-      for (uint64_t modulus : moduli) {
-        const FirstDimShapeKey key =
-            first_dim_shape_key(plan, candidate.scheme.identity, modulus,
-                                context);
-        double bandwidth = cal.default_scan_bandwidth_bytes_per_ms;
-        const auto found = cal.scan_bandwidth_bytes_per_ms.find(key);
-        if (found != cal.scan_bandwidth_bytes_per_ms.end()) {
-          bandwidth = found->second;
-        }
-        if (!(std::isfinite(bandwidth) && bandwidth > 0)) {
-          return std::numeric_limits<double>::infinity();
-        }
-        const size_t one_limb_bytes = checked_mul(
-            checked_mul(plan.matrix_rows, plan.matrix_cols, "scan rows cols"),
-            checked_mul(s.ring_degree, first_dim_limb_bytes(candidate.scheme.identity),
-                        "scan limb bytes"),
-            "scan bytes");
-        ms += static_cast<double>(one_limb_bytes) / bandwidth;
-      }
-    }
-  }
-  ms += cal.first_dim_output_ciphertext_ms *
-        static_cast<double>(m.first_dim_output_ciphertexts);
-  ms += cal.cmux_ms *
-        static_cast<double>(m.fold_cmux_count + m.rotate_cmux_count);
-  ms += cal.substitution_ms *
-        static_cast<double>(m.projection_keyswitch_count);
-  ms += cal.path_item_pack_ms *
-        static_cast<double>(s.plane_count * s.path_levels);
-  ms += cal.modulus_switch_ms * static_cast<double>(s.response_ciphertexts);
-  return ms;
-}
-
-void rank_by_prediction(std::vector<Candidate> &candidates,
-                        const CostCalibration &calibration,
-                        const ParetoContext &context) {
-  for (Candidate &candidate : candidates) {
-    candidate.metrics.predicted_server_ms =
-        predict_server_ms(candidate, calibration, context);
-    require(std::isfinite(candidate.metrics.predicted_server_ms),
-            "predicted server time must be finite");
-  }
-  std::stable_sort(candidates.begin(), candidates.end(),
-                   [](const Candidate &a, const Candidate &b) {
-                     return a.metrics.predicted_server_ms <
-                            b.metrics.predicted_server_ms;
-                   });
 }
 
 bool same_comparison_context(const Candidate &a, const Candidate &b,

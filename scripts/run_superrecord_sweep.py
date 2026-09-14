@@ -24,7 +24,7 @@ def command_text(command):
         return None
 
 
-def environment_metadata(binary):
+def cmake_cache_fields(binary):
     cache = binary.parent / 'CMakeCache.txt'
     fields = {}
     if cache.exists():
@@ -32,6 +32,10 @@ def environment_metadata(binary):
             if '=' in line and not line.startswith(('#', '//')):
                 key, value = line.split('=', 1)
                 fields[key.split(':', 1)[0]] = value
+    return fields
+
+
+def compiler_command_for(binary, fields):
     compiler_command = fields.get('CMAKE_CXX_COMPILER', '/usr/bin/clang++').split(';')
     compiler_args = fields.get('CMAKE_CXX_COMPILER_ARG1', '')
     if not compiler_args:
@@ -41,6 +45,12 @@ def environment_metadata(binary):
                 compiler_args = match.group(1)
                 break
     compiler_command += shlex.split(compiler_args)
+    return compiler_command
+
+
+def environment_metadata(binary):
+    fields = cmake_cache_fields(binary)
+    compiler_command = compiler_command_for(binary, fields)
     flags = binary.parent / 'CMakeFiles/Onion-PIR.dir/flags.make'
     return {
         'repository_commit': command_text(['git', 'rev-parse', 'HEAD']),
@@ -68,6 +78,73 @@ def environment_metadata(binary):
         'start_utc': datetime.datetime.now(datetime.timezone.utc).isoformat(),
         'timing_environment': 'local desktop; background activity and thermal/frequency drift are not controlled',
     }
+
+
+def task_command_and_environment(args, binary, metadata, raw, entry_bits, leaves, responses, trials, warmup):
+    env = os.environ.copy()
+    env.update({
+        'SUPERRECORD_COMMIT': metadata['repository_commit'] or 'unavailable',
+        'SUPERRECORD_BOOTSTRAP_SEED': str(args.bootstrap_seed),
+        'SUPERRECORD_ENTRY_BITS': str(entry_bits),
+        'SUPERRECORD_OUTPUT_JSON': str(raw),
+        'SUPERRECORD_MAX_FRONTIER': str(args.max_frontier),
+        'SUPERRECORD_MAX_ARITY': str(args.max_arity),
+        'SUPERRECORD_MAX_RESPONSES': str(responses),
+        'SUPERRECORD_EXECUTION_SEED': str(args.execution_seed),
+        'SUPERRECORD_KEY_MODE': args.key_mode,
+        'SUPERRECORD_MEMORY_BYTES': str(int(args.memory_gib * 1024 ** 3)),
+    })
+    if args.plan_only:
+        env['SUPERRECORD_PLAN_ONLY'] = '1'
+    command = [str(binary), '--test', 'tree_superrecord_bench',
+               '--leaf-count', str(leaves), '--experiments', str(trials),
+               '--warmup', str(warmup), '--trial-seed', str(args.seed)]
+    return command, env
+
+
+def run_sweep_task(args, binary, output, metadata, manifest, manifest_path,
+                   entry_bits, leaves, responses, trials, warmup):
+    """Run one workload, attach its provenance, and publish analysis status."""
+    label = f'e{entry_bits}-n{leaves}'
+    raw = output / f'{label}.json'
+    if raw.exists():
+        raise ValueError(f'refusing to overwrite an existing raw run: {raw}')
+    command, env = task_command_and_environment(
+        args, binary, metadata, raw, entry_bits, leaves, responses, trials, warmup
+    )
+    print(f'{label}: {trials} measured trials, {warmup} warmups; log {output / (label + ".log")}', flush=True)
+    record = {'label': label, 'raw_file': str(raw), 'command': command,
+              'benchmark_environment': {k: v for k, v in env.items() if k.startswith('SUPERRECORD_')}}
+    record['process'] = run_measured(command, log_path=output / f'{label}.log',
+                                     env=env, cwd=ROOT)
+    manifest['runs'].append(record)
+    manifest_path.write_text(json.dumps(manifest, indent=2) + '\n')
+    if record['process']['exit_code'] != 0 or not raw.exists():
+        manifest['state'] = 'failed'
+        manifest_path.write_text(json.dumps(manifest, indent=2) + '\n')
+        print(f'{label}: failed; inspect preserved log', file=sys.stderr)
+        return 1
+    try:
+        data = json.loads(raw.read_text())
+    except (OSError, ValueError) as error:
+        record['error'] = str(error)
+        manifest['state'] = 'failed'
+        manifest_path.write_text(json.dumps(manifest, indent=2) + '\n')
+        return 1
+    data['environment'] = metadata
+    data['process'] = record['process']
+    raw.write_text(json.dumps(data, indent=2) + '\n')
+    if not args.plan_only:
+        analysis = [sys.executable, str(ROOT / 'scripts/analyze_superrecord_sweep.py'),
+                    str(raw), '--seed', str(args.bootstrap_seed)]
+        result = subprocess.run(analysis, cwd=ROOT, check=False)
+        record['analysis_exit_code'] = result.returncode
+        if result.returncode:
+            manifest['state'] = 'failed'
+            manifest_path.write_text(json.dumps(manifest, indent=2) + '\n')
+            return result.returncode
+    print(f'{label}: saved {raw}', flush=True)
+    return 0
 
 
 def main():
@@ -112,60 +189,12 @@ def main():
     manifest = {'environment': metadata, 'runs': [], 'state': 'running'}
     manifest_path = output / 'manifest.json'
     for entry_bits, leaves, responses in tasks:
-        label = f'e{entry_bits}-n{leaves}'
-        raw = output / f'{label}.json'
-        if raw.exists():
-            raise ValueError(f'refusing to overwrite an existing raw run: {raw}')
-        env = os.environ.copy()
-        env.update({
-            'SUPERRECORD_COMMIT': metadata['repository_commit'] or 'unavailable',
-            'SUPERRECORD_BOOTSTRAP_SEED': str(args.bootstrap_seed),
-            'SUPERRECORD_ENTRY_BITS': str(entry_bits),
-            'SUPERRECORD_OUTPUT_JSON': str(raw),
-            'SUPERRECORD_MAX_FRONTIER': str(args.max_frontier),
-            'SUPERRECORD_MAX_ARITY': str(args.max_arity),
-            'SUPERRECORD_MAX_RESPONSES': str(responses),
-            'SUPERRECORD_EXECUTION_SEED': str(args.execution_seed),
-            'SUPERRECORD_KEY_MODE': args.key_mode,
-            'SUPERRECORD_MEMORY_BYTES': str(int(args.memory_gib * 1024 ** 3)),
-        })
-        if args.plan_only:
-            env['SUPERRECORD_PLAN_ONLY'] = '1'
-        command = [str(binary), '--test', 'tree_superrecord_bench',
-                   '--leaf-count', str(leaves), '--experiments', str(trials),
-                   '--warmup', str(warmup), '--trial-seed', str(args.seed)]
-        print(f'{label}: {trials} measured trials, {warmup} warmups; log {output / (label + ".log")}', flush=True)
-        record = {'label': label, 'raw_file': str(raw), 'command': command,
-                  'benchmark_environment': {k: v for k, v in env.items() if k.startswith('SUPERRECORD_')}}
-        record['process'] = run_measured(command, log_path=output / f'{label}.log',
-                                         env=env, cwd=ROOT)
-        manifest['runs'].append(record)
-        manifest_path.write_text(json.dumps(manifest, indent=2) + '\n')
-        if record['process']['exit_code'] != 0 or not raw.exists():
-            manifest['state'] = 'failed'
-            manifest_path.write_text(json.dumps(manifest, indent=2) + '\n')
-            print(f'{label}: failed; inspect preserved log', file=sys.stderr)
-            return 1
-        try:
-            data = json.loads(raw.read_text())
-        except (OSError, ValueError) as error:
-            record['error'] = str(error)
-            manifest['state'] = 'failed'
-            manifest_path.write_text(json.dumps(manifest, indent=2) + '\n')
-            return 1
-        data['environment'] = metadata
-        data['process'] = record['process']
-        raw.write_text(json.dumps(data, indent=2) + '\n')
-        if not args.plan_only:
-            analysis = [sys.executable, str(ROOT / 'scripts/analyze_superrecord_sweep.py'),
-                        str(raw), '--seed', str(args.bootstrap_seed)]
-            result = subprocess.run(analysis, cwd=ROOT, check=False)
-            record['analysis_exit_code'] = result.returncode
-            if result.returncode:
-                manifest['state'] = 'failed'
-                manifest_path.write_text(json.dumps(manifest, indent=2) + '\n')
-                return result.returncode
-        print(f'{label}: saved {raw}', flush=True)
+        status = run_sweep_task(
+            args, binary, output, metadata, manifest, manifest_path,
+            entry_bits, leaves, responses, trials, warmup,
+        )
+        if status:
+            return status
     manifest['state'] = 'complete'
     manifest_path.write_text(json.dumps(manifest, indent=2) + '\n')
     print(f'Artifacts: {output}', flush=True)

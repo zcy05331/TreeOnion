@@ -329,7 +329,14 @@ void PirTest::test_tree_superrecord_kernel() {
   const TreeParams perf_params = plan_for(
       scheme, 256, size_t{1} << 19, 3, 64, 4, test_policy());
   const tree_superrecord::LevelPlan &perf_plan = perf_params.level_plans.back();
-  require_test(perf_plan.matrix_rows == 16 && perf_plan.matrix_cols == 342,
+  const size_t expected_rows = size_t{1} << 4;
+  const size_t expected_cols = ceil_div(
+      ceil_div(ceil_div(size_t{1} << 19, size_t{3}),
+               scheme.get_poly_degree() / 64),
+      expected_rows);
+  require_test(perf_plan.matrix_rows == expected_rows &&
+                   perf_plan.matrix_cols == expected_cols &&
+                   !std::has_single_bit(expected_cols),
                "bounded performance fixture uses a feasible ragged plan");
   LevelPlaneDatabase perf_db;
   perf_db.level = perf_plan.level;
@@ -354,6 +361,15 @@ void PirTest::test_tree_superrecord_kernel() {
   perf_pyramid[0].reserve(perf_plan.matrix_cols);
   for (size_t col = 0; col < perf_plan.matrix_cols; ++col) {
     perf_pyramid[0].push_back(client.fresh_zero_ct());
+  }
+  // The larger ring moves the four-bit fold from [5, 9) to [6, 10),
+  // beyond the nine selectors in the earlier query. All performance alpha
+  // inputs encrypt zero, so either selector bit is valid: reuse an encrypted
+  // bit from this same client and scheme without consuming extra randomness.
+  const size_t required_selectors =
+      perf_plan.fold_bit_begin + perf_plan.fold_bit_count;
+  while (new_sigma.size() < required_selectors) {
+    new_sigma.push_back(unpacked.sigma_selectors.front());
   }
   const auto perf_old_start = Clock::now();
   const RlweCt perf_old = old_select_level_reference_for_test(
