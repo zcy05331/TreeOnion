@@ -293,6 +293,9 @@ RlweCt select_level_m32(const LevelPlaneM32 &db, const LevelPlan &plan,
   clock.lap(&TreeServerTiming::alpha_scan);
 
   const uint64_t q = runtime_scheme.get_rns_mods()[0];
+  // One Barrett constant for the whole level: the compose below runs
+  // 2 * degree * rows times, so a hardware divide per term dominates it.
+  const utils::BarrettU128 b_q2 = utils::barrett_u128_setup(crt.q2);
   std::vector<RlweCt> candidates;
   candidates.reserve(db.rows);
   for (size_t row = 0; row < db.rows; ++row) {
@@ -307,9 +310,12 @@ RlweCt select_level_m32(const LevelPlaneM32 &db, const LevelPlan &plan,
         const uint64_t x2 = out_hi[at];
         // Garner: x = x1 + q1 * ((x2 - x1) * q1^{-1} mod q2), canonical in
         // [0, q1 q2), which is what makes the m32 and reference outputs equal.
-        const uint64_t diff = (x2 + crt.q2 - x1 % crt.q2) % crt.q2;
-        const uint64_t lift = static_cast<uint64_t>(
-            (static_cast<uint128_t>(diff) * crt.q1_inv_mod_q2) % crt.q2);
+        // x2 < q2 and x1 mod q2 < q2, so the sum lies in (0, 2 q2) and one
+        // conditional subtraction replaces the reduction.
+        const uint64_t sum = x2 + crt.q2 - utils::barrett_reduce_u128(x1, b_q2);
+        const uint64_t diff = sum >= crt.q2 ? sum - crt.q2 : sum;
+        const uint64_t lift = utils::barrett_reduce_u128(
+            static_cast<uint128_t>(diff) * crt.q1_inv_mod_q2, b_q2);
         (comp == 0 ? ct.c0 : ct.c1)[coeff] = x1 + crt.q1 * lift;
       }
     }

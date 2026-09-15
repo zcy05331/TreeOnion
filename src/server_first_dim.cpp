@@ -379,10 +379,16 @@ void PirServer::inter_to_cts_composite(std::vector<RlweCt> &result,
   //
   // Garner CRT compose: (lo, hi) → lo + q1 * ((hi − lo) · q1_inv mod q2).
   // Since q1, q2 < 2^29, diff·q1_inv stays under 2^58 — no 128-bit mul.
-  auto compose = [q1, q2, q1_inv_mod_q2](uint64_t lo, uint64_t hi) -> uint64_t {
-    const uint64_t lo_mod_q2 = lo % q2;
-    const uint64_t diff = (hi + q2 - lo_mod_q2) % q2;
-    const uint64_t k = (diff * q1_inv_mod_q2) % q2;
+  // compose runs 2 * coeff_count * other_dim_sz times per query, so the two
+  // reductions go through Barrett instead of a hardware divide, and the sum
+  // in (0, 2 q2) takes one conditional subtraction.
+  const utils::BarrettU128 b_q2 = utils::barrett_u128_setup(q2);
+  auto compose = [q1, q2, q1_inv_mod_q2, b_q2](uint64_t lo,
+                                               uint64_t hi) -> uint64_t {
+    const uint64_t sum = hi + q2 - utils::barrett_reduce_u128(lo, b_q2);
+    const uint64_t diff = sum >= q2 ? sum - q2 : sum;
+    const uint64_t k = utils::barrett_reduce_u128(
+        static_cast<uint128_t>(diff) * q1_inv_mod_q2, b_q2);
     return lo + q1 * k;
   };
 
