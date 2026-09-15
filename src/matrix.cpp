@@ -324,12 +324,20 @@ static void level_mat_mat_avx512_safe(const uint32_t *A_data,
                                       uint64_t *out_data, size_t m, size_t n,
                                       size_t levels, const uint64_t *level_qs) {
   std::vector<uint32_t> B0(n), B1(n);
+  // barrett_u128_setup is a 128-bit division. The 32-bit dispatch passes one
+  // modulus repeated over every level, so recomputing it per level costs a
+  // division per NTT coefficient for a constant that never changes.
+  uint64_t setup_q = 0;
+  utils::BarrettU128 b128{};
   for (size_t level = 0; level < levels; ++level) {
     const uint32_t *B_ptr = B_data + level * (n * 2);
     for (size_t k = 0; k < n; ++k) { B0[k] = B_ptr[2*k]; B1[k] = B_ptr[2*k+1]; }
     const uint32_t *A_ptr = A_data + level * (m * n);
     uint64_t       *C_ptr = out_data + level * (m * 2);
-    const auto b128 = utils::barrett_u128_setup(level_qs[level]);
+    if (level_qs[level] != setup_q) {
+      setup_q = level_qs[level];
+      b128 = utils::barrett_u128_setup(setup_q);
+    }
     mat_mat_avx512_safe(A_ptr, B0.data(), B1.data(), C_ptr, m, n, b128);
   }
 }

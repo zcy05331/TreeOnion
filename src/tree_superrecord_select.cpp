@@ -8,6 +8,7 @@
 #include "hexl/hexl.hpp"
 
 #include <algorithm>
+#include <memory>
 
 namespace tree_superrecord {
 
@@ -285,11 +286,14 @@ RlweCt select_level_m32(const LevelPlaneM32 &db, const LevelPlan &plan,
 
   StageClock clock(timing);
   const size_t out_elems = degree * db.rows * 2;
-  std::vector<uint64_t> out_lo(out_elems), out_hi(out_elems);
+  // level_mat_mat_32 writes every element of both buffers, so they are
+  // allocated without the value-initialisation a vector would perform.
+  const std::unique_ptr<uint64_t[]> out_lo(new uint64_t[out_elems]);
+  const std::unique_ptr<uint64_t[]> out_hi(new uint64_t[out_elems]);
   level_mat_mat_32(db.lo.data(), pyramid_m32.lo[pyramid_row].data(),
-                   out_lo.data(), db.rows, db.cols, degree, crt.q1);
+                   out_lo.get(), db.rows, db.cols, degree, crt.q1);
   level_mat_mat_32(db.hi.data(), pyramid_m32.hi[pyramid_row].data(),
-                   out_hi.data(), db.rows, db.cols, degree, crt.q2);
+                   out_hi.get(), db.rows, db.cols, degree, crt.q2);
   clock.lap(&TreeServerTiming::alpha_scan);
 
   const uint64_t q = runtime_scheme.get_rns_mods()[0];

@@ -8,6 +8,7 @@
 #include "hexl/hexl.hpp"
 
 #include <algorithm>
+#include <memory>
 #include <utility>
 
 using tree_select_internal::plan_row_and_cols;
@@ -338,12 +339,15 @@ RlweCt select_level_m32(const TreeLevelDatabaseM32 &db, const LevelPlan &plan,
   // 输出布局与金字塔 B 布局同构：out[(coeff·rows + row)·2 + comp]。
   TIME_START(TREE_SCAN_TIME);
   const size_t out_elems = N * db.rows * 2;
-  std::vector<uint64_t> out_lo(out_elems), out_hi(out_elems);
+  // level_mat_mat_32 会写满两个缓冲的每一个元素，因此这里不走 vector 的
+  // 值初始化——那一遍清零随后会被完全覆写。
+  const std::unique_ptr<uint64_t[]> out_lo(new uint64_t[out_elems]);
+  const std::unique_ptr<uint64_t[]> out_hi(new uint64_t[out_elems]);
   TIME_START(TREE_SCAN_CORE_TIME);
   level_mat_mat_32(db.lo.data(), pyramid_m32.lo[pyramid_row].data(),
-                   out_lo.data(), db.rows, db.cols, N, crt.q1);
+                   out_lo.get(), db.rows, db.cols, N, crt.q1);
   level_mat_mat_32(db.hi.data(), pyramid_m32.hi[pyramid_row].data(),
-                   out_hi.data(), db.rows, db.cols, N, crt.q2);
+                   out_hi.get(), db.rows, db.cols, N, crt.q2);
   TIME_END(TREE_SCAN_CORE_TIME);
 
   // 复合配置下唯一的 RNS limb 就是 q = q1·q2，INTT 按它做。
