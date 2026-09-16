@@ -301,8 +301,10 @@ RlweCt select_level_m32(const LevelPlaneM32 &db, const LevelPlan &plan,
   candidates.reserve(db.rows);
   for (size_t row = 0; row < db.rows; ++row) {
     RlweCt ct;
-    ct.c0.assign(degree, 0);
-    ct.c1.assign(degree, 0);
+    // The compose below writes every coefficient of both polynomials, so the
+    // buffers are reserved rather than zero-filled and then overwritten.
+    ct.c0.reserve(degree);
+    ct.c1.reserve(degree);
     ct.ntt_form = false;
     for (size_t coeff = 0; coeff < degree; ++coeff) {
       for (size_t comp = 0; comp < 2; ++comp) {
@@ -314,7 +316,7 @@ RlweCt select_level_m32(const LevelPlaneM32 &db, const LevelPlan &plan,
         const uint64_t diff = (x2 + crt.q2 - x1 % crt.q2) % crt.q2;
         const uint64_t lift = static_cast<uint64_t>(
             (static_cast<uint128_t>(diff) * crt.q1_inv_mod_q2) % crt.q2);
-        (comp == 0 ? ct.c0 : ct.c1)[coeff] = x1 + crt.q1 * lift;
+        (comp == 0 ? ct.c0 : ct.c1).push_back(x1 + crt.q1 * lift);
       }
     }
     utils::ntt_inv(ct.c0.data(), degree, q);
