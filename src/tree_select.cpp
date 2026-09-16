@@ -352,9 +352,6 @@ RlweCt select_level_m32(const TreeLevelDatabaseM32 &db, const LevelPlan &plan,
 
   // 复合配置下唯一的 RNS limb 就是 q = q1·q2，INTT 按它做。
   const uint64_t q = scheme.get_rns_mods()[0];
-  // 整个 level 共用一个 Barrett 常数：下面的合成要跑 2·N·rows 次，
-  // 每项一次硬件除法会主导这一段。
-  const utils::BarrettU128 b_q2 = utils::barrett_u128_setup(crt.q2);
   std::vector<RlweCt> candidates;
   candidates.reserve(db.rows);
   // 逐候选行做 CRT 合成 + INTT，还原成系数形式的 RLWE 密文。
@@ -375,12 +372,10 @@ RlweCt select_level_m32(const TreeLevelDatabaseM32 &db, const LevelPlan &plan,
         // diff 先把 x1 约减到 mod q2 再做非负减法；乘 q1^{-1} (mod q2) 用
         // u128 防溢出。结果是 [0, q1·q2) 内的唯一规范代表元——正因为返回
         // 的是规范代表元，逐位一致性才能对标量路径成立。
-        // x2 < q2 且 x1 mod q2 < q2，和落在 (0, 2q2)，一次条件减法即可
-        // 代替取模。
-        const uint64_t sum = x2 + crt.q2 - utils::barrett_reduce_u128(x1, b_q2);
-        const uint64_t diff = sum >= crt.q2 ? sum - crt.q2 : sum;
-        const uint64_t lift = utils::barrett_reduce_u128(
-            static_cast<uint128_t>(diff) * crt.q1_inv_mod_q2, b_q2);
+        const uint64_t diff = (x2 + crt.q2 - x1 % crt.q2) % crt.q2;
+        const uint64_t lift =
+            static_cast<uint64_t>((static_cast<uint128_t>(diff) *
+                                   crt.q1_inv_mod_q2) % crt.q2);
         const uint64_t value = x1 + crt.q1 * lift;
         (comp == 0 ? ct.c0 : ct.c1)[coeff] = value;
       }
