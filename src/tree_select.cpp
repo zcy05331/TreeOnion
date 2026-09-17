@@ -358,10 +358,8 @@ RlweCt select_level_m32(const TreeLevelDatabaseM32 &db, const LevelPlan &plan,
   TIME_START(TREE_SCAN_FINALIZE_TIME);
   for (size_t row = 0; row < db.rows; ++row) {
     RlweCt ct;
-    // 下面的合成会写满两个多项式的每一个系数，所以只预留容量，
-    // 不做随后会被完全覆写的清零。
-    ct.c0.reserve(N);
-    ct.c1.reserve(N);
+    ct.c0.assign(N, 0);
+    ct.c1.assign(N, 0);
     ct.ntt_form = false;
     for (size_t coeff = 0; coeff < N; ++coeff) {
       for (size_t comp = 0; comp < 2; ++comp) {
@@ -379,7 +377,7 @@ RlweCt select_level_m32(const TreeLevelDatabaseM32 &db, const LevelPlan &plan,
             static_cast<uint64_t>((static_cast<uint128_t>(diff) *
                                    crt.q1_inv_mod_q2) % crt.q2);
         const uint64_t value = x1 + crt.q1 * lift;
-        (comp == 0 ? ct.c0 : ct.c1).push_back(value);
+        (comp == 0 ? ct.c0 : ct.c1)[coeff] = value;
       }
     }
     // 每候选一次 INTT：与 NTT 路径同一收尾（INTT 线性保证求和可后置）。
