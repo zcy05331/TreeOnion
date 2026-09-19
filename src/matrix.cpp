@@ -13,14 +13,16 @@ typedef unsigned __int128 uint128_t;
 static void level_mat_mat_avx512_safe(const uint32_t *A_data,
                                       const uint32_t *B_data,
                                       uint64_t *out_data, size_t m, size_t n,
-                                      size_t levels, const uint64_t *level_qs);
+                                      size_t levels, const uint64_t *level_qs,
+                                      Matrix32QueryLayout query_layout);
 #endif
 
 static void level_mat_mat_32_scalar_u128(const uint32_t *A_data,
                                          const uint32_t *B_data,
                                          uint64_t *out_data, size_t m,
                                          size_t n, size_t levels,
-                                         uint64_t q);
+                                         uint64_t q,
+                                         Matrix32QueryLayout query_layout);
 
 Avx512KernelAvailability detected_matmul32_availability() {
   Avx512KernelAvailability availability;
@@ -171,10 +173,11 @@ void level_mat_mat(db_matrix_t *A, db_matrix_t *B, inter_matrix_t *out,
       avx_safe = avx512_lazy_accumulation_safe(n, level_qs[level]);
     }
     if (avx_safe) {
-      level_mat_mat_avx512_safe(reinterpret_cast<const uint32_t*>(A->data),
-                                reinterpret_cast<const uint32_t*>(B->data),
-                                reinterpret_cast<uint64_t*>(out->data),
-                                m, n, levels, level_qs);
+      level_mat_mat_avx512_safe(
+          reinterpret_cast<const uint32_t*>(A->data),
+          reinterpret_cast<const uint32_t*>(B->data),
+          reinterpret_cast<uint64_t*>(out->data), m, n, levels, level_qs,
+          Matrix32QueryLayout::Interleaved);
       return;
     }
   }
@@ -322,8 +325,13 @@ static inline void mat_mat_avx512_safe(const uint32_t *__restrict A,
 static void level_mat_mat_avx512_safe(const uint32_t *A_data,
                                       const uint32_t *B_data,
                                       uint64_t *out_data, size_t m, size_t n,
-                                      size_t levels, const uint64_t *level_qs) {
-  std::vector<uint32_t> B0(n), B1(n);
+                                      size_t levels, const uint64_t *level_qs,
+                                      Matrix32QueryLayout query_layout) {
+  std::vector<uint32_t> B0, B1;
+  if (query_layout == Matrix32QueryLayout::Interleaved) {
+    B0.resize(n);
+    B1.resize(n);
+  }
   // barrett_u128_setup is a 128-bit division. The 32-bit dispatch passes one
   // modulus repeated over every level, so recomputing it per level costs a
   // division per NTT coefficient for a constant that never changes.
@@ -331,14 +339,23 @@ static void level_mat_mat_avx512_safe(const uint32_t *A_data,
   utils::BarrettU128 b128{};
   for (size_t level = 0; level < levels; ++level) {
     const uint32_t *B_ptr = B_data + level * (n * 2);
-    for (size_t k = 0; k < n; ++k) { B0[k] = B_ptr[2*k]; B1[k] = B_ptr[2*k+1]; }
+    const uint32_t *B0_ptr = B_ptr;
+    const uint32_t *B1_ptr = B_ptr + n;
+    if (query_layout == Matrix32QueryLayout::Interleaved) {
+      for (size_t k = 0; k < n; ++k) {
+        B0[k] = B_ptr[2 * k];
+        B1[k] = B_ptr[2 * k + 1];
+      }
+      B0_ptr = B0.data();
+      B1_ptr = B1.data();
+    }
     const uint32_t *A_ptr = A_data + level * (m * n);
     uint64_t       *C_ptr = out_data + level * (m * 2);
     if (level_qs[level] != setup_q) {
       setup_q = level_qs[level];
       b128 = utils::barrett_u128_setup(setup_q);
     }
-    mat_mat_avx512_safe(A_ptr, B0.data(), B1.data(), C_ptr, m, n, b128);
+    mat_mat_avx512_safe(A_ptr, B0_ptr, B1_ptr, C_ptr, m, n, b128);
   }
 }
 #endif // __AVX512F__ && __AVX512DQ__
@@ -364,9 +381,9 @@ uint32_t level_mat_mat_stream_only(const uint32_t *A_data, size_t m,
 
 void level_mat_mat_32(const uint32_t *A_data, const uint32_t *B_data,
                       uint64_t *out_data, size_t m, size_t n, size_t levels,
-                      uint64_t q) {
+                      uint64_t q, Matrix32QueryLayout query_layout) {
   level_mat_mat_32_dispatch(A_data, B_data, out_data, m, n, levels, q,
-                            detected_matmul32_availability());
+                            detected_matmul32_availability(), query_layout);
 }
 
 void level_mat_mat_32_dispatch(const uint32_t *A_data,
@@ -376,7 +393,8 @@ void level_mat_mat_32_dispatch(const uint32_t *A_data,
                                size_t n,
                                size_t levels,
                                uint64_t q,
-                               Avx512KernelAvailability availability) {
+                               Avx512KernelAvailability availability,
+                               Matrix32QueryLayout query_layout) {
   const Avx512KernelAvailability detected = detected_matmul32_availability();
   const Avx512KernelAvailability effective{
       availability.compiled_with_required_avx512_kernel &&
@@ -388,18 +406,20 @@ void level_mat_mat_32_dispatch(const uint32_t *A_data,
 #if defined(__AVX512F__) && defined(__AVX512DQ__)
     std::vector<uint64_t> level_qs(levels, q);
     level_mat_mat_avx512_safe(A_data, B_data, out_data, m, n, levels,
-                              level_qs.data());
+                              level_qs.data(), query_layout);
     return;
 #endif
   }
-  level_mat_mat_32_scalar_u128(A_data, B_data, out_data, m, n, levels, q);
+  level_mat_mat_32_scalar_u128(A_data, B_data, out_data, m, n, levels, q,
+                               query_layout);
 }
 
 static void level_mat_mat_32_scalar_u128(const uint32_t *A_data,
                                          const uint32_t *B_data,
                                          uint64_t *out_data, size_t m,
                                          size_t n, size_t levels,
-                                         uint64_t q) {
+                                         uint64_t q,
+                                         Matrix32QueryLayout query_layout) {
   // Scalar fallback。数学输出与 AVX-512 path 相同，但这里没有 SIMD lane
   // 拆分：一个 scalar accumulator 会吃完整的 inner dimension。Composite
   // first-dimension kernel (n=512, q≈2^29) 的 n*q^2 超过 64 bits，因此
@@ -409,13 +429,17 @@ static void level_mat_mat_32_scalar_u128(const uint32_t *A_data,
     const uint32_t *A_ptr = A_data + level * (m * n);
     const uint32_t *B_ptr = B_data + level * (n * 2);
     uint64_t       *C_ptr = out_data + level * (m * 2);
+    const bool split = query_layout == Matrix32QueryLayout::SplitColumns;
+    const size_t b0_base = 0;
+    const size_t b1_base = split ? n : 1;
+    const size_t b_stride = split ? 1 : 2;
     for (size_t i = 0; i < m; ++i) {
       const uint32_t *Ar = A_ptr + i * n;
       uint128_t t0 = 0, t1 = 0;
       for (size_t k = 0; k < n; ++k) {
         const uint64_t a = Ar[k];
-        t0 += a * static_cast<uint64_t>(B_ptr[2 * k]);
-        t1 += a * static_cast<uint64_t>(B_ptr[2 * k + 1]);
+        t0 += a * static_cast<uint64_t>(B_ptr[b0_base + k * b_stride]);
+        t1 += a * static_cast<uint64_t>(B_ptr[b1_base + k * b_stride]);
       }
       C_ptr[2 * i]     = static_cast<uint64_t>(t0 % q128);
       C_ptr[2 * i + 1] = static_cast<uint64_t>(t1 % q128);

@@ -25,6 +25,19 @@ bool equal_pyramids(const AlphaPyramid &a, const AlphaPyramid &b) {
   return true;
 }
 
+std::vector<uint32_t> interleaved_from_split_columns(
+    const std::vector<uint32_t> &split, size_t cols, size_t levels) {
+  std::vector<uint32_t> interleaved(split.size());
+  for (size_t level = 0; level < levels; ++level) {
+    const size_t level_off = level * cols * 2;
+    for (size_t col = 0; col < cols; ++col) {
+      interleaved[level_off + 2 * col] = split[level_off + col];
+      interleaved[level_off + 2 * col + 1] = split[level_off + cols + col];
+    }
+  }
+  return interleaved;
+}
+
 std::vector<RlweCt> alpha_fixture(size_t count, const PirParams &scheme,
                                  bool boundary_values) {
   const size_t n = scheme.get_poly_degree();
@@ -86,6 +99,21 @@ void PirTest::test_tree_superrecord_alpha() {
         const auto new_m32 = pyramid_to_m32(optimized, scheme);
         require_test(old_m32.lo == new_m32.lo && old_m32.hi == new_m32.hi,
                      "NTT-domain pyramid preserves both CRT scan buffers exactly");
+        const auto split_m32 = pyramid_to_m32(
+            optimized, scheme, Matrix32QueryLayout::SplitColumns);
+        require_test(split_m32.query_layout ==
+                         Matrix32QueryLayout::SplitColumns,
+                     "split-column pyramid records its query layout");
+        for (size_t row = 0; row < optimized.size(); ++row) {
+          const size_t cols = optimized[row].size();
+          const size_t levels = scheme.get_poly_degree();
+          require_test(interleaved_from_split_columns(split_m32.lo[row], cols,
+                                                      levels) == new_m32.lo[row],
+                       "split-column lo row converts back to interleaved");
+          require_test(interleaved_from_split_columns(split_m32.hi[row], cols,
+                                                      levels) == new_m32.hi[row],
+                       "split-column hi row converts back to interleaved");
+        }
       }
     }
   }

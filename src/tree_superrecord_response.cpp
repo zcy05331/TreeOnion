@@ -175,7 +175,8 @@ PathResponse answer_path_m32(const PreprocessedTree &db, ExpandedQuery &query,
   const AlphaPyramid pyramid_ntt =
       build_ragged_alpha_pyramid_ntt(query.alpha, params, runtime_scheme);
   const ::AlphaPyramidM32 pyramid_m32 =
-      pyramid_to_m32(pyramid_ntt, runtime_scheme);
+      pyramid_to_m32(pyramid_ntt, runtime_scheme,
+                     Matrix32QueryLayout::SplitColumns);
   clock.lap(&TreeServerTiming::alpha_prepare);
   return pack_path(
       [&](size_t level, size_t plane) {

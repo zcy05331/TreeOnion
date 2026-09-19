@@ -281,12 +281,14 @@ struct NttAccumulator {
 // data[(coeff·cols + col)·2 + comp]——col 对应金字塔条目 k（矩阵乘的求和维），
 // comp∈{0,1} 对应 c0/c1（作为 B 的两个输出通道一起被乘）。
 AlphaPyramidM32 pyramid_to_m32(const AlphaPyramid &pyramid_ntt,
-                               const PirParams &scheme) {
+                               const PirParams &scheme,
+                               Matrix32QueryLayout query_layout) {
   constexpr size_t N = DBConsts::PolyDegree;
   const CompositeRnsTables &crt = scheme.get_composite_rns();
   // 守卫：CRT 拆分表只在复合模数配置下可用。
   require(crt.enabled, "the m32 pyramid needs a composite configuration");
   AlphaPyramidM32 out;
+  out.query_layout = query_layout;
   out.lo.reserve(pyramid_ntt.size());
   out.hi.reserve(pyramid_ntt.size());
   // 每个金字塔行独立生成一对 (lo, hi) 缓冲：行 c 的 cols = row.size()，
@@ -301,7 +303,11 @@ AlphaPyramidM32 pyramid_to_m32(const AlphaPyramid &pyramid_ntt,
         for (size_t comp = 0; comp < 2; ++comp) {
           const uint64_t value =
               comp == 0 ? row[k].c0[coeff] : row[k].c1[coeff];
-          const size_t at = (coeff * row.size() + k) * 2 + comp;
+          const size_t level_base = coeff * row.size() * 2;
+          const size_t at =
+              query_layout == Matrix32QueryLayout::SplitColumns
+                  ? level_base + comp * row.size() + k
+                  : level_base + 2 * k + comp;
           lo[at] = static_cast<uint32_t>(value % crt.q1);
           hi[at] = static_cast<uint32_t>(value % crt.q2);
         }
@@ -345,9 +351,11 @@ RlweCt select_level_m32(const TreeLevelDatabaseM32 &db, const LevelPlan &plan,
   const std::unique_ptr<uint64_t[]> out_hi(new uint64_t[out_elems]);
   TIME_START(TREE_SCAN_CORE_TIME);
   level_mat_mat_32(db.lo.data(), pyramid_m32.lo[pyramid_row].data(),
-                   out_lo.get(), db.rows, db.cols, N, crt.q1);
+                   out_lo.get(), db.rows, db.cols, N, crt.q1,
+                   pyramid_m32.query_layout);
   level_mat_mat_32(db.hi.data(), pyramid_m32.hi[pyramid_row].data(),
-                   out_hi.get(), db.rows, db.cols, N, crt.q2);
+                   out_hi.get(), db.rows, db.cols, N, crt.q2,
+                   pyramid_m32.query_layout);
   TIME_END(TREE_SCAN_CORE_TIME);
 
   // 复合配置下唯一的 RNS limb 就是 q = q1·q2，INTT 按它做。

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "logging.h"
+#include "matrix.h"
 #include "server.h"
 #include "tree_index.h"
 #include "tree_query.h"
@@ -196,15 +197,20 @@ RlweCt select_level_ntt(const TreeLevelDatabaseNtt &db, const LevelPlan &plan,
                         std::span<GSWCt> beta_selectors, PirServer &mux,
                         const TreePirParams &tree, const PirParams &scheme);
 
-// NTT 形式金字塔的每查询 CRT-limb 拆分，采用矩阵核 B 操作数的布局
-// data[(coeff·cols + col)·2 + component]（component 0/1 对应 c0/c1）；
-// 每次查询只构建一次，所有层共享。
+// NTT 形式金字塔的每查询 CRT-limb 拆分，采用矩阵核 B 操作数的布局。
+// 默认 data[(coeff·cols + col)·2 + component]（component 0/1 对应 c0/c1）；
+// SplitColumns 则按每个 coeff 存 [all c0 columns][all c1 columns]，供
+// prepared-query callers跳过 SIMD path 的逐层 deinterleave。每次查询只构建
+// 一次，所有层共享。
 struct AlphaPyramidM32 {
   // 每个金字塔行一个缓冲区：lo 存 mod q1、hi 存 mod q2 的 u32 值。
   std::vector<std::vector<uint32_t>> lo, hi;
+  Matrix32QueryLayout query_layout = Matrix32QueryLayout::Interleaved;
 };
 AlphaPyramidM32 pyramid_to_m32(const AlphaPyramid &pyramid_ntt,
-                               const PirParams &scheme);
+                               const PirParams &scheme,
+                               Matrix32QueryLayout query_layout =
+                                   Matrix32QueryLayout::Interleaved);
 
 // Milestone-6 完整矩阵核：同一选择运算改在 m32 视图上执行——每个 CRT limb
 // 一次 level_mat_mat_32（32×32→64，延迟规约），随后 CRT 合成、每候选一次

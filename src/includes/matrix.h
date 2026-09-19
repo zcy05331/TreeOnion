@@ -49,6 +49,11 @@ enum class MatMul32Dispatch {
     ScalarU128,
 };
 
+enum class Matrix32QueryLayout {
+    Interleaved,
+    SplitColumns,
+};
+
 struct Avx512KernelAvailability {
     bool compiled_with_required_avx512_kernel = false;
     bool runtime_cpu_supports_required_avx512_features = false;
@@ -75,7 +80,9 @@ void level_mat_mat_32_dispatch(const uint32_t *A_data,
                                size_t n,
                                size_t levels,
                                uint64_t q,
-                               Avx512KernelAvailability availability);
+                               Avx512KernelAvailability availability,
+                               Matrix32QueryLayout query_layout =
+                                   Matrix32QueryLayout::Interleaved);
 
 
 // ! mat_vec functions means matrix-vector multiplication.
@@ -126,14 +133,18 @@ uint32_t level_mat_mat_stream_only(const uint32_t *A_data, size_t m,
 // 和 scalar fallback 计算同一个数学输出，但运行时是否启用 SIMD 只由编译
 // target 决定。
 //   A   : m x n, layout matches level_mat_mat (level-major, row-major)
-//   B   : per level, B[level] is n x 2 (interleaved [B0_k, B1_k]);
-//         overall B_data is level-major
+//   B   : per level, B[level] is n x 2. The default layout is interleaved
+//         [B0_k, B1_k]. SplitColumns stores all B0 values followed by all B1
+//         values for that level, avoiding per-level deinterleave in the SIMD
+//         path.
 //   out : m x 2 per level (interleaved)
 //   levels : number of levels, must match A
 //   q   : single modulus shared across all levels
 void level_mat_mat_32(const uint32_t *A_data, const uint32_t *B_data,
                       uint64_t *out_data, size_t m, size_t n, size_t levels,
-                      uint64_t q);
+                      uint64_t q,
+                      Matrix32QueryLayout query_layout =
+                          Matrix32QueryLayout::Interleaved);
 
 // ======================== COMPONENT WISE MULTIPLICATION ========================
 

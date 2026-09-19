@@ -42,6 +42,19 @@ std::vector<uint64_t> oracle_m32(const std::vector<uint32_t> &A,
   return out;
 }
 
+std::vector<uint32_t> split_columns_from_interleaved(
+    const std::vector<uint32_t> &B, size_t n, size_t levels) {
+  std::vector<uint32_t> split(B.size());
+  for (size_t level = 0; level < levels; ++level) {
+    const size_t level_off = level * n * 2;
+    for (size_t col = 0; col < n; ++col) {
+      split[level_off + col] = B[level_off + 2 * col];
+      split[level_off + n + col] = B[level_off + 2 * col + 1];
+    }
+  }
+  return split;
+}
+
 void fill_mod_q(std::vector<uint32_t> &v, uint64_t q, uint64_t seed) {
   std::mt19937_64 rng(seed);
   for (uint32_t &x : v) {
@@ -62,6 +75,15 @@ void require_matches_oracle(size_t m, size_t n, size_t levels, uint64_t q,
                             availability);
   const std::vector<uint64_t> ref = oracle_m32(A, B, m, n, levels, q);
   require_test(got == ref, label + " must match independent uint128 oracle");
+
+  const std::vector<uint32_t> split =
+      split_columns_from_interleaved(B, n, levels);
+  std::vector<uint64_t> got_split(m * 2 * levels, 0);
+  level_mat_mat_32_dispatch(A.data(), split.data(), got_split.data(), m, n,
+                            levels, q, availability,
+                            Matrix32QueryLayout::SplitColumns);
+  require_test(got_split == ref,
+               label + " split-column layout must match independent oracle");
 }
 
 size_t first_unsafe_cols(uint64_t q) {
@@ -206,12 +228,24 @@ void PirTest::test_tree_superrecord_kernel() {
   require_test(!avx512_lazy_accumulation_safe(16, q32),
                "large uint32 modulus first SIMD group is unsafe");
 
+  require_matches_oracle(2, 1, 3, 65537, no_compile,
+                         "tiny scalar fallback");
+  require_matches_oracle(3, 7, 2, 65537, no_compile,
+                         "small ragged scalar fallback");
+  require_matches_oracle(2, 511, 1, q29, no_compile,
+                         "pre-boundary scalar fallback");
+  require_matches_oracle(2, 512, 1, q29, no_compile,
+                         "boundary scalar fallback");
   require_matches_oracle(3, 683, 2, 65537, no_compile,
                          "multi-plane ragged scalar fallback");
   require_matches_oracle(2, 352, 2, q29, no_runtime,
                          "multi-plane production safe scalar fallback");
   require_matches_oracle(2, 683, 1, q29, yes,
                          "unsafe production width forced through wrapper");
+  require_matches_oracle(1, 688, 1, q29, yes,
+                         "unsafe grouped width forced through wrapper");
+  require_matches_oracle(1, 1024, 1, q29, yes,
+                         "large unsafe width forced through wrapper");
   require_matches_oracle(1, 16, 1, q32, yes,
                          "large valid uint32 modulus forced through wrapper");
 

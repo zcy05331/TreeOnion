@@ -291,9 +291,11 @@ RlweCt select_level_m32(const LevelPlaneM32 &db, const LevelPlan &plan,
   const std::unique_ptr<uint64_t[]> out_lo(new uint64_t[out_elems]);
   const std::unique_ptr<uint64_t[]> out_hi(new uint64_t[out_elems]);
   level_mat_mat_32(db.lo.data(), pyramid_m32.lo[pyramid_row].data(),
-                   out_lo.get(), db.rows, db.cols, degree, crt.q1);
+                   out_lo.get(), db.rows, db.cols, degree, crt.q1,
+                   pyramid_m32.query_layout);
   level_mat_mat_32(db.hi.data(), pyramid_m32.hi[pyramid_row].data(),
-                   out_hi.get(), db.rows, db.cols, degree, crt.q2);
+                   out_hi.get(), db.rows, db.cols, degree, crt.q2,
+                   pyramid_m32.query_layout);
   clock.lap(&TreeServerTiming::alpha_scan);
 
   const uint64_t q = runtime_scheme.get_rns_mods()[0];
