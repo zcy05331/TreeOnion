@@ -294,22 +294,45 @@ AlphaPyramidM32 pyramid_to_m32(const AlphaPyramid &pyramid_ntt,
   // 每个金字塔行独立生成一对 (lo, hi) 缓冲：行 c 的 cols = row.size()，
   // 与该行被消费时的选择宽度一致。
   for (const std::vector<RlweCt> &row : pyramid_ntt) {
-    std::vector<uint32_t> lo(N * row.size() * 2), hi(N * row.size() * 2);
+    const size_t cols = row.size();
+    std::vector<uint32_t> lo(N * cols * 2), hi(N * cols * 2);
     for (size_t k = 0; k < row.size(); ++k) {
       // 守卫：必须消费 pyramid_to_ntt 的输出（系数形式在此无意义）。
       require(row[k].ntt_form, "the m32 pyramid consumes the NTT-form pyramid");
-      // 逐 NTT 系数、逐分量取 mod q1 / mod q2，写入 B 布局位置。
-      for (size_t coeff = 0; coeff < N; ++coeff) {
-        for (size_t comp = 0; comp < 2; ++comp) {
-          const uint64_t value =
-              comp == 0 ? row[k].c0[coeff] : row[k].c1[coeff];
-          const size_t level_base = coeff * row.size() * 2;
-          const size_t at =
-              query_layout == Matrix32QueryLayout::SplitColumns
-                  ? level_base + comp * row.size() + k
-                  : level_base + 2 * k + comp;
-          lo[at] = static_cast<uint32_t>(value % crt.q1);
-          hi[at] = static_cast<uint32_t>(value % crt.q2);
+    }
+    if (query_layout == Matrix32QueryLayout::SplitColumns) {
+      constexpr size_t CoeffTile = 8;
+      constexpr size_t ColTile = 16;
+      for (size_t coeff_base = 0; coeff_base < N; coeff_base += CoeffTile) {
+        const size_t coeff_end = std::min(coeff_base + CoeffTile, N);
+        for (size_t col_base = 0; col_base < cols; col_base += ColTile) {
+          const size_t col_end = std::min(col_base + ColTile, cols);
+          for (size_t k = col_base; k < col_end; ++k) {
+            const RlweCt &ct = row[k];
+            for (size_t coeff = coeff_base; coeff < coeff_end; ++coeff) {
+              const size_t level_base = coeff * cols * 2;
+              const size_t c0_at = level_base + k;
+              const size_t c1_at = level_base + cols + k;
+              lo[c0_at] = static_cast<uint32_t>(ct.c0[coeff] % crt.q1);
+              hi[c0_at] = static_cast<uint32_t>(ct.c0[coeff] % crt.q2);
+              lo[c1_at] = static_cast<uint32_t>(ct.c1[coeff] % crt.q1);
+              hi[c1_at] = static_cast<uint32_t>(ct.c1[coeff] % crt.q2);
+            }
+          }
+        }
+      }
+    } else {
+      for (size_t k = 0; k < row.size(); ++k) {
+        // 逐 NTT 系数、逐分量取 mod q1 / mod q2，写入 B 布局位置。
+        for (size_t coeff = 0; coeff < N; ++coeff) {
+          for (size_t comp = 0; comp < 2; ++comp) {
+            const uint64_t value =
+                comp == 0 ? row[k].c0[coeff] : row[k].c1[coeff];
+            const size_t level_base = coeff * row.size() * 2;
+            const size_t at = level_base + 2 * k + comp;
+            lo[at] = static_cast<uint32_t>(value % crt.q1);
+            hi[at] = static_cast<uint32_t>(value % crt.q2);
+          }
         }
       }
     }
