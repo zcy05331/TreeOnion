@@ -1,0 +1,22 @@
+--- a/src/pir/respire.rs
++++ b/src/pir/respire.rs
+@@ -1043,13 +1043,18 @@
+             }
+             scalar_cts.push(scalar_ct)
+         }
++        // [PROFILE] Keep repacking, vectorization, and compression disjoint.
++        let merged = Instant::now();
+         let vec = Self::scal_to_vec(vectorize_params, scalar_cts.as_slice().try_into().unwrap());
++        let vectorized = Instant::now();
+         let compressed =
+             Self::answer_compress_vec(pp, &vec, chunk.len().div_ceil(Self::PACK_RATIO_RESPONSE));
+ 
+         let end = Instant::now();
+         if let Some(time_stats) = time_stats {
+-            time_stats.add("answer_compress", end - begin);
++            time_stats.add("answer_merge", merged - begin);
++            time_stats.add("answer_vectorize", vectorized - merged);
++            time_stats.add("answer_modswitch", end - vectorized);
+         }
+ 
+         if let Some((_, s_vec, _)) = qk {
