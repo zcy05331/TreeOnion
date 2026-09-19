@@ -1,0 +1,6 @@
+Running test: tree_superrecord_kernel
+==============================================================================
+                    test_tree_superrecord_kernel(Benchmark build)
+==============================================================================
+super-record reference old_us=722 optimized_us=1004 rows=2 cols=6
+bounded-matrix reference old_us=249441 optimized_us=74872 rows=16 cols=342

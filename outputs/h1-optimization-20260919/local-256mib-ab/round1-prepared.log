@@ -1,0 +1,36 @@
+Running test: tree_superrecord_bench
+==============================================================================
+                    test_tree_superrecord_benchmark(Benchmark build)
+==============================================================================
+calibrating first-dimension kernels for 1 candidate shapes
+planner: E=256 c=12 N=2^22: 1 candidates (1 h=1), Pareto frontier 1, benchmark rows 1, execution seed 6003972730984227889, response packing mlwe
+preparing [generic-h1-mandatory-0] E=256 N=2^22 h=1 G=8 P=3 rho=256 m=22 b=5 N0=512(align 16) width=578 h_q=10 keys req/reg=10/11 resp=1 scan=1536 MiB folds=171 rot=444 proj=444 util=0.888889 pred=559.522 ms
+completed warmup block 0 leaf 2042299
+completed warmup block 1 leaf 3367950
+completed warmup block 2 leaf 3858498
+completed measured block 3 leaf 2035825
+completed measured block 4 leaf 2581974
+completed measured block 5 leaf 1344117
+completed measured block 6 leaf 1520986
+completed measured block 7 leaf 1302009
+completed measured block 8 leaf 3825569
+completed measured block 9 leaf 2714950
+completed measured block 10 leaf 1271627
+completed measured block 11 leaf 2750083
+completed measured block 12 leaf 748020
+completed measured block 13 leaf 1362277
+completed measured block 14 leaf 3085890
+completed measured block 15 leaf 4161357
+completed measured block 16 leaf 3417517
+completed measured block 17 leaf 2134775
+completed measured block 18 leaf 1875509
+generic super-record JSON: /Users/little_sun/Desktop/little_sun/26Summer/OnionPIRv2/.worktrees/generic-h1-opt-20260919/outputs/h1-optimization-20260919/local-256mib-ab/round1-prepared.json
+
+generic super-record benchmark: N=2^22 leaves, E=256 bits, 16 measured trials after 3 warmup, trial seed 7
+[candidate-0 generic-h1-mandatory-0] E=256 N=2^22 h=1 G=8 P=3 rho=256 m=22 b=5 N0=512(align 16) width=578 h_q=10 keys req/reg=10/11 resp=1 scan=1536 MiB folds=171 rot=444 proj=444 util=0.888889 pred=559.522 ms
+  database 1536.3 MiB (98325 plaintext cells, scan 1536.3 MiB per query), setup 9207.08 ms
+  server total mean 558.967 ms, median 557.608, p95 573.968, stddev 6.47531
+  stages avg (ms): expand 76.738242 complete 19.328786 prepare 61.785620 scan 318.422082 finalize 9.344458 fold 16.981922 rotate 45.433772 project 0.000000 pack 0.000000 switch 0.369614 merge 9.943573
+  stages sum 558.348 ms; client query 0.0862526 ms, client extract 0.176099 ms
+  throughput 2748.51 MiB/s scanned; communication: modeled query 14880 B, actual response payload 11264 B; noise: min budget 2 bits, max residue 91 of decoder bound 508.628; real non-target neighbour slots/trial 0
+  samples(server): 565.966917 552.741542 563.075167 557.838542 556.639875 568.180125 549.273958 562.327834 552.165375 559.971458 573.968459 558.628667 552.846459 557.378000 555.968459 556.500083

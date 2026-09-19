@@ -78,6 +78,8 @@ of `G`, plane count `P`, and `N0`; other bundle arities remain comparison contro
 The fixed 1 GiB / 32 B optimization reference is `h1/G8/P3/N0=512/b7`,
 EP3/drop32 with exact KS8 and MLWE response packing. This reference is specific
 to that workload, not a fixed layout for every entry size or database size.
+Local optimization trials and their acceptance limits are recorded in the
+[h1 experiment report](outputs/h1-optimization-20260919/REPORT.md).
 
 
 `src/tree_superrecord_*` implements the entry-size-aware super-record path
