@@ -7,8 +7,8 @@ The other project processes15294/20293 were stopped(T) with zero CPU-tick growth
 when inspected; do not resume or terminate them. Check metadata/status and reuse
 the validated50-trial result at the scheduled matrix start; never submit a duplicate.
 
-The rest of the matrix remains scheduled for2026-09-20 03:00America/Chicago
-(08:00UTC). At that time check live processes again and wait if busy. The one-time
+The rest of the matrix remains scheduled for2026-09-20 06:00America/Chicago
+(11:00UTC). At that time check live processes again and wait if busy. The one-time
 heartbeat `clemson-1-4-gib` was updated with the immediateStandard run location.
 
 ## Standard baseline completed
@@ -16,7 +16,7 @@ heartbeat `clemson-1-4-gib` was updated with the immediateStandard run location.
 The immediate Standard1GiB run completed:50/50correct,906.011ms mean,
 1130.230MiB/s original-data throughput,11264Bactualresponsepayload.
 Native57/57regressions passed. Resultsidecars are in `standard-now/`;
-remote metadata/status is `complete`. At03:00validate/reuse it, then proceed
+remote metadata/status is `complete`. At06:00validate/reuse it, then proceed
 to h1A/B and the remainingmatrix; do not rerun it solely because step2below
 describes the initial command.
 
@@ -58,13 +58,13 @@ Recordserverlatency,stageprofiles,query/responsebytekind,setup,memory,correctnes
 
 ## Execution order and remaining preparation
 
-1. Prepare a finite serial runner and an idle gate locally. At/after03:00, upload
+1. Prepare a finite serial runner and an idle gate locally. At/after06:00, upload
    only code/scripts/source manifests (exclude docs,papers,private backups).
 2. FIRST PRIORITY per latest user instruction: build native HEXL1.2.6 and the
    defaultEP6 core, verify correctness, then run Standard OnionPIRv2 1GiB
    before h1 tuning or external-backend preparation. Use50 measured queries,
    3warmups,seed7. Preserve rawJSON,log,process exit andpeakRSS; validate and
-   report this speed baseline promptly. This changes order, not the03:00/idle
+   report this speed baseline promptly. This changes order, not the06:00/idle
    restriction. Exact case invocation after the time and idle checks:
 
    ```sh
