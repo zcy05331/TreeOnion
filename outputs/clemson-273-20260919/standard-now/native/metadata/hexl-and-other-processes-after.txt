@@ -1,0 +1,4 @@
+/users/zcy05331/onion-cuckoo-rs-20260919T234720Z/deps/hexl-build/CMakeCache.txt
+CMAKE_BUILD_TYPE:STRING=Release
+other_project 15294 state S ticks 1805
+other_project 20293 state R ticks 18155

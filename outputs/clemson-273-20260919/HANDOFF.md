@@ -1,10 +1,24 @@
 # Scheduled Clemson matrix
 
-User instruction supersedes the earlier idle observation: another project is
-currently running. DO NOT start remote compilation, dependency installation or
-benchmarks before2026-09-20 03:00 America/Chicago (08:00UTC). At that time check
-live processes and CPU activity again; wait if busy. Never stop the other job.
-A one-time task heartbeat `clemson-1-4-gib` is scheduled for03:00.
+Latest user override: run ONLY the Standard OnionPIRv2 1GiB speed baseline
+immediately. It has been submitted under
+`/users/zcy05331/standard-onion-1gb-20260920T0132Z`, guarded by idle checks.
+The other project processes15294/20293 were stopped(T) with zero CPU-tick growth
+when inspected; do not resume or terminate them. Check metadata/status and reuse
+the validated50-trial result at the scheduled matrix start; never submit a duplicate.
+
+The rest of the matrix remains scheduled for2026-09-20 03:00America/Chicago
+(08:00UTC). At that time check live processes again and wait if busy. The one-time
+heartbeat `clemson-1-4-gib` was updated with the immediateStandard run location.
+
+## Standard baseline completed
+
+The immediate Standard1GiB run completed:50/50correct,906.011ms mean,
+1130.230MiB/s original-data throughput,11264Bactualresponsepayload.
+Native57/57regressions passed. Resultsidecars are in `standard-now/`;
+remote metadata/status is `complete`. At03:00validate/reuse it, then proceed
+to h1A/B and the remainingmatrix; do not rerun it solely because step2below
+describes the initial command.
 
 ## Machine
 
@@ -30,7 +44,8 @@ Nativecandidatecomparison is required before promotion.
 External six adapters are restored ONLY from committedd4d55bb, never copied
 from the dirty path-baselines worktree. Top-L/A3 work remains unfinished and
 must not enter this campaign silently.
-No remote uploads or remote builds were performed during initial preparation.
+Initial preparation was local-only. The subsequent explicit "run now" request
+authorized the separate Standard upload/build/run described above.
 
 ## Repetitions and workload
 
