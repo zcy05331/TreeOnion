@@ -22,6 +22,13 @@ SCALES = {
     "4gb": 1 << 26,
 }
 SCALE_ORDER = ("256mb", "512mb", "1gb", "4gb")
+
+
+def cuckoo_heights(scale: str) -> tuple[int, ...]:
+    # make_benchmark_reference chooses h=7 below 1 GiB and h=10 from 1 GiB.
+    # The C++ Cuckoo benchmark rejects heights above that reference envelope.
+    return (7,) if SCALES[scale] < (1 << 24) else (7, 8, 9, 10)
+
 WARMUPS = 3
 TRIAL_SEED = 7
 STANDARD_TRIALS = 50
@@ -485,10 +492,9 @@ class CoreMatrix:
             str(WARMUPS),
             "--leaf-count",
             str(SCALES[scale]),
-            str(folder / "h7.json"),
-            str(folder / "h8.json"),
-            str(folder / "h9.json"),
-            str(folder / "h10.json"),
+            "--heights",
+            ",".join(map(str, cuckoo_heights(scale))),
+            *[str(folder / f"h{height}.json") for height in cuckoo_heights(scale)],
         ]
         result = self.runner.run(command, cwd=self.paths.source)
         row["command"] = command
@@ -546,7 +552,7 @@ class CoreMatrix:
             else:
                 self.append_row(scale, "layerwise_tuned", "skipped", reason="layerwise profile failed")
             pilots_ok = True
-            for height in (7, 8, 9, 10):
+            for height in cuckoo_heights(scale):
                 pilots_ok = self.cuckoo_pilot(scale, height) and pilots_ok
             if pilots_ok:
                 chosen = self.select_cuckoo(scale)

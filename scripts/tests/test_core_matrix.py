@@ -40,8 +40,9 @@ class FakeRunner(matrix.Runner):
         if command[1].endswith("select_cuckoo_layout.py"):
             output = pathlib.Path(command[command.index("--output") + 1])
             output.parent.mkdir(parents=True, exist_ok=True)
-            output.write_text(json.dumps({"decision": {"chosen_expansion_height": 8}}) + "\n")
-            return ok(command, "8\n")
+            height = int(command[command.index("--heights") + 1].split(",")[-1])
+            output.write_text(json.dumps({"decision": {"chosen_expansion_height": height}}) + "\n")
+            return ok(command, str(height) + "\n")
         if command[1].endswith("read_process_peak_memory.py"):
             return self.run_wrapper(command, env or {})
         raise AssertionError(f"unexpected command: {command}")
@@ -125,7 +126,7 @@ class CoreMatrixTests(unittest.TestCase):
         root, result = self.run_matrix(runner)
 
         self.assertEqual(result, 0)
-        self.assertEqual(runner.waits, 35)
+        self.assertEqual(runner.waits, 29)
         status = json.loads((root / "outputs" / "core-matrix" / "status.json").read_text())
         self.assertEqual(status["state"], "complete")
         labels = [(row["scale"], row["case"], row["status"]) for row in status["rows"]]
@@ -150,6 +151,20 @@ class CoreMatrixTests(unittest.TestCase):
             "flat": 8,
             "cuckoo_tuned": 8,
         })
+
+    def test_small_scales_do_not_request_heights_outside_reference_envelope(self):
+        runner = FakeRunner()
+        root, result = self.run_matrix(runner)
+        self.assertEqual(result, 0)
+        status = json.loads((root / "outputs/core-matrix/status.json").read_text())
+        for scale in ("256mb", "512mb"):
+            pilots = [row["case"] for row in status["rows"]
+                      if row["scale"] == scale and row["case"].startswith("tuning/cuckoo/h")]
+            self.assertEqual(pilots, ["tuning/cuckoo/h7"])
+            formal = [row for row in status["rows"] if row["scale"] == scale and row["case"] == "cuckoo_tuned"]
+            self.assertEqual(len(formal), 1)
+            self.assertEqual(formal[0]["status"], "complete")
+            self.assertEqual(formal[0]["trials"], 8)
 
     def test_standard_1g_is_validated_and_copied_without_waiting(self) -> None:
         runner = FakeRunner()
