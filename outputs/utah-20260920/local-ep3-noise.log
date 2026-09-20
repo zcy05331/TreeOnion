@@ -1,0 +1,5 @@
+Running test: tree_noise_envelope
+==============================================================================
+                    test_tree_noise_envelope(Benchmark build)
+==============================================================================
+N0 = 512 h1 noise envelope: max noise 68 of decode bound 508, min measured budget 2 bits over 3 leaves

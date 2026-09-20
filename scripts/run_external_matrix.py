@@ -468,7 +468,7 @@ class MatrixRunner:
         self.save()
         write_json(self.outputs / "summary.json", self.state)
         lines = [
-            "# Clemson External Matrix",
+            "# External Baseline Matrix",
             "",
             f"State: {self.state['state']}",
             "",

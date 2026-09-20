@@ -1,0 +1,12 @@
+Internal ctest changing into directory: /users/zcy05331/tree-h1-final-20260920T2105Z/build-spirit-external
+Test project /users/zcy05331/tree-h1-final-20260920T2105Z/build-spirit-external
+    Start 1: spirit_rc_dense_polynomials
+1/3 Test #1: spirit_rc_dense_polynomials ......   Passed    2.99 sec
+    Start 2: spirit_rc_h8_full_path
+2/3 Test #2: spirit_rc_h8_full_path ...........   Passed    4.77 sec
+    Start 3: spirit_rc_packed_selectors
+3/3 Test #3: spirit_rc_packed_selectors .......   Passed    0.70 sec
+
+100% tests passed, 0 tests failed out of 3
+
+Total Test time (real) =   8.47 sec
