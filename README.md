@@ -73,7 +73,8 @@ source. Their separate build/smoke gates are described in their adapter READMEs.
 After preparing these dependencies, `scripts/run_regression.sh` runs the core
 and integrated script gates, including an encrypted Respire smoke. Full Python
 discovery additionally requires `SPIRIT_PATH_ADAPTER` to name the built RC
-adapter and `RESPIRE_PATH_ADAPTER_BIN` to name the built Respire adapter.
+adapter, `SPIRIT_SOURCE_DIR` to name its pinned upstream checkout, and
+`RESPIRE_PATH_ADAPTER_BIN` to name the built Respire adapter.
 
 For a single 1 GiB-tier primary run with 32-byte entries:
 

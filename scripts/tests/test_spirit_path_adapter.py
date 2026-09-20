@@ -11,6 +11,7 @@ from scripts.path_baselines.report import validate_result
 
 
 ROOT = Path(__file__).resolve().parents[2]
+SPIRIT_SOURCE = Path(os.environ.get("SPIRIT_SOURCE_DIR", ROOT / ".benchmarks" / "SPIRIT"))
 HARNESS = Path(os.environ.get(
     "SPIRIT_PATH_ADAPTER",
     ROOT / ".benchmarks" / "build-spirit-local" / "spirit_path_adapter",
@@ -207,7 +208,7 @@ class SpiritPathAdapterSmoke(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             td_path = Path(td)
             archive = td_path / "SPIRIT-archive"
-            shutil.copytree(ROOT / ".benchmarks" / "SPIRIT" / "src", archive / "src")
+            shutil.copytree(SPIRIT_SOURCE / "src", archive / "src")
 
             missing = subprocess.run(
                 [
@@ -262,7 +263,7 @@ class SpiritPathAdapterSmoke(unittest.TestCase):
                     "cmake",
                     "-S", str(ROOT / "scripts" / "path_baselines" / "spirit"),
                     "-B", str(Path(td) / "build-mismatch"),
-                    f"-DSPIRIT_DIR={ROOT / '.benchmarks' / 'SPIRIT'}",
+                    f"-DSPIRIT_DIR={SPIRIT_SOURCE}",
                     "-DSPIRIT_SOURCE_COMMIT=0000000000000000000000000000000000000000",
                 ],
                 cwd=ROOT,

@@ -8,7 +8,11 @@ surface is preserved on `codex/archive-full-pir-20260920` at `fcc521f`.
 
 ```bash
 bash scripts/run_regression.sh /path/to/Onion-PIR
-ONIONPIR_BENCH_BIN=/path/to/Onion-PIR python3 -m unittest discover -s scripts/tests -v
+ONIONPIR_BENCH_BIN=/path/to/Onion-PIR \
+SPIRIT_PATH_ADAPTER=/path/to/spirit_path_adapter \
+SPIRIT_SOURCE_DIR=/path/to/pinned/SPIRIT \
+RESPIRE_PATH_ADAPTER_BIN=/path/to/path_workload \
+  python3 -m unittest discover -s scripts/tests -v
 TREEPIR_SEALPIR_ADAPTER=/path/to/treepir_sealpir_adapter \
   python3 -m unittest discover -s scripts/treepir_sealpir/tests -v
 ```
