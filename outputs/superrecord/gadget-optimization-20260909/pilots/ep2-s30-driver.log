@@ -1,6 +1,0 @@
-Traceback (most recent call last):
-  File "/Users/little_sun/Desktop/little_sun/26Summer/OnionPIRv2/.worktrees/generic-superrecord/scripts/benchmark_gadget_configs.py", line 368, in <module>
-    main()
-  File "/Users/little_sun/Desktop/little_sun/26Summer/OnionPIRv2/.worktrees/generic-superrecord/scripts/benchmark_gadget_configs.py", line 333, in main
-    raise RuntimeError("no valid benchmark results completed")
-RuntimeError: no valid benchmark results completed

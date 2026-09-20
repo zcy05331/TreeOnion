@@ -27,6 +27,34 @@ pub const FORMAL_H24_SHAPE: RespireShape = RespireShape {
     d3: 64,
 };
 
+const FORMAL_H22_PARAMS: RespireParamsExpanded = {
+    let mut params = FactoryParams::batch_256(49, 8, 7, 7);
+    params.D3 = 64;
+    params.expand().expand()
+};
+type FormalH22Base = respire!(FORMAL_H22_PARAMS);
+pub type FormalH22 = CuckooRespireImpl<32, 49, { 1usize << 23 }, FormalH22Base>;
+pub const FORMAL_H22_SHAPE: RespireShape = RespireShape {
+    label: "formal_h22_256mib_batch_256",
+    nu1: 7,
+    nu2: 7,
+    d3: 64,
+};
+
+const FORMAL_H23_PARAMS: RespireParamsExpanded = {
+    let mut params = FactoryParams::batch_256(49, 8, 8, 7);
+    params.D3 = 64;
+    params.expand().expand()
+};
+type FormalH23Base = respire!(FORMAL_H23_PARAMS);
+pub type FormalH23 = CuckooRespireImpl<32, 49, { 1usize << 24 }, FormalH23Base>;
+pub const FORMAL_H23_SHAPE: RespireShape = RespireShape {
+    label: "formal_h23_512mib_batch_256",
+    nu1: 8,
+    nu2: 7,
+    d3: 64,
+};
+
 const FORMAL_H26_PARAMS: RespireParamsExpanded = {
     let mut params = FactoryParams::batch_256(49, 8, 9, 9);
     params.D3 = 64;

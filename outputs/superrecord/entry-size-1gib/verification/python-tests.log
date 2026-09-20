@@ -1,9 +1,0 @@
-..............usage: python3 -m unittest [-h] [--binary BINARY] [--output-dir OUTPUT_DIR]
-                           [--entries ENTRIES] [--reuse-32b REUSE_32B]
-                           [--plan-only] [--source-commit SOURCE_COMMIT]
-python3 -m unittest: error: --entries must select at least one distinct entry size
-..............
-----------------------------------------------------------------------
-Ran 28 tests in 5.425s
-
-OK

@@ -1,9 +1,10 @@
 #include "tests.h"
 #include "tree_multiplane.h"
-#include "tree_superrecord_test_util.h"
+#include "tree_entry_test_util.h"
 
 #include <bit>
 #include <span>
+#include <utility>
 #include <vector>
 
 using tree_multiplane::EntryBits;
@@ -11,13 +12,12 @@ using tree_multiplane::EntryBits;
 namespace {
 
 EntryBits entry_for(size_t bits, size_t level, size_t node) {
-  return tree_superrecord_test::synthetic_entry(bits, level, node);
+  return tree_entry_test::synthetic_entry(bits, level, node);
 }
 
-tree_superrecord::EncodedSuperRecord encode_one(const EntryBits &entry,
-                                                const tree_multiplane::Params &params) {
-  return tree_superrecord::encode_super_record(
-      std::span<const EntryBits>(&entry, 1), params.codec);
+tree_entry_codec::EncodedEntry encode_one(
+    const EntryBits &entry, const tree_multiplane::Params &params) {
+  return tree_entry_codec::encode_entry(entry, params.codec);
 }
 
 void require_response_plaintext(const tree_multiplane::Response &response,
@@ -25,10 +25,10 @@ void require_response_plaintext(const tree_multiplane::Response &response,
                                 const tree_multiplane::Params &params,
                                 size_t leaf,
                                 const tree_multiplane::EntrySource &source,
-                                tree_superrecord::ResponsePacking packing) {
+                                tree_packing::ResponsePacking packing) {
   const size_t planes = params.codec.plane_count;
   const size_t items = (params.tree.L + 1) * planes;
-  const auto bounds = path_chunk_bounds(items, params.tree.rho);
+  const auto bounds = tree_packing::path_chunk_bounds(items, params.tree.rho);
   require_test(response.chunks.size() == bounds.size(),
                "multiplane response chunk count");
   require_test(response.item_offsets.size() == items,
@@ -45,7 +45,7 @@ void require_response_plaintext(const tree_multiplane::Response &response,
       const size_t plane = item % planes;
       const size_t node = leaf >> (params.tree.L - level);
       const auto encoded = encode_one(source(level, node), params);
-      const size_t offset = tree_superrecord::packed_residue_offset(
+      const size_t offset = tree_packing::packed_residue_offset(
           local, params.tree.rho, packing);
       require_test(response.item_offsets[item] == offset,
                    "multiplane public residue offset");
@@ -58,10 +58,38 @@ void require_response_plaintext(const tree_multiplane::Response &response,
   }
 }
 
-void exercise_e2e(tree_superrecord::ResponsePacking packing) {
+void require_chunk_bounds_arithmetic() {
+  const auto bounds = tree_packing::path_chunk_bounds(17, 5);
+  require_test(bounds.size() == 4, "path chunk bounds count");
+  require_test(bounds[0] == std::pair<size_t, size_t>{0, 5},
+               "path chunk first bound");
+  require_test(bounds[1] == std::pair<size_t, size_t>{5, 5},
+               "path chunk middle bound");
+  require_test(bounds[2] == std::pair<size_t, size_t>{10, 5},
+               "path chunk middle bound 2");
+  require_test(bounds[3] == std::pair<size_t, size_t>{15, 2},
+               "path chunk tail bound");
+}
+
+std::vector<EntryBits> answer_path(const tree_multiplane::Database &db,
+                                   PirClient &client, PirServer &server,
+                                   const PirParams &scheme,
+                                   const tree_multiplane::Params &params,
+                                   size_t leaf,
+                                   tree_packing::ResponsePacking packing) {
+  RlweCt query = make_tree_query(client, scheme, params.tree, leaf);
+  ExpandedTreeQuery expanded = unpack_tree_query(
+      server, scheme, params.tree, client.get_client_id(), query);
+  tree_multiplane::Response response =
+      tree_multiplane::answer(db, expanded, server, client.get_client_id(),
+                              params, scheme, packing);
+  return tree_multiplane::extract(response, client, params);
+}
+
+void exercise_e2e(tree_packing::ResponsePacking packing) {
   PirParams scheme;
   PirClient client(scheme);
-  const size_t c = tree_superrecord_test::payload_bits(scheme);
+  const size_t c = tree_entry_test::payload_bits(scheme);
   const size_t key_height = std::bit_width(DBConsts::PolyDegree) - 1;
   auto keys = client.create_session_keys(key_height);
   const size_t g = DBConsts::PolyDegree / 8;
@@ -104,18 +132,28 @@ void exercise_e2e(tree_superrecord::ResponsePacking packing) {
                    "multiplane decoded entry");
     }
   }
+
+  const size_t repeated_leaf = static_cast<size_t>(0x51A7E5EEDULL % tree.N);
+  const std::vector<EntryBits> first =
+      answer_path(db, client, server, scheme, params, repeated_leaf, packing);
+  const std::vector<EntryBits> second =
+      answer_path(db, client, server, scheme, params, repeated_leaf, packing);
+  require_test(first == second,
+               "fresh query/session randomness preserves decoded path");
 }
 
 }  // namespace
 
 void test_tree_multiplane() {
+  require_chunk_bounds_arithmetic();
+
   PirParams scheme;
   const size_t key_height = std::bit_width(DBConsts::PolyDegree) - 1;
 
   {
     const size_t g = 32;
     const size_t entry_bits = 256;
-    const size_t c = tree_superrecord_test::payload_bits(scheme);
+    const size_t c = tree_entry_test::payload_bits(scheme);
     const TreePirParams tree = make_tree_pir_params_for_scheme(
         tree_height_for(2, 1, g), 2, g, scheme, key_height);
     const tree_multiplane::Params params =
@@ -123,7 +161,7 @@ void test_tree_multiplane() {
     require_test(params.codec.plane_count == 1,
                  "256-bit g32 entries fit in one old-layout plane");
     const tree_multiplane::EntrySource source = [&](size_t level, size_t node) {
-      return tree_superrecord::entry_from_bytes(
+      return tree_entry_codec::entry_from_bytes(
           synthetic_tree_node_bytes(level, node), entry_bits);
     };
     const size_t level = tree.r + 1;
@@ -150,6 +188,6 @@ void test_tree_multiplane() {
                  "c*g+1 bits require exactly two old-layout planes");
   }
 
-  exercise_e2e(tree_superrecord::ResponsePacking::Projection);
-  exercise_e2e(tree_superrecord::ResponsePacking::MlweMerge);
+  exercise_e2e(tree_packing::ResponsePacking::Projection);
+  exercise_e2e(tree_packing::ResponsePacking::MlweMerge);
 }

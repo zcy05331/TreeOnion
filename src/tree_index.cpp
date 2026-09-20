@@ -122,8 +122,8 @@ TreePirParams make_tree_pir_params(size_t L, size_t a, size_t n, size_t g,
   params.W = std::bit_ceil(params.w);
   params.h_q = static_cast<size_t>(std::bit_width(params.W)) - 1;
 
-  // 方案绑定：t / q 原样记录；MVP 阶段响应环与主环相同（n₂ = n、q₂ = q），
-  // 环切换压缩（M7）会在别处替换这两个字段。注意 rns_moduli 先拷贝后 move。
+  // 方案绑定：t / q 原样记录；最终 h1 响应环与主环相同（n₂ = n、q₂ = q）。
+  // 注意 rns_moduli 先拷贝后 move。
   params.t = t;
   params.rns_moduli = rns_moduli;
   params.response_degree = n;                       // MVP：n₂ = n
@@ -206,8 +206,8 @@ void validate_tree_params(const TreePirParams &params) {
             "W must be invertible modulo every RNS modulus");
   }
 
-  // MVP 冻结：响应环即主环（n₂ = n、q₂ = q）。字段漂移说明有人改了响应
-  // 侧却没走正式的环切换路径，直接拒绝。
+  // 最终 h1 路径冻结：响应环即主环（n₂ = n、q₂ = q）。字段漂移说明
+  // 响应几何已经偏离当前支持的同环响应路径，直接拒绝。
   require(params.response_degree == params.n,
           "MVP response ring must equal the main ring");
   require(params.response_moduli == params.rns_moduli,

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run a bounded sweep for the old-layout h=1 tree multiplane benchmark."""
+"""Tune N0 after fixing the h1 layout by utilization and P<=6."""
 
 from __future__ import annotations
 
@@ -19,6 +19,23 @@ from summarize_cloudlab_profiles import ProfileError, validate_sampled
 
 class SweepError(Exception):
     pass
+
+
+def select_layout(entry_bits: int, chunk_bits: int = 12,
+                  ring_degree: int = 2048) -> tuple[int, int]:
+    if entry_bits <= 0 or chunk_bits <= 0 or ring_degree < 2 or ring_degree & (ring_degree - 1):
+        raise SweepError("layout needs positive payload widths and a power-of-two ring")
+    choices = []
+    g = 1
+    while g <= ring_degree // 2:
+        planes = (entry_bits + chunk_bits * g - 1) // (chunk_bits * g)
+        if planes <= 6:
+            choices.append((g * planes, planes, g))
+        g *= 2
+    if not choices:
+        raise SweepError("entry cannot fit in six planes with rho >= 2")
+    _, planes, g = min(choices)
+    return g, planes
 
 
 @dataclass(frozen=True)
@@ -136,9 +153,11 @@ def validate_result(path: Path, *, case: Case, leaf_count: int, entry_bits: int,
     b = metadata_int(metadata, "b", path)
     if b < 0:
         raise SweepError(f"{path}: metadata.b must be non-negative")
-    expected_planes = math.ceil(entry_bits / (chunk_bits * case.g))
+    expected_planes = (entry_bits + chunk_bits * case.g - 1) // (chunk_bits * case.g)
     if plane_count != expected_planes:
         raise SweepError(f"{path}: metadata.plane_count {plane_count} != minimal {expected_planes}")
+    if (case.g, plane_count) != select_layout(entry_bits, chunk_bits, ring_degree):
+        raise SweepError(f"{path}: layout violates maximum utilization, minimum P, P<=6 policy")
     rho = ring_degree // case.g
     reported_rho = metadata_int(metadata, "rho", path)
     if reported_rho != rho:
@@ -309,7 +328,8 @@ def print_plan(cases: list[Case], binary: Path, args: argparse.Namespace) -> Non
 def run_sweep(args: argparse.Namespace) -> int:
     binary = args.binary.resolve()
     output_dir = args.output_dir.resolve()
-    cases = build_cases(output_dir, args.g_values, args.n0_values)
+    g, planes = select_layout(args.entry_bits, args.chunk_bits, args.ring_degree)
+    cases = build_cases(output_dir, [g], args.n0_values)
     manifest_path = output_dir / "manifest.json"
     ranking_path = output_dir / "ranking.json"
 
@@ -331,6 +351,9 @@ def run_sweep(args: argparse.Namespace) -> int:
         "binary": str(binary),
         "leaf_count": args.leaf_count,
         "entry_bits": args.entry_bits,
+        "layout_policy": "maximum utilization, then minimum P; P<=6",
+        "g": g,
+        "plane_count": planes,
         "experiments": args.experiments,
         "warmup": args.warmup,
         "trial_seed": args.trial_seed,
@@ -382,6 +405,9 @@ def run_sweep(args: argparse.Namespace) -> int:
                 query_layout=args.query_layout,
                 trial_seed=args.trial_seed,
             )
+            if (int(summary["metadata"]["chunk_bits"]) != args.chunk_bits or
+                    int(summary["metadata"]["ring_degree"]) != args.ring_degree):
+                raise SweepError("binary scheme does not match --chunk-bits/--ring-degree")
             sample_leaves = tuple(summary["sample_leaves"])
             if reference_leaves is None:
                 reference_leaves = sample_leaves
@@ -437,7 +463,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--leaf-count", type=int, required=True)
     parser.add_argument("--entry-bits", type=int, default=256)
-    parser.add_argument("--g-values", required=True)
+    parser.add_argument("--chunk-bits", type=int, default=12)
+    parser.add_argument("--ring-degree", type=int, default=2048)
     parser.add_argument("--n0-values", required=True)
     parser.add_argument("--experiments", type=int, default=3)
     parser.add_argument("--warmup", type=int, default=3)
@@ -454,7 +481,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         parser.error("--experiments must be positive")
     if args.warmup < 0:
         parser.error("--warmup must be non-negative")
-    args.g_values = parse_power2_csv(args.g_values, "--g-values")
+    select_layout(args.entry_bits, args.chunk_bits, args.ring_degree)
     args.n0_values = parse_power2_csv(args.n0_values, "--n0-values")
     return args
 

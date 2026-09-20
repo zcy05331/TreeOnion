@@ -466,11 +466,10 @@ void test_merkle_server_phases() {
 }
 
 // The Floyd sampler must keep reproducing the leaf schedule of the archived
-// runs. outputs/merkle_baselines/7eb7a735fff5-m4-rosetta-v2-merkle-paths-16-
-// trials.json (git-tracked since commit 7c7a116) was written by
-// merkle_benchmarks with --leaf-count 16777216 --warmup 3 --experiments 16 and
-// records workload.trial_seed 3403547260970671391 next to the
-// warmup_leaf_indices / trial_leaf_indices copied below.
+// runs. The archive branch keeps the source JSON; the constants below copy
+// the warmup_leaf_indices / trial_leaf_indices written by merkle_benchmarks
+// with --leaf-count 16777216 --warmup 3 --experiments 16 and trial seed
+// 3403547260970671391.
 // run_cloudlab_numa_ab.sh pairs A/B runs by identical sample_leaf_indices and
 // TreePIR replays the same leaves from leaves.txt, so a change to the splitmix
 // constants, the modulo or the Floyd fallback would leave the distinctness

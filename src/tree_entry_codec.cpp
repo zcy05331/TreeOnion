@@ -1,0 +1,204 @@
+#include "tree_entry_codec.h"
+
+#include <algorithm>
+#include <bit>
+#include <limits>
+#include <stdexcept>
+#include <string>
+
+namespace tree_entry_codec {
+namespace {
+
+[[noreturn]] void fail(const std::string &message) {
+  throw std::invalid_argument("tree_entry_codec: " + message);
+}
+
+void require(bool condition, const char *message) {
+  if (!condition) fail(message);
+}
+
+size_t ceil_div(size_t numerator, size_t denominator) {
+  if (denominator == 0) fail("division by zero");
+  return numerator / denominator + (numerator % denominator != 0 ? 1 : 0);
+}
+
+size_t checked_mul(size_t a, size_t b, const char *field) {
+  if (a != 0 && b > std::numeric_limits<size_t>::max() / a) {
+    fail(std::string(field) + " overflows size_t");
+  }
+  return a * b;
+}
+
+}  // namespace
+
+void validate_entry(const EntryBits &entry) {
+  require(entry.bit_length > 0, "entry bit length must be positive");
+  require(entry.bytes.size() == ceil_div(entry.bit_length, 8),
+          "entry byte count does not match its bit length");
+  const size_t used_in_last = entry.bit_length % 8;
+  if (used_in_last != 0) {
+    const uint8_t mask = static_cast<uint8_t>(0xFFu << used_in_last);
+    require((entry.bytes.back() & mask) == 0,
+            "entry has nonzero bits above its bit length");
+  }
+}
+
+void validate_codec_spec(const CodecSpec &spec) {
+  require(spec.entry_bits > 0, "codec entry_bits must be positive");
+  require(spec.payload_bits_per_coeff > 0 && spec.payload_bits_per_coeff < 64,
+          "codec payload bits per coefficient must be in [1, 63]");
+  require(spec.record_coeffs > 0, "codec record width must be positive");
+  require(spec.plaintext_modulus > 1, "codec plaintext modulus must exceed 1");
+  require((uint64_t{1} << spec.payload_bits_per_coeff) <=
+              spec.plaintext_modulus,
+          "codec payload width exceeds the plaintext modulus");
+  require(spec.plane_count == minimal_plane_count(
+                                  spec.entry_bits,
+                                  spec.payload_bits_per_coeff,
+                                  spec.record_coeffs),
+          "codec plane count is not the minimal ceil(E/(cG))");
+}
+
+EntryBits zero_entry(size_t bit_length) {
+  require(bit_length > 0, "entry bit length must be positive");
+  EntryBits entry;
+  entry.bit_length = bit_length;
+  entry.bytes.assign(ceil_div(bit_length, 8), 0);
+  return entry;
+}
+
+EntryBits entry_from_bytes(std::span<const uint8_t> bytes, size_t bit_length) {
+  EntryBits entry = zero_entry(bit_length);
+  require(bytes.size() >= entry.bytes.size(),
+          "byte source is shorter than the entry");
+  std::copy(bytes.begin(), bytes.begin() + entry.bytes.size(),
+            entry.bytes.begin());
+  const size_t used_in_last = bit_length % 8;
+  if (used_in_last != 0) {
+    const uint8_t mask =
+        static_cast<uint8_t>((uint16_t{1} << used_in_last) - 1);
+    entry.bytes.back() &= mask;
+  }
+  return entry;
+}
+
+uint8_t get_bit(const EntryBits &entry, size_t bit) {
+  if (bit >= entry.bit_length) {
+    throw std::out_of_range("tree_entry_codec: entry bit index out of range");
+  }
+  return static_cast<uint8_t>((entry.bytes[bit / 8] >> (bit % 8)) & 1U);
+}
+
+void set_bit(EntryBits &entry, size_t bit, uint8_t value) {
+  if (bit >= entry.bit_length) {
+    throw std::out_of_range("tree_entry_codec: entry bit index out of range");
+  }
+  const uint8_t mask = static_cast<uint8_t>(1U << (bit % 8));
+  if (value == 0) {
+    entry.bytes[bit / 8] &= static_cast<uint8_t>(~mask);
+  } else {
+    entry.bytes[bit / 8] |= mask;
+  }
+}
+
+size_t minimal_plane_count(size_t entry_bits, size_t payload_bits_per_coeff,
+                           size_t record_coeffs) {
+  const size_t plane_bits =
+      checked_mul(payload_bits_per_coeff, record_coeffs, "plane payload bits");
+  return ceil_div(entry_bits, plane_bits);
+}
+
+LayoutChoice choose_layout(size_t entry_bits, size_t payload_bits_per_coeff,
+                           size_t ring_degree) {
+  require(entry_bits > 0, "entry bit length must be positive");
+  require(payload_bits_per_coeff > 0, "payload width must be positive");
+  require(std::has_single_bit(ring_degree),
+          "ring degree must be a power of two");
+  constexpr size_t kMaxPlanes = 6;
+
+  LayoutChoice best;
+  size_t best_product = std::numeric_limits<size_t>::max();
+  for (size_t g = 1; g <= ring_degree / 2; g <<= 1) {
+    const size_t rho = ring_degree / g;
+    if (rho < 2) continue;
+    const size_t planes =
+        minimal_plane_count(entry_bits, payload_bits_per_coeff, g);
+    if (planes == 0 || planes > kMaxPlanes) continue;
+    const size_t product = checked_mul(g, planes, "layout capacity product");
+    if (product < best_product ||
+        (product == best_product &&
+         (best.plane_count == 0 || planes < best.plane_count))) {
+      best_product = product;
+      best.g = g;
+      best.rho = rho;
+      best.plane_count = planes;
+      best.payload_utilization =
+          static_cast<double>(entry_bits) /
+          static_cast<double>(payload_bits_per_coeff * product);
+    }
+  }
+  require(best.g != 0, "no h=1 layout satisfies the plane bound");
+  return best;
+}
+
+EncodedEntry encode_entry(const EntryBits &entry, const CodecSpec &spec) {
+  validate_codec_spec(spec);
+  validate_entry(entry);
+  require(entry.bit_length == spec.entry_bits,
+          "entry bit length does not match the codec");
+
+  const size_t c = spec.payload_bits_per_coeff;
+  EncodedEntry planes(spec.plane_count, PlaneDigits(spec.record_coeffs, 0));
+  size_t plane = 0;
+  size_t digit = 0;
+  size_t digit_offset = 0;
+  size_t remaining_entry_bits = spec.entry_bits;
+  for (uint8_t byte : entry.bytes) {
+    size_t fragment_bits = std::min<size_t>(8, remaining_entry_bits);
+    size_t consumed = 0;
+    while (fragment_bits > 0) {
+      const size_t take = std::min(fragment_bits, c - digit_offset);
+      const uint64_t mask = (uint64_t{1} << take) - 1;
+      planes[plane][digit] |=
+          static_cast<uint64_t>((byte >> consumed) & mask) << digit_offset;
+      fragment_bits -= take;
+      consumed += take;
+      digit_offset += take;
+      if (digit_offset == c) {
+        digit_offset = 0;
+        ++digit;
+        if (digit == spec.record_coeffs) {
+          digit = 0;
+          ++plane;
+        }
+      }
+    }
+    remaining_entry_bits -= std::min<size_t>(8, remaining_entry_bits);
+  }
+  return planes;
+}
+
+EntryBits decode_entry(const EncodedEntry &encoded, const CodecSpec &spec) {
+  validate_codec_spec(spec);
+  require(encoded.size() == spec.plane_count,
+          "encoded entry has the wrong plane count");
+  const size_t c = spec.payload_bits_per_coeff;
+  const size_t plane_bits = c * spec.record_coeffs;
+  for (const PlaneDigits &plane : encoded) {
+    require(plane.size() == spec.record_coeffs,
+            "encoded plane has the wrong digit count");
+    for (uint64_t digit : plane) {
+      require(digit < (uint64_t{1} << c), "encoded digit exceeds 2^c");
+    }
+  }
+  EntryBits entry = zero_entry(spec.entry_bits);
+  for (size_t bit = 0; bit < spec.entry_bits; ++bit) {
+    const size_t plane = bit / plane_bits;
+    const size_t within = bit % plane_bits;
+    const uint64_t digit = encoded[plane][within / c];
+    if ((digit >> (within % c)) & 1U) set_bit(entry, bit, 1);
+  }
+  return entry;
+}
+
+}  // namespace tree_entry_codec

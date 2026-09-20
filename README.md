@@ -1,246 +1,109 @@
-# OnionPIR version 2
+# Onion Merkle PIR
 
-> **WARNING:** Note that this repository is for research purpose. Do not use this in production directly.
+Research prototype for privately retrieving a tree path. The primary algorithm
+uses h=1 and the original `(gamma, alpha, beta)` index layout with multiple
+planes. See the [source map](src/README.md) and [script guide](scripts/README.md)
+for implementation boundaries.
 
-For implementation navigation, see the [C++ source map](src/README.md) and
-[script and verification guide](scripts/README.md). They describe the client,
-server, database, planning, benchmark and reporting boundaries and the local
-regression entry points.
+## Primary algorithm
 
-### Preliminaries
+For an E-bit entry and c payload bits per coefficient, a plane reserves g
+coefficients and `P=ceil(E/(c*g))`. Choose a dyadic divisor g of the ring degree
+n with `rho=n/g>=2` and **P<=6**. First maximize `E/(c*g*P)`; among layouts with
+the same utilization, choose the smallest P. Only then tune N0 and the derived
+fold width b by complete server time.
 
-We ran our code on a `Intel(R) Xeon(R) Platinum 8358 CPU @ 2.60GHz` (Ice Lake, 32 cores per socket, AVX-512). AVX2 and AVX-512 are used to accelerate the first-dimension matrix multiply and NTT-related computation.
+At `n=2048, t=4099, c=12`:
 
-We use c++20 and `GCC 11.4.0` for compilation.
+| Entry bytes | g | P |
+|---:|---:|---:|
+| 16 | 4 | 3 |
+| 32 | 8 | 3 |
+| 48 | 32 | 1 |
+| 64 | 16 | 3 |
+| 128 | 32 | 3 |
 
-### Installation
+At tree level ell, `R=2^max(ell-log2(rho),0)`, node `p+u*R` occupies
+polynomial p at coefficients `u+digit*rho`. All planes share the same query,
+expanded alpha pyramid, and beta/gamma selectors. Selection and rotation run
+per plane, then MLWE combines the fragments into responses. Projection remains
+a response-packing diagnostic of this same algorithm.
 
-OnionPIRv2 only depends on [Intel HEXL](https://github.com/intel/hexl) for fast NTT. The expected install path is set in the top-level `CMakeLists.txt` (`HEXL_DIR`) — adjust it to match your environment, or pass `-DHEXL_DIR=...` on the cmake line. HEXL is required: the ring kernels have no scalar fallback, and `-DUSE_HEXL=OFF` is rejected at configure time.
+The leaf index is `i=gamma*(N0*2^b)+alpha*2^b+beta`. N0 is a power of two.
+The alpha pyramid is built in the NTT domain; interleaved and split-column
+query buffers support a matched implementation comparison. Correctness checks
+cover the complete response plaintext, including padding; noise margins are
+diagnostic and do not impose a one-bit admission threshold.
 
-```
-python3 run.py            # build (Benchmark) + run pir test on k1_comp
-python3 run.py --build-only
-```
+## Baselines
 
-### Usage
+The supported comparison contains exactly these seven baseline families:
 
-`run.py` handles building with the correct compile flags and running the binary.
-
-```
-python run.py [options]
-```
-
-| Option | Description |
+| Baseline | Implementation |
 |---|---|
-| `-c NAME`, `--config NAME` | Build configuration (default: `k1_comp`). See available configs below |
-| `-v`, `--verbose` | Build in Debug mode (enables `DEBUG_PRINT` at compile time) |
-| `--no-compress` | Accepted legacy flag; the current implementation uses the same packed-query path |
-| `-t NAME`, `--test NAME` | Test to run (default: `pir`). See available tests below |
-| `-n N`, `--experiments N` | Number of experiment iterations (default: 5) |
-| `-w N`, `--warmup N` | Number of warmup iterations (default: 3) |
-| `-o FILE`, `--output FILE` | Write results to file (bare name goes to `outputs/`) |
-| `-j N`, `--jobs N` | Parallel make jobs (default: all cores) |
-| `--build-only` | Build without running |
-| `--leaf-count N` | Merkle benchmark leaf count; power of two (default: `2^24`) |
-| `--benchmark-json FILE` | Write structured Merkle benchmark output |
-| `--benchmark-case NAME` | Run `all`, only `standard_onionpir`, both `merkle_paths`, or only `merkle_layerwise` (default: `all`) |
-| `--run-optional-4gb` | Attempt the resource-gated `2^26`-leaf (4 GB) workload; always 4 measured trials |
-| `-h`, `--help` | Show help message |
+| StandardOnionPIR | Original single-block OnionPIRv2 |
+| SPIRIT+RC | SPIRIT with packed selectors and response compression |
+| Layerwise tuned | One PIR per tree level, using measured layout tuning |
+| Cuckoo batch tuned | Cuckoo batch placement with measured layout tuning |
+| TreePIR | Colored-path baseline with VBPIR/SealPIR backend tuning |
+| Flat | One whole-tree PIR per requested path level |
+| Respire | Canonical tree-path workload on Respire batch PIR |
 
-**Examples:**
+StandardOnionPIR retrieves one plaintext block; it is a speed reference rather
+than a full-path protocol. The primary, SPIRIT+RC and Respire workloads include
+the root; the legacy Merkle and colored-path baselines omit it. Reports retain
+these useful-node counts and distinguish measured bytes from modeled bytes.
+
+## Build and test
+
+Use C++20 and Intel HEXL 1.2.6. Supply its CMake package path explicitly:
 
 ```bash
-# Default: k1_comp config, pir test, 5 trials + 3 warmup
-python3 run.py
-
-# Pick a different config
-python3 run.py -c k1
-python3 run.py -c k2_mp
-python3 run.py -c n4096_k2_mp
-
-# Verbose/debug mode — recompiles with DEBUG_PRINT enabled
-python3 run.py -v
-
-# Save results to outputs/results.txt
-python3 run.py -o results.txt
-
-# Just build, don't run
-python3 run.py --build-only
-
-# Run a specific test
-python3 run.py -t fst_dim
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Benchmark \
+  -DACTIVE_CONFIG=CONFIG_N2048_K1_COMP -DHEXL_DIR=/path/to/hexl/lib64/cmake/hexl-1.2.6
+cmake --build build -j8
+./build/Onion-PIR --test all --experiments 3 --warmup 1
 ```
 
-### Primary tree PIR: h=1 with the original index layout
+The default build retains exact EP6 arithmetic for the core baselines. The
+primary performance configuration uses `-DPIR_EP_ROWS=3 -DPIR_EP_LOW_BITS=32`
+with exact KS8; validate its encrypted primary tests before measuring it.
+SPIRIT+RC requires its pinned SEAL fork, and Respire requires its pinned Rust
+source. Their separate build/smoke gates are described in their adapter READMEs.
+After preparing these dependencies, `scripts/run_regression.sh` runs the core
+and integrated script gates, including an encrypted Respire smoke. Full Python
+discovery additionally requires `SPIRIT_PATH_ADAPTER` to name the built RC
+adapter and `RESPIRE_PATH_ADAPTER_BIN` to name the built Respire adapter.
 
-The primary research algorithm fixes **h=1**, permits multiple planes, and uses
-the original **gamma/alpha/beta** indexing from Tree g32. The record width `g`
-is tunable: `rho=n/g`, `P=ceil(entry_bits/(c*g))`, where `c=floor(log2(t))`.
-At level `ell`, `R=2^max(ell-log2(rho),0)`, node `p+u*R` goes in polynomial
-`p` at coefficients `u+digit*rho`. Every plane uses this same assignment and
-the same expanded query. Leaf indices decompose as
-`i=gamma*(N0*2^b)+alpha*2^b+beta`, with power-of-two `N0` and `g`.
-
-`tree_multiplane` tests packing and encrypted retrieval; `tree_multiplane_bench`
-measures one layout, including full-response correctness, profiling and bytes.
-The old `tree_bench_g32` benchmark remains unchanged. For example:
+For a single 1 GiB-tier primary run with 32-byte entries:
 
 ```bash
-TREE_MULTIPLANE_G=8 TREE_MULTIPLANE_N0=512 \
-TREE_MULTIPLANE_ENTRY_BITS=256 TREE_MULTIPLANE_PACKING=mlwe \
+TREE_MULTIPLANE_N0=512 TREE_MULTIPLANE_PACKING=mlwe \
   ./build/Onion-PIR --test tree_multiplane_bench --leaf-count 16777216 \
-  --experiments 50 --warmup 3 --trial-seed 7 --benchmark-json outputs/h1-old-layout.json
+  --experiments 50 --warmup 3 --trial-seed 7 --benchmark-json outputs/primary.json
 ```
 
-Use `scripts/benchmark_tree_multiplane.py` to compare `g` and `N0` candidates
-serially and rank valid points by measured complete server time. `P` and `b`
-are derived, not independent overrides. For 32-byte entries at `t=4099`,
-`(g,P)` examples are `(8,3)`, `(16,2)`, `(32,1)`. `TREE_MULTIPLANE_PACKING`
-also accepts `projection`; `TREE_MULTIPLANE_QUERY_LAYOUT` accepts `interleaved`
-(default) or `split-columns` for a matched query-preparation comparison.
-Gadget parameters remain build-time settings. Noise margins are diagnostic;
-acceptance requires exact decryption of the whole response, including padding.
-
-### Historical Generic super-record path
-
-`tree_superrecord_*` retains its independent sigma-based indexing and supports
-arbitrary bundle arities. Even h1/G32/P1 there assigns nodes to polynomials
-differently from the primary path. Previous Generic h1/G8/P3 timings and the
-[h1 optimization report](outputs/h1-optimization-20260919/REPORT.md) describe
-that historical path; they are not measurements of the restored index layout.
-
-
-`src/tree_superrecord_*` implements the entry-size-aware super-record path
-(arbitrary bundle arity h, dyadic record width G, minimal plane count P,
-ragged first dimension N0, one shared sigma selector vector, pooled
-multi-plane responses) planned from `(E, N, policy)`; see
-[docs/TREE_PIR_GENERIC_SUPERRECORD.md](docs/TREE_PIR_GENERIC_SUPERRECORD.md).
-Correctness suites: `tree_superrecord_codec`, `tree_superrecord_planner`,
-`tree_superrecord_index`, `tree_superrecord_e2e`, `tree_superrecord_noise`,
-`tree_superrecord_kernel` (all in `--test all`).
-Timed comparison against the legacy g=32 path on the same leaf schedule:
+For a layout-fixed N0 sweep:
 
 ```bash
-scripts/run_superrecord_sweep.sh --leaf-count 4194304 --warmup 3 --trials 16 --memory-gib 10
+python3 scripts/benchmark_tree_multiplane.py --binary build/Onion-PIR \
+  --output-dir outputs/primary-n0 --leaf-count 16777216 --entry-bits 256 \
+  --n0-values 128,256,512,1024 --experiments 8 --warmup 3 --trial-seed 7
 ```
 
-Frozen local planner profiles for 13-bit through 30,000-bit entries are in
-[docs/SUPERRECORD_PLANNER_PROFILES.md](docs/SUPERRECORD_PLANNER_PROFILES.md).
-They record the selected PlanTag parameters, key coverage, overfetch, dispatch
-metrics, timing and evidence files for the nine entry-size cases. The 256-bit
-Bundle3 point is the exact-fill specialization generated by the generic planner,
-not a separate protocol.
+## Experiment policy
 
-For the new 16/32/64/128-byte, 1 GiB h3/h1 study, use
-[the entry-size experiment guide](docs/ENTRY_SIZE_1GIB_EXPERIMENT.md) and
-`scripts/run_entry_size_sweep.py`. The guide also records the selected
-future baseline list and its 100/16-query policy. The previously launched
-8 GiB matrix retains its original source and schedule.
+The current matrix uses 32-byte entries at 256 MiB, 512 MiB, 1 GiB and 4 GiB,
+corresponding to leaf heights 22, 23, 24 and 26. Normally use 50 measured queries;
+Cuckoo batch, TreePIR and Flat use 8. Each point has 3 warmups and seed 7.
+Record complete server latency, stage profiling, query/response bytes, setup,
+peak memory, hardware and source revision. A fresh host requires fresh timings.
+The serial runners wait for other computation to be idle and never signal it.
+Resource-infeasible points are reported explicitly rather than counted as runs.
 
-### Merkle PIR baselines on Apple Silicon
+## Archived experiments
 
-The frozen comparison uses the paper-aligned v2 configuration
-`CONFIG_N2048_K1_COMP` (`n=2048`, `log(q)=58`, `log(t)=13`,
-`log(q')=22`, `L_KEY=10`, `L_EP=6`, `L_KS=8`, `sigma=2.55`). On an
-Apple M4 it deliberately runs an x86_64 binary with Intel HEXL 1.2.6 under
-Rosetta 2:
-
-```bash
-scripts/run_merkle_baselines_x86_64.sh
-```
-
-The script builds in the isolated `build-x86_64-benchmark/` directory, checks
-both the executable and HEXL archive architectures, runs the `2^24`-leaf
-(1 GB paper row) workload with 3 warmups and 5 measured trials, and writes JSON
-plus human-readable output under `outputs/merkle_baselines/`. Use environment
-variables for a bounded smoke run, for example:
-
-```bash
-LEAF_COUNT=256 WARMUPS=0 EXPERIMENTS=1 \
-  RESULT_STEM=smoke scripts/run_merkle_baselines_x86_64.sh
-```
-
-Set `TRIAL_SEED` to choose a reproducible query schedule. Warm-up and measured
-query IDs are sampled without replacement, so every trial in one run uses a
-different ID; all three cases reuse that same schedule for paired comparison.
-Set `BENCHMARK_CASE=standard_onionpir` when repeating only the Standard case;
-the runner returns before allocating or executing either Merkle-path baseline.
-Set `BENCHMARK_CASE=merkle_paths` to run paired Flat and Layerwise trials
-without constructing or timing Standard. Set
-`BENCHMARK_CASE=merkle_layerwise` to run Layerwise alone without constructing
-or timing Standard or Flat. JSON preserves every measured server-time/
-throughput sample plus population and sample variance.
-The top-level throughput remains database bytes divided by mean server time,
-while the per-trial throughput statistics use the arithmetic mean of the
-individual trial throughputs.
-
-Set `RUN_OPTIONAL_4GB=1` to request the `2^26`-leaf (4 GB) row, which always
-measures 4 trials. It is skipped
-with an explicit `skipped_resource_limit` result unless estimated
-preprocessed storage plus a 2 GiB safety margin fits physical memory.
-
-The report labels these measurements
-`x86_64 + Intel HEXL under Rosetta 2 on Apple M4; non-native result`. They
-align protocol parameters and accounting with the paper, but they are not
-native M4 measurements or a reproduction of the paper's Xeon/AVX-512 timings.
-Query and helper-key byte counts are modeled seed-compressed sizes; response
-bytes are measured from the repository's serializer, so totals ending in
-`_mixed` are intentionally not described as fully measured wire traffic.
-
-The canonical H=24 run from commit `fff03386deea` used 3 warmups and 5 measured
-trials with seed `15794071829771909372`. Its eight query IDs are distinct and
-recorded in the artifact. Full metadata and per-stage timings are in
-`outputs/merkle_baselines/fff03386deea-m4-rosetta-v2-unique-queries.json`
-(SHA-256 `c41b147c1d2caa432b2cf5e7bc9cc96562fb3df2874b2b1d31eb61f3492ff556`).
-
-| Case | Avg. server time | Paper throughput (DB/time) | Repeated-scan bandwidth | Modeled queries | Actual responses | Online mixed | Shared helper keys | First session mixed |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|
-| `standard_onionpir` | 2,397.800 ms | 427.059 MiB/s | 427.059 MiB/s | 14,880 B | 11,264 B | 26,144 B | 1,488,000 B | 1,514,144 B |
-| `merkle_flat` | 35,265.343 ms | 29.037 MiB/s | 696.889 MiB/s | 357,120 B | 270,336 B | 627,456 B | 1,488,000 B | 2,115,456 B |
-| `merkle_layerwise` | 1,990.784 ms | 514.390 MiB/s | 514.390 MiB/s | 357,120 B | 270,336 B | 627,456 B | 1,488,000 B | 2,115,456 B |
-
-The earlier `abaca522bc98` artifact is retained for provenance and uses the
-original v1 schema, where
-`paper_server_throughput_MBps` was incorrectly computed from repeated scan
-bytes. Treat its 705.389 MiB/s flat value as scan bandwidth. The current schema
-v2 artifact uses plaintext database bytes divided by the complete case's server
-time and reports repeated work separately as `paper_scan_throughput_MBps`.
-
-Flat scan bandwidth can still exceed layerwise scan bandwidth without a timing
-error. Every H=24 flat call uses a `512 x 683` first-dimension shape. The largest
-layerwise call uses `256 x 683`: it scans half as many plaintexts but still
-produces 683 encrypted candidates and performs the same 682 remaining-dimension
-MUX reductions. Smaller layers repeatedly pay query expansion, RGSW completion,
-candidate conversion, MUX, and modulus-switch costs for progressively fewer
-bytes. Those non-linear costs are amortized better by the large regular flat
-scan, but flat repeats the full database 24 times. Consequently layerwise still
-has 17.71x lower full-path server latency and 385.778 versus 21.778 useful
-response bytes/s.
-
-The optional H=27 row was not extrapolated: its estimated peak allocation was
-45,822,181,376 bytes, so the 17,179,869,184-byte host recorded
-`skipped_resource_limit` after applying the fixed 2 GiB safety margin in the
-earlier gated run. All 392 decryptions in the current unique-query run passed;
-the logged residual noise budget ranged from 1 to 3 bits, so the H=24 result is
-correct but has a narrow minimum noise margin.
-
-**Available configs:** `k1`, `k1_comp` (default, composite-mod K=1), `k2_mp`, `n4096_k2_mp`. See `src/includes/database_constants.h` for per-config parameters.
-
-**Available tests:** `pir` (default), `bfv`, `ext_prod`, `ext_prod_mux`, `fst_dim`, `fast_expand`, `decrypt_mod_q`, `mod_switch`, `db_shape`, `bv_ks`, `cpu_info`, `hexl_ntt`, `utils_arith`, `noise_sampling`, `rlwe_enc`, `barrett`, `plan_params`
-
-You can also build and run manually with CMake:
-
-```bash
-mkdir build && cd build
-cmake .. -DCMAKE_BUILD_TYPE=Benchmark -DACTIVE_CONFIG=CONFIG_N2048_K1_COMP
-make && ./Onion-PIR --test pir
-```
-
-
-
-### Tips
-
-- Currently, most of the parameters can be adjusted in `src/includes/database_constants.h`. 
-- You can use `clangd` when reading the code. The `compile_commands.json` file will be automatically generated after cmake.
-- You can install the [Better Comments](https://marketplace.visualstudio.com/items?itemName=aaron-bond.better-comments) extension to highlight the TODO or remarked comments.
-- The code also runs for clang, but we use GCC unroll in some places. Please change those lines if you want to test optimal throughput.
+Earlier algorithms, campaign scripts and raw results remain in
+[`codex/archive-full-pir-20260920`](https://github.com/zcy05331/OnionMerklePIR/tree/codex/archive-full-pir-20260920).
+They are not active baseline implementations in main. Current artifacts belong
+under `outputs/`; private drafts and `docs/` stay outside published source.

@@ -1,8 +1,0 @@
-{
-  "schema_version": "real_selector_check.v1",
-  "bucket_rows_checked": 79,
-  "heights": [
-    {"H": 24, "bucket_count": 37, "total_member_entries": 97970208, "min_members": 2644126, "max_members": 2651168, "min_target_num_pt": 27543, "max_target_num_pt": 27617, "old_ref": {"h": 7, "N0": 32, "remaining_dims": 14}, "new_ref": {"h": 10, "N0": 512, "remaining_dims": 10}, "old_selected": {"h": 7, "N0": 64, "remaining_dims": 9, "Nrest_min": 431, "Nrest_max": 432, "padded_min": 27584, "padded_max": 27648}, "new_selected": {"h": 7, "N0": 64, "remaining_dims": 9, "Nrest_min": 431, "Nrest_max": 432, "padded_min": 27584, "padded_max": 27648}, "changed_buckets": 0},
-    {"H": 27, "bucket_count": 42, "total_member_entries": 786271843, "min_members": 18709252, "max_members": 18730684, "min_target_num_pt": 194889, "max_target_num_pt": 195112, "old_ref": {"h": 7, "N0": 16, "remaining_dims": 18}, "new_ref": {"h": 10, "N0": 512, "remaining_dims": 13}, "old_selected": {"h": 7, "N0": 32, "remaining_dims": 13, "Nrest_min": 6091, "Nrest_max": 6098, "padded_min": 194912, "padded_max": 195136}, "new_selected": {"h": 7, "N0": 32, "remaining_dims": 13, "Nrest_min": 6091, "Nrest_max": 6098, "padded_min": 194912, "padded_max": 195136}, "changed_buckets": 0}
-  ]
-}

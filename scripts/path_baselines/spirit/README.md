@@ -1,6 +1,6 @@
 # SPIRIT path baseline adapter
 
-This adapter runs the public SPIRIT batch PIR implementation against the full binary-tree path workload. It uses the real `BatchDBSetup`, `BatchQuery`, `BatchAnswerPrecompute`, `BatchAnswerQueryPrecompute`, `BatchAnswer`, and `BatchExtract` API from `https://github.com/zhouzhangwalker/SPIRIT` for plain SPIRIT. With `--scheme spirit_rc`, it uses the same upstream batch query/answer pipeline, then applies the adapter RC module's encrypted response rotation and MultiResMerge routine.
+This adapter runs the SPIRIT+RC path baseline against the full binary-tree path workload. It uses the real `BatchDBSetup`, `BatchQuery`, `BatchAnswerPrecompute`, `BatchAnswerQueryPrecompute`, and `BatchAnswer` API from `https://github.com/zhouzhangwalker/SPIRIT`, then applies the adapter RC module's encrypted response rotation and MultiResMerge routine. Standalone SPIRIT is no longer a retained baseline in this tree; `--scheme spirit` exits with an error.
 
 The workload database is the full BFS tree with 32-byte records. A path query contains the root and every ancestor down to the requested leaf, so height `H` returns `H + 1` records. Flat BFS indices follow:
 
@@ -13,13 +13,11 @@ The adapter never enables SPIRIT's `benchmark_randomize_hint_matrix` mode becaus
 
 The instrumented build keeps SPIRIT's public checkout unchanged and patches only the generated build copy. It exposes the existing `BatchAnswer` timers for `secret_unpack`, `matvec`, `modswitch`, `b_extract`, and `lwe_pack`, plus `answer_glue` for remaining measured answer wall time. The JSON also reports actual serialized query/response byte counts and the minimum SEAL invariant noise budget over returned response ciphertexts. `backend_records` is the realized bucket-matrix capacity in 32-byte-equivalent records after PBC replication and row/column padding, not the logical tree size. The `layout` object separately reports physical copied PBC entries and byte-cell capacity. `setup.helper_bytes` is `null` because this adapter does not have an actual setup serializer. The separate `setup.public_metadata_bytes` field is a labeled current in-memory model for PBC routing tables, bucket-layout metadata, and public matrix seeds; it is not claimed as required wire communication because these tables may be reconstructed from public seeds/layout. Query and response bytes remain actual serialized payload sizes.
 
-## Plain SPIRIT vs SPIRIT+RC
+## SPIRIT+RC Layout
 
-`--scheme spirit` uses upstream's balanced bucket layout and returns all bucket response ciphertexts. `--scheme spirit_rc` uses a public strided layout required by response compression: for polynomial degree `n` and 32-byte records, each bucket stores byte `j` of a record at row `(slot mod (n/32)) + j * (n/32)`. This forces one response polynomial per bucket and lets the RC module privately rotate the selected residue to zero and merge all bucket residues into one ciphertext.
+`--scheme spirit_rc` uses a public strided layout required by response compression: for polynomial degree `n` and 32-byte records, each bucket stores byte `j` of a record at row `(slot mod (n/32)) + j * (n/32)`. This forces one response polynomial per bucket and lets the RC module privately rotate the selected residue to zero and merge all bucket residues into one ciphertext.
 
 The RC implementation is a prototype baseline of the paper's response-side idea with packed selector upload enabled. The client packs the selected-residue bits into one RNS-RGSW selector query ciphertext and the server expands it before private rotation. The JSON counts the packed selector ciphertext and expansion parameters in `query_rc_selector_bytes`, and counts merge, expansion, and relinearization keys in `query_rc_galois_key_bytes`. The server selector expansion time is reported as the `selector_unpack` stage.
-
-The two schemes therefore compare complete supported pipelines with different public database geometry. They are not a fixed-layout ablation.
 
 ## Parameter lineage
 
@@ -35,18 +33,6 @@ Build:
 cmake -S scripts/path_baselines/spirit -B .benchmarks/build-spirit-local \
   -DSPIRIT_DIR="$PWD/.benchmarks/SPIRIT"
 cmake --build .benchmarks/build-spirit-local -j2
-```
-
-Run plain SPIRIT:
-
-```bash
-.benchmarks/build-spirit-local/spirit_path_adapter \
-  --scheme spirit \
-  --height 8 \
-  --leaf-file /path/to/leaves.txt \
-  --warmup 1 \
-  --trials 2 \
-  --output /tmp/spirit-path.json
 ```
 
 Run SPIRIT+RC:

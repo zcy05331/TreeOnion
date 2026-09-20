@@ -1,5 +1,0 @@
-1gb: selected vbpir_fd256 mean_server_ms=8887.484
-4gb: selected sealpir_d2 mean_server_ms=101162.721
-wrote /users/zcy05331/core-pir-20260905/outputs/profiling/stage_samples.csv
-wrote /users/zcy05331/core-pir-20260905/outputs/profiling/profile_summary.json
-wrote /users/zcy05331/core-pir-20260905/outputs/profiling/PROFILE_SUMMARY.md

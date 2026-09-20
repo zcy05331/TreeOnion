@@ -2,8 +2,8 @@
 #include "merkle_benchmark.h"
 #include "tree_multiplane.h"
 #include "tree_profile_json.h"
-#include "tree_response.h"
-#include "tree_superrecord_test_util.h"
+#include "tree_packing.h"
+#include "tree_entry_test_util.h"
 
 #include <algorithm>
 #include <bit>
@@ -45,7 +45,7 @@ double elapsed_ms(Clock::time_point start) {
 // One expanded old-layout query serves every level and every plane.
 void PirTest::test_tree_multiplane_benchmark() {
   using namespace tree_multiplane;
-  using tree_superrecord::ResponsePacking;
+  using tree_packing::ResponsePacking;
   print_func_name(__FUNCTION__);
   PirParams scheme;
   require_applicable(scheme.get_composite_rns().enabled,
@@ -53,21 +53,27 @@ void PirTest::test_tree_multiplane_benchmark() {
   const size_t n = scheme.get_poly_degree();
   const size_t key_height = std::bit_width(n) - 1;
   const size_t L = bench_tree_height(22);
-  const size_t g = positive_env("TREE_MULTIPLANE_G", 32);
-  require_test(std::has_single_bit(g) && g <= n / 2,
-               "TREE_MULTIPLANE_G must be a power of two <= n/2");
+  const size_t entry_bits = positive_env("TREE_MULTIPLANE_ENTRY_BITS", 256);
+  const size_t payload_bits = tree_entry_test::payload_bits(scheme);
+  const auto layout = tree_entry_codec::choose_layout(entry_bits, payload_bits, n);
+  const char *env_g = std::getenv("TREE_MULTIPLANE_G");
+  const size_t g = env_g && *env_g ? positive_env("TREE_MULTIPLANE_G", layout.g)
+                                   : layout.g;
+  require_test(g == layout.g,
+               "TREE_MULTIPLANE_G must match the final h1 layout policy");
   const size_t leaf_count = size_t{1} << L;
   const size_t N0 = positive_env("TREE_MULTIPLANE_N0",
                                  std::min(size_t{512}, leaf_count / (n / g)));
   require_test(std::has_single_bit(N0) && N0 >= 2,
                "TREE_MULTIPLANE_N0 must be a power of two >= 2");
-  const size_t entry_bits = positive_env("TREE_MULTIPLANE_ENTRY_BITS", 256);
   const auto params = make_params(make_tree_pir_params_for_scheme(
       L, std::bit_width(N0) - 1, g, scheme, key_height), entry_bits);
   const auto &tree = params.tree;
   const size_t planes = params.codec.plane_count;
+  require_test(planes == layout.plane_count,
+               "final h1 layout policy plane count mismatch");
   const size_t items = (L + 1) * planes;
-  const auto bounds = path_chunk_bounds(items, tree.rho);
+  const auto bounds = tree_packing::path_chunk_bounds(items, tree.rho);
   const std::string packing_name = string_env("TREE_MULTIPLANE_PACKING", "mlwe");
   require_test(packing_name == "mlwe" || packing_name == "projection",
                "TREE_MULTIPLANE_PACKING must be mlwe or projection");
@@ -77,8 +83,9 @@ void PirTest::test_tree_multiplane_benchmark() {
       string_env("TREE_MULTIPLANE_QUERY_LAYOUT", "interleaved");
   require_test(layout_name == "interleaved" || layout_name == "split-columns",
                "TREE_MULTIPLANE_QUERY_LAYOUT must be interleaved or split-columns");
-  const auto layout = layout_name == "interleaved" ? Matrix32QueryLayout::Interleaved
-                                                   : Matrix32QueryLayout::SplitColumns;
+  const auto query_layout = layout_name == "interleaved"
+                                ? Matrix32QueryLayout::Interleaved
+                                : Matrix32QueryLayout::SplitColumns;
   const size_t warmups = bench_warmups.value_or(3);
   const size_t trials = bench_measured_trials.value_or(16);
   const uint64_t seed = bench_trial_seed.value_or(7);
@@ -86,10 +93,10 @@ void PirTest::test_tree_multiplane_benchmark() {
   const auto schedule = make_benchmark_trial_plan(leaf_count, warmups, trials, seed);
   const EntrySource source = [&](size_t level, size_t node) {
     if (entry_bits == 256) {
-      return tree_superrecord::entry_from_bytes(
+      return tree_entry_codec::entry_from_bytes(
           synthetic_tree_node_bytes(level, node), entry_bits);
     }
-    return tree_superrecord_test::synthetic_entry(entry_bits, level, node);
+    return tree_entry_test::synthetic_entry(entry_bits, level, node);
   };
 
   auto start = Clock::now();
@@ -112,7 +119,8 @@ void PirTest::test_tree_multiplane_benchmark() {
   }
   if (packing == ResponsePacking::MlweMerge) {
     for (const auto &[first, count] : bounds)
-      packing_keyswitches += tree_superrecord::mlwe_merge_keyswitch_count(count, tree.rho);
+      packing_keyswitches +=
+          tree_packing::mlwe_merge_keyswitch_count(count, tree.rho);
   }
 
   uint64_t max_noise = 0;
@@ -132,7 +140,7 @@ void PirTest::test_tree_multiplane_benchmark() {
     auto expanded = unpack_tree_query(server, scheme, tree, client.get_client_id(),
                                       query, &unpack_timing);
     auto response = answer(db, expanded, server, client.get_client_id(), params,
-                           scheme, packing, layout);
+                           scheme, packing, query_layout);
     // Includes all unpacking/preparation/glue, rather than only named timers.
     sample.server_total_ms = elapsed_ms(tick);
     tick = Clock::now();
@@ -162,9 +170,8 @@ void PirTest::test_tree_multiplane_benchmark() {
         const size_t level = item / planes;
         const size_t plane = item % planes;
         const auto entry = source(level, leaf >> (L - level));
-        const auto digits = tree_superrecord::encode_super_record(
-            std::span<const EntryBits>(&entry, 1), params.codec);
-        const size_t offset = tree_superrecord::packed_residue_offset(
+        const auto digits = tree_entry_codec::encode_entry(entry, params.codec);
+        const size_t offset = tree_packing::packed_residue_offset(
             local, tree.rho, packing);
         require_test(response.item_offsets[item] == offset,
                      "multiplane response placement mismatch");
@@ -207,7 +214,8 @@ void PirTest::test_tree_multiplane_benchmark() {
       entry_bits, logical_bytes, warmups, trials, seed, setup_ms,
       scheme.get_BFV_size(true), helper_bytes, 0, entry_bits != 256, packing_name, samples,
       {{"index_layout", "gamma-alpha-beta"}, {"h", "1"},
-       {"g", std::to_string(g)}, {"plane_count", std::to_string(planes)},
+      {"g", std::to_string(g)}, {"plane_count", std::to_string(planes)},
+       {"layout_policy", "P_le_6_max_util_tie_minP"},
        {"N0", std::to_string(N0)}, {"b", std::to_string(tree.b)},
        {"rho", std::to_string(tree.rho)}, {"ring_degree", std::to_string(n)},
        {"chunk_bits", std::to_string(params.codec.payload_bits_per_coeff)},

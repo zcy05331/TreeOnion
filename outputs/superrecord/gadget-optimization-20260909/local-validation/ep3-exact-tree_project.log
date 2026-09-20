@@ -1,7 +1,0 @@
-Running test: tree_project
-==============================================================================
-                    test_tree_project(Benchmark build)
-==============================================================================
-projection depth 11 noise budget: 18 bits
-Plaintexts are not equal at coefficient 0
-Error: rotate + project must isolate the target node

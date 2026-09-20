@@ -65,7 +65,7 @@ inline void print_throughput(const std::string &name, const size_t db_size) {
 class PirTest {
   public:
     size_t num_experiments = 10;
-    // Timed benchmarks (tree_bench, tree_bench_g32, cuckoo_bench) take their
+    // Timed benchmarks (tree_multiplane_bench, cuckoo_bench) take their
     // workload from these when main.cpp received the matching flag
     // (--leaf-count, --experiments, --warmup, --trial-seed). Without the
     // flag each benchmark keeps its own documented default, so archived runs
@@ -109,34 +109,15 @@ class PirTest {
     void test_tree_rotate();
     // Milestone 3: projection map for every depth plus the rotate+project gate.
     void test_tree_project();
-    void test_tree_response_merge();
-    // Milestone 4: full path pipeline, chunk packing, client decode.
-    void test_tree_e2e();
+    void test_tree_packing();
     // Milestone 6: scalar vs NTT first-dimension kernels, bit-for-bit.
     void test_tree_kernel();
-    // Timed MVP path benchmark at the baseline workload scale (2^24 leaves).
-    void test_tree_benchmark();
-    // Real-scenario g=32: 32-byte nodes end to end, plus its benchmark.
-    void test_tree_g32();
-    void test_tree_benchmark_g32();
     void test_tree_multiplane_benchmark();
-    // Milestone 7: d=2 ring-switched response compression gate.
-    void test_tree_compress();
     // Cuckoo-hash batch PIR baseline: correctness gate and L=22 benchmark.
     void test_cuckoo_batch();
     void test_cuckoo_benchmark();
-    // Generic super-record tree PIR: arbitrary h, dyadic G, minimal P, ragged
-    // N0, one shared sigma selector vector, pooled multi-plane responses.
-    void test_tree_superrecord_codec();
-    void test_tree_superrecord_planner();
-    void test_tree_superrecord_index();
-    void test_tree_superrecord_e2e();
-    void test_tree_superrecord_noise();
-    void test_tree_superrecord_kernel();
-    void test_tree_superrecord_alpha();
-    void test_tree_superrecord_noise_probe();
-    // Timed: planner candidates for 32-byte nodes against the legacy g=32 path.
-    void test_tree_superrecord_benchmark();
+    // h=1 entry codec: bitstream packing, zero padding and layout policy.
+    void test_tree_entry_codec();
     void test_mod_switch();
     void test_db_shape();
     void test_runtime_layout();

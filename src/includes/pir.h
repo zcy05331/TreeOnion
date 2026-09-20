@@ -52,12 +52,12 @@ struct PirQueryShapeConfig {
   size_t expansion_height;
 };
 
-// [Generic tree PIR] Structural identity of one HE scheme instance: every
+// Structural identity of one HE scheme instance: every
 // quantity that the packed-query scale, the gadget rows, the composite
 // first-dimension split, and the small-q response codec depend on. It is the
-// single source of truth for scheme_compatible() and for the planner's frozen
-// SchemeFingerprint; layout fields (num_pt, fst_dim_sz, expansion height) are
-// deliberately absent so one identity covers every query shape.
+// single source of truth for scheme compatibility checks; layout fields
+// (num_pt, fst_dim_sz, expansion height) are deliberately absent so one
+// identity covers every query shape.
 struct PirSchemeIdentity {
   uint32_t schema_version = 1;
 

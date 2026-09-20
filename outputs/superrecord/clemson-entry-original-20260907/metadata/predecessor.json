@@ -1,5 +1,0 @@
-{
-  "run_root": "/users/zcy05331/generic-superrecord-bench-20260904/revision-fb79387",
-  "controller_pid": 18736,
-  "policy": "wait for existing matrix to finish; do not interrupt it"
-}

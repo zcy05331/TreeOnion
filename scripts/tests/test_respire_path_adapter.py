@@ -61,6 +61,19 @@ class RespirePathAdapterDryRunTest(unittest.TestCase):
         self.assertEqual(data["logical_records"], (1 << 25) - 1)
         self.assertEqual(data["backend_records"], 1 << 25)
 
+    def test_h22_h23_dry_run_use_small_formal_geometries(self):
+        for height in (22, 23):
+            with self.subTest(height=height):
+                data = self.dry_run(height, [0, (1 << height) - 1], warmup=1, trials=1)
+                sample = data["dry_run_samples"][1]
+                self.assertEqual(data["height"], height)
+                self.assertEqual(data["leaf_count"], 1 << height)
+                self.assertEqual(data["logical_records"], (1 << (height + 1)) - 1)
+                self.assertEqual(data["backend_records"], 1 << (height + 1))
+                self.assertEqual(len(sample["path_indices"]), height + 1)
+                self.assertEqual(len(sample["request_indices"]), 32)
+                self.assertEqual(sample["path_indices"][-1], (1 << (height + 1)) - 2)
+
     def test_h26_dry_run_uses_4gib_geometry(self):
         data = self.dry_run(26, [0, (1 << 26) - 1], warmup=1, trials=1)
         sample = data["dry_run_samples"][1]
@@ -72,18 +85,32 @@ class RespirePathAdapterDryRunTest(unittest.TestCase):
         self.assertEqual(len(sample["request_indices"]), 32)
         self.assertEqual(sample["path_indices"][-1], (1 << 27) - 2)
 
-    def test_rust_dispatch_includes_distinct_h26_shape(self):
+    def test_rust_dispatch_includes_distinct_formal_shapes(self):
         main_rs = (ROOT / "scripts/path_baselines/respire/path_workload/main.rs").read_text(encoding="utf-8")
         params_rs = (ROOT / "scripts/path_baselines/respire/path_workload/params.rs").read_text(encoding="utf-8")
         report_rs = (ROOT / "scripts/path_baselines/respire/path_workload/report.rs").read_text(encoding="utf-8")
+        self.assertIn("22 => runner::execute::<params::FormalH22>", main_rs)
+        self.assertIn("23 => runner::execute::<params::FormalH23>", main_rs)
         self.assertIn("26 => runner::execute::<params::FormalH26>", main_rs)
+        self.assertIn("pub type FormalH22 = CuckooRespireImpl<32, 49, { 1usize << 23 }, FormalH22Base>;", params_rs)
+        self.assertIn("pub type FormalH23 = CuckooRespireImpl<32, 49, { 1usize << 24 }, FormalH23Base>;", params_rs)
         self.assertIn("pub type FormalH26 = CuckooRespireImpl<32, 49, { 1usize << 27 }, FormalH26Base>;", params_rs)
+        self.assertIn("FactoryParams::batch_256(49, 8, 7, 7)", params_rs)
+        self.assertIn("FactoryParams::batch_256(49, 8, 8, 7)", params_rs)
         self.assertIn("FactoryParams::batch_256(49, 8, 9, 9)", params_rs)
+        self.assertIn('label: "formal_h22_256mib_batch_256"', params_rs)
+        self.assertIn('label: "formal_h23_512mib_batch_256"', params_rs)
         self.assertIn('label: "formal_h26_4gib_batch_256"', params_rs)
+        h22 = re.search(r"FORMAL_H22_SHAPE:.*?nu1: (\d+),\s+nu2: (\d+),", params_rs, re.S)
+        h23 = re.search(r"FORMAL_H23_SHAPE:.*?nu1: (\d+),\s+nu2: (\d+),", params_rs, re.S)
         h24 = re.search(r"FORMAL_H24_SHAPE:.*?nu1: (\d+),\s+nu2: (\d+),", params_rs, re.S)
         h26 = re.search(r"FORMAL_H26_SHAPE:.*?nu1: (\d+),\s+nu2: (\d+),", params_rs, re.S)
+        self.assertIsNotNone(h22)
+        self.assertIsNotNone(h23)
         self.assertIsNotNone(h24)
         self.assertIsNotNone(h26)
+        self.assertEqual(h22.groups(), ("7", "7"))
+        self.assertEqual(h23.groups(), ("8", "7"))
         self.assertNotEqual(h24.groups(), h26.groups())
         h24_nu1, h24_nu2 = map(int, h24.groups())
         h26_nu1, h26_nu2 = map(int, h26.groups())

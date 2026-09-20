@@ -3,11 +3,10 @@
 #include "client.h"
 #include "matrix.h"
 #include "server.h"
+#include "tree_entry_codec.h"
+#include "tree_packing.h"
 #include "tree_query.h"
-#include "tree_response.h"
-#include "tree_response_merge.h"
 #include "tree_select.h"
-#include "tree_superrecord_codec.h"
 
 #include <cstddef>
 #include <functional>
@@ -17,12 +16,12 @@
 
 namespace tree_multiplane {
 
-using EntryBits = tree_superrecord::EntryBits;
+using EntryBits = tree_entry_codec::EntryBits;
 using EntrySource = std::function<EntryBits(size_t level, size_t node)>;
 
 struct Params {
   TreePirParams tree;
-  tree_superrecord::CodecSpec codec;
+  tree_entry_codec::CodecSpec codec;
 };
 
 Params make_params(const TreePirParams &tree, size_t entry_bits);
@@ -45,8 +44,8 @@ struct Response {
 Response answer(const Database &db, ExpandedTreeQuery &query, PirServer &server,
                 size_t client_id, const Params &params,
                 const PirParams &scheme,
-                tree_superrecord::ResponsePacking packing =
-                    tree_superrecord::ResponsePacking::MlweMerge,
+                tree_packing::ResponsePacking packing =
+                    tree_packing::ResponsePacking::MlweMerge,
                 Matrix32QueryLayout query_layout =
                     Matrix32QueryLayout::Interleaved);
 

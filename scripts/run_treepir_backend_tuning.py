@@ -12,8 +12,10 @@ import sys
 from pathlib import Path
 from typing import Any, Callable
 
+from path_baselines.workload import trial_leaves
 
-SUPPORTED_HEIGHTS = {24: "1gb", 26: "4gb", 27: "8gb"}
+
+SUPPORTED_HEIGHTS = {22: "256mb", 23: "512mb", 24: "1gb", 26: "4gb", 27: "8gb"}
 DEFAULT_VBPIR_DIMS = (64, 128, 256)
 H27_VBPIR_DIMS = (128, 256)
 SEALPIR_DIMS = (1, 2)
@@ -279,8 +281,8 @@ def run_formal_candidate(args, height, runner, *, folder, tuning_dir, scale, lea
         "warmups": args.warmups,
         "pilot_trials": args.pilot_trials,
         "global_optimality_claim": "none",
-        "excluded_backends": ["Spiral", "PIRANA"],
-        "note": "Spiral and PIRANA are separately investigated and not measured by this runner.",
+        "candidate_families": ["VBPIR", "SealPIRplus"],
+        "note": "This runner is the retained TreePIR baseline tuner; removed standalone TreePIR+Spiral experiments are not part of the final baseline set.",
     }
     final_json.write_text(json.dumps(selected, indent=2) + "\n")
     (tuning_dir / "selection.json").write_text(json.dumps({
@@ -295,21 +297,22 @@ def run_formal_candidate(args, height, runner, *, folder, tuning_dir, scale, lea
 
 
 def prepare_leaf_schedule(args, height, runner, *, folder, tuning_dir, scale,
-                          leaf_count, onion, vbpir, env):
+                          leaf_count, vbpir, env):
     """Generate shared leaves and validate their VBPIR index mapping before pilots."""
     schedule_json = tuning_dir / "schedule-treepir-tuned.json"
-    schedule_process = runner(
-        [str(onion), "--test", "tree_superrecord_bench", "--leaf-count", str(leaf_count),
-         "--experiments", str(args.trials), "--warmup", str(args.warmups), "--trial-seed", str(args.trial_seed)],
-        log_path=schedule_json.with_suffix(".log"),
-        output_path=schedule_json,
-        env={**env, "SUPERRECORD_PLAN_ONLY": "1", "SUPERRECORD_SKIP_LEGACY": "1",
-             "SUPERRECORD_BUNDLE_ARITIES": "1,3", "SUPERRECORD_MAX_ARITY": "3",
-             "SUPERRECORD_OUTPUT_JSON": str(schedule_json)},
-    )
-    if not process_ok(schedule_process):
-        print(f"{scale}: schedule generation failed", file=sys.stderr)
-        return None
+    leaves = trial_leaves(leaf_count, args.warmups, args.trials, args.trial_seed)
+    schedule_json.write_text(json.dumps({
+        "leaf_schedule": {
+            "warmup": leaves[:args.warmups],
+            "measured": leaves[args.warmups:],
+        },
+        "height": height,
+        "leaf_count": leaf_count,
+        "warmups": args.warmups,
+        "trials": args.trials,
+        "trial_seed": args.trial_seed,
+        "generator": "path_baselines.workload.trial_leaves",
+    }, indent=2) + "\n")
     leaves = validate_leaf_schedule(schedule_json, trials=args.trials, warmups=args.warmups, leaf_count=leaf_count)
     leaf_file = folder / "treepir-leaves-tuned.txt"
     write_leaf_file(leaf_file, leaves)
@@ -346,11 +349,9 @@ def run_one_height(args: argparse.Namespace, height: int, runner: Callable[..., 
 
     vbpir = args.vbpir_bin or run_root / "deps" / "TreePIR" / "VBPIR_TreePIR" / "build" / "bin" / "vbpir_treepir"
     sealpir = args.sealpir_binary or source / "build-treepir-sealpir" / "treepir_sealpir_adapter"
-    onion = args.onion_bin or source / "build-native" / "Onion-PIR"
-
     prepared = prepare_leaf_schedule(
         args, height, runner, folder=folder, tuning_dir=tuning_dir, scale=scale,
-        leaf_count=leaf_count, onion=onion, vbpir=vbpir, env=env,
+        leaf_count=leaf_count, vbpir=vbpir, env=env,
     )
     if prepared is None:
         return False
@@ -375,14 +376,13 @@ def run_one_height(args: argparse.Namespace, height: int, runner: Callable[..., 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--run-root", required=True, type=Path)
-    parser.add_argument("--heights", nargs="+", type=int, default=[24, 26])
+    parser.add_argument("--heights", nargs="+", type=int, default=[22, 23, 24, 26])
     parser.add_argument("--trials", type=int, default=16)
     parser.add_argument("--warmups", type=int, default=3)
     parser.add_argument("--pilot-trials", type=int, default=16)
     parser.add_argument("--trial-seed", type=int, default=7)
     parser.add_argument("--vbpir-bin", type=Path)
     parser.add_argument("--sealpir-binary", type=Path)
-    parser.add_argument("--onion-bin", type=Path)
     args = parser.parse_args(argv)
     if args.trials <= 0 or args.warmups < 0 or args.pilot_trials <= 0:
         parser.error("--trials and --pilot-trials must be positive; --warmups must be nonnegative")

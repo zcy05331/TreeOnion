@@ -1,4 +1,0 @@
-[  1%] Building CXX object CMakeFiles/Onion-PIR.dir/src/cuckoo_batch.cpp.o
-[  2%] Building CXX object CMakeFiles/Onion-PIR.dir/src/tests/test_cuckoo_batch.cpp.o
-[  4%] Linking CXX executable Onion-PIR
-[100%] Built target Onion-PIR

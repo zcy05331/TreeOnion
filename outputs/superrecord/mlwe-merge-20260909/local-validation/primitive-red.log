@@ -1,6 +1,0 @@
-Running test: tree_response_merge
-==============================================================================
-                    test_tree_response_merge(Benchmark build)
-==============================================================================
-rho=1 inputs=1 KS=0 all 2048 coefficients correct
-Error: MLWE merge must preserve scale and isolate every desired coefficient

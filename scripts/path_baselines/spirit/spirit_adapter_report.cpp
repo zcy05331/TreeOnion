@@ -168,7 +168,7 @@ std::string render_json(const Options &options, const RunResult &result)
         << ",\"lwe_dimension\":" << options.lwe_dimension
         << ",\"lwe_secret_distribution\":\"uniform ternary {-1,0,1}\""
         << ",\"lwe_query_noise_distribution\":\"SPIRIT sample_poly_cbd_u32\""
-        << ",\"rc_expansion_coeff_modulus_bits\":" << (options.scheme == "spirit_rc" ? "[56,60,60]" : "[]")
+        << ",\"rc_expansion_coeff_modulus_bits\":[56,60,60]"
         << ",\"rc_expansion_coeff_modulus\":";
     write_array(out, result.rc_expansion_coeff_modulus);
     out
@@ -176,12 +176,12 @@ std::string render_json(const Options &options, const RunResult &result)
         << ",\"num_hash_funcs\":" << options.num_hash_funcs
         << ",\"cuckoo_factor\":" << options.cuckoo_factor
         << ",\"max_attempts\":" << options.max_attempts
-        << ",\"rc_response_poly_degree\":" << (options.scheme == "spirit_rc" ? options.poly_modulus_degree : 0)
+        << ",\"rc_response_poly_degree\":" << options.poly_modulus_degree
         << ",\"rc_selector_query_packing\":\"packed_single_rgsw_query_ciphertext_plus_expansion_parameters_and_keys_counted\""
         << ",\"benchmark_randomize_hint_matrix\":false},";
     out << "\"layout\":{\"bucket_count\":" << result.bucket_count
-        << ",\"variant\":\"" << (options.scheme == "spirit_rc" ? "rc_strided_one_polynomial_per_bucket" : "plain_spirit_balanced") << "\""
-        << ",\"rc_byte_row_stride\":" << (options.scheme == "spirit_rc" ? options.poly_modulus_degree / kRecordSizeBytes : 0)
+        << ",\"variant\":\"rc_strided_one_polynomial_per_bucket\""
+        << ",\"rc_byte_row_stride\":" << options.poly_modulus_degree / kRecordSizeBytes
         << ",\"physical_copied_entries\":" << result.backend_physical_copied_entries
         << ",\"matrix_byte_cells\":" << result.backend_matrix_byte_cells
         << ",\"matrix_32b_equivalent_records\":" << result.backend_records
@@ -245,11 +245,9 @@ std::string render_json(const Options &options, const RunResult &result)
             << ",\"b_extract\":" << trial.server_b_extract_ms
             << ",\"lwe_pack\":" << trial.server_lwe_pack_ms
             << ",\"answer_glue\":" << trial.server_answer_glue_ms;
-        if (options.scheme == "spirit_rc") {
-            out << ",\"selector_unpack\":" << trial.server_rc_selector_unpack_ms
-                << ",\"response_rotation\":" << trial.server_rc_rotate_ms
-                << ",\"response_merge\":" << trial.server_rc_merge_ms;
-        }
+        out << ",\"selector_unpack\":" << trial.server_rc_selector_unpack_ms
+            << ",\"response_rotation\":" << trial.server_rc_rotate_ms
+            << ",\"response_merge\":" << trial.server_rc_merge_ms;
         out << "},\"details\":{\"query_vector_bytes\":" << trial.query_vector_bytes
             << ",\"query_packed_secret_bytes\":" << trial.query_packed_secret_bytes
             << ",\"query_galois_key_bytes\":" << trial.query_galois_key_bytes

@@ -1,9 +1,0 @@
-{
-  "machine": "arm64",
-  "execution": "x86_64 via Rosetta",
-  "memory_bytes": 17179869184,
-  "leaf_count": 4194304,
-  "actual_tree_bytes": 268435424,
-  "trials": 100,
-  "warmups": 3
-}

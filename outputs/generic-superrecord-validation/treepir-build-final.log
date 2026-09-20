@@ -1,3 +1,0 @@
-[ 12%] Building CXX object CMakeFiles/vbpir_treepir.dir/src/main.cpp.o
-[ 25%] Linking CXX executable bin/vbpir_treepir
-[100%] Built target vbpir_treepir

@@ -46,41 +46,6 @@ std::uint64_t query_vector_size_bytes(const spirit::pir::BatchQueryMessage &quer
     return total;
 }
 
-std::uint64_t response_size_bytes(const spirit::pir::BatchResponseMessage &response)
-{
-    std::uint64_t total = 0;
-    for (const auto &bucket_response : response.bucket_responses) {
-        for (const auto &cipher : bucket_response.packed_columns) {
-            total += serialized_size_bytes(cipher);
-        }
-    }
-    return total;
-}
-
-std::uint64_t response_ciphertext_count(const spirit::pir::BatchResponseMessage &response)
-{
-    std::uint64_t total = 0;
-    for (const auto &bucket_response : response.bucket_responses) {
-        total += bucket_response.packed_columns.size();
-    }
-    return total;
-}
-
-int response_min_noise_budget_bits(
-    const spirit::pir::BatchResponseMessage &response,
-    seal::Decryptor &decryptor)
-{
-    int min_budget = std::numeric_limits<int>::max();
-    bool saw_ciphertext = false;
-    for (const auto &bucket_response : response.bucket_responses) {
-        for (const auto &cipher : bucket_response.packed_columns) {
-            min_budget = std::min(min_budget, decryptor.invariant_noise_budget(cipher));
-            saw_ciphertext = true;
-        }
-    }
-    return saw_ciphertext ? min_budget : -1;
-}
-
 int ciphertext_noise_budget_bits(const seal::Ciphertext &cipher, seal::Decryptor &decryptor)
 {
     return decryptor.invariant_noise_budget(cipher);
@@ -178,20 +143,13 @@ RunResult run_spirit_path(const Options &options)
     result.workload = build_workload(options);
     result.database_bytes = result.workload.record_count * kRecordSizeBytes;
     result.backend_records = result.workload.record_count;
-    if (options.scheme == "spirit_rc") {
-        result.limitations.push_back(
-            "SPIRIT+RC prototype implements packed encrypted selector upload, server selector expansion, encrypted response rotation, and MultiResMerge over a strided one-polynomial-per-bucket public layout.");
-        result.limitations.push_back(
-            "SPIRIT+RC uses a different public database layout from plain SPIRIT: bytes of a record are strided by n/32 residues to allow one compressed response ciphertext.");
-        result.rc_expansion_coeff_modulus = {
-            72057594037641217ULL,
-            1152921504606830593ULL,
-            1152921504606683137ULL,
-        };
-    } else {
-        result.limitations.push_back(
-            "Plain SPIRIT baseline over upstream balanced bucket layout; SPIRIT+RC uses a separate strided RC layout when --scheme spirit_rc is selected.");
-    }
+    result.limitations.push_back(
+        "SPIRIT+RC prototype implements packed encrypted selector upload, server selector expansion, encrypted response rotation, and MultiResMerge over a strided one-polynomial-per-bucket public layout.");
+    result.rc_expansion_coeff_modulus = {
+        72057594037641217ULL,
+        1152921504606830593ULL,
+        1152921504606683137ULL,
+    };
     result.limitations.push_back(
         "SEAL is configured with sec_level=none because the public SPIRIT artifact parameter line n=2048, coeff_modulus bits [56,60], t=65537 exceeds SEAL's degree-2048 tc128 modulus limit; no 128-bit security claim is made by this adapter.");
 
@@ -243,9 +201,7 @@ RunResult run_spirit_path(const Options &options)
     params.record_plain_modulus = options.record_plain_modulus;
     params.record_size_bytes = kRecordSizeBytes;
     params.benchmark_randomize_hint_matrix = false;
-    if (options.scheme == "spirit_rc") {
-        params.rc_response_poly_degree = options.poly_modulus_degree;
-    }
+    params.rc_response_poly_degree = options.poly_modulus_degree;
 
     spirit::pir::BatchPublicParams public_params;
     spirit::pir::BatchServerState server_state;
@@ -301,17 +257,15 @@ RunResult run_spirit_path(const Options &options)
         row.query_vector_bytes = query_vector_size_bytes(query);
         row.query_packed_secret_bytes = serialized_size_bytes(query.packed_secret);
         row.query_galois_key_bytes = serialized_size_bytes(query.galois_keys);
-        if (options.scheme == "spirit_rc") {
-            rc_query = build_rc_query(public_params, client_state, context, keygen, encryptor, secret_key);
-            row.query_rc_selector_bytes = rc_query.selector_bytes;
-            row.query_rc_galois_key_bytes = rc_query.galois_key_bytes;
-            row.query_rc_merge_galois_key_bytes = rc_query.merge_galois_key_bytes;
-            row.query_rc_selector_ciphertext_bytes = rc_query.packed_selectors.ciphertext_bytes;
-            row.query_rc_selector_parameter_bytes = rc_query.packed_selectors.parameter_bytes;
-            row.query_rc_selector_key_bytes = rc_query.packed_selectors.key_bytes;
-            row.query_rc_selector_bucket_count = rc_query.packed_selectors.bucket_count;
-            row.query_rc_selector_value_bits = rc_query.packed_selectors.value_bits;
-        }
+        rc_query = build_rc_query(public_params, client_state, context, keygen, encryptor, secret_key);
+        row.query_rc_selector_bytes = rc_query.selector_bytes;
+        row.query_rc_galois_key_bytes = rc_query.galois_key_bytes;
+        row.query_rc_merge_galois_key_bytes = rc_query.merge_galois_key_bytes;
+        row.query_rc_selector_ciphertext_bytes = rc_query.packed_selectors.ciphertext_bytes;
+        row.query_rc_selector_parameter_bytes = rc_query.packed_selectors.parameter_bytes;
+        row.query_rc_selector_key_bytes = rc_query.packed_selectors.key_bytes;
+        row.query_rc_selector_bucket_count = rc_query.packed_selectors.bucket_count;
+        row.query_rc_selector_value_bits = rc_query.packed_selectors.value_bits;
         row.query_bytes = row.query_vector_bytes + row.query_packed_secret_bytes +
             row.query_galois_key_bytes + row.query_rc_selector_bytes + row.query_rc_galois_key_bytes;
 
@@ -352,28 +306,19 @@ RunResult run_spirit_path(const Options &options)
             row.server_lwe_pack_ms;
         row.server_answer_glue_ms = std::max(0.0, row.server_answer_ms - profiled_answer_ms);
         row.server_ms = row.server_query_precompute_ms + row.server_answer_ms;
-        row.response_ciphertexts = response_ciphertext_count(response);
-        if (options.scheme == "spirit_rc") {
-            RcResponse rc_response = build_rc_response(public_params, response, rc_query, context, evaluator);
-            row.server_rc_selector_unpack_ms = rc_response.selector_unpack_ms;
-            row.server_rc_rotate_ms = rc_response.rotate_ms;
-            row.server_rc_merge_ms = rc_response.merge_ms;
-            row.server_ms += row.server_rc_selector_unpack_ms + row.server_rc_rotate_ms + row.server_rc_merge_ms;
-            row.response_ciphertexts = 1;
-            row.response_bytes = rc_response.response_bytes;
-            row.response_noise_budget_min_bits = ciphertext_noise_budget_bits(rc_response.merged, decryptor);
-            row.rc_rotation_external_products = rc_response.rotation_external_products;
-            row.rc_merge_keyswitches = rc_response.merge_keyswitches;
-            row.extract_ms = measure_ms([&]() {
-                extracted_records = extract_rc_records(public_params, client_state, rc_response, context, decryptor);
-            });
-        } else {
-            row.response_noise_budget_min_bits = response_min_noise_budget_bits(response, decryptor);
-            row.response_bytes = response_size_bytes(response);
-            row.extract_ms = measure_ms([&]() {
-                spirit::pir::BatchExtract(public_params, client_state, response, context, decryptor, extracted_records);
-            });
-        }
+        RcResponse rc_response = build_rc_response(public_params, response, rc_query, context, evaluator);
+        row.server_rc_selector_unpack_ms = rc_response.selector_unpack_ms;
+        row.server_rc_rotate_ms = rc_response.rotate_ms;
+        row.server_rc_merge_ms = rc_response.merge_ms;
+        row.server_ms += row.server_rc_selector_unpack_ms + row.server_rc_rotate_ms + row.server_rc_merge_ms;
+        row.response_ciphertexts = 1;
+        row.response_bytes = rc_response.response_bytes;
+        row.response_noise_budget_min_bits = ciphertext_noise_budget_bits(rc_response.merged, decryptor);
+        row.rc_rotation_external_products = rc_response.rotation_external_products;
+        row.rc_merge_keyswitches = rc_response.merge_keyswitches;
+        row.extract_ms = measure_ms([&]() {
+            extracted_records = extract_rc_records(public_params, client_state, rc_response, context, decryptor);
+        });
 
         row.correct = check_path_records(trial, extracted_records, row.correct_entries);
         if (!row.correct || row.correct_entries != row.path_entries) {

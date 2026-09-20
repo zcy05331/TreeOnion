@@ -27,7 +27,7 @@ class SpiritPathAdapterSmoke(unittest.TestCase):
             check=True,
         )
 
-    def test_h2_real_encrypted_path_query(self):
+    def test_default_scheme_runs_spirit_rc_real_encrypted_path_query(self):
         with tempfile.TemporaryDirectory() as td:
             td_path = Path(td)
             leaves = td_path / "leaves.txt"
@@ -43,7 +43,7 @@ class SpiritPathAdapterSmoke(unittest.TestCase):
             result = json.loads(out.read_text(encoding="utf-8"))
 
         self.assertEqual(result["schema_version"], "path-baseline-v1")
-        self.assertEqual(result["scheme"], "spirit")
+        self.assertEqual(result["scheme"], "spirit_rc")
         self.assertEqual(result["path_mode"], "ancestor_root_included")
         self.assertEqual(result["height"], 2)
         self.assertEqual(result["record_bytes"], 32)
@@ -70,7 +70,7 @@ class SpiritPathAdapterSmoke(unittest.TestCase):
         self.assertGreater(result["setup"]["pbc_routing_table_bytes"], 0)
         self.assertGreater(result["setup"]["bucket_layout_metadata_bytes"], 0)
         self.assertGreater(result["setup"]["public_matrix_seed_bytes"], 0)
-        self.assertIn("Plain SPIRIT baseline", result["limitations"][0])
+        self.assertIn("SPIRIT+RC prototype", result["limitations"][0])
         self.assertFalse(result["parameters"]["benchmark_randomize_hint_matrix"])
         self.assertGreaterEqual(len(result["parameters"]["coeff_modulus"]), 1)
         self.assertGreater(result["parameters"]["coeff_modulus"][0], 0)
@@ -80,8 +80,10 @@ class SpiritPathAdapterSmoke(unittest.TestCase):
         for stage in ["query_precompute", "secret_unpack", "matvec", "modswitch", "b_extract", "lwe_pack", "answer_glue"]:
             self.assertIn(stage, stages)
             self.assertGreaterEqual(stages[stage], 0)
-        self.assertNotIn("response_rotation", stages)
-        self.assertNotIn("response_merge", stages)
+        self.assertIn("selector_unpack", stages)
+        self.assertIn("response_rotation", stages)
+        self.assertIn("response_merge", stages)
+        self.assertEqual(result["layout"]["variant"], "rc_strided_one_polynomial_per_bucket")
         self.assertGreaterEqual(result["samples"][0]["details"]["response_noise_budget_min_bits"], 0)
 
     def test_validate_input_only_checks_full_root_included_path(self):
@@ -179,6 +181,27 @@ class SpiritPathAdapterSmoke(unittest.TestCase):
             )
             self.assertNotEqual(randomized.returncode, 0)
             self.assertIn("unknown option", randomized.stderr)
+
+    def test_rejects_removed_standalone_spirit_scheme(self):
+        with tempfile.TemporaryDirectory() as td:
+            leaves = Path(td) / "leaves.txt"
+            leaves.write_text("0\n", encoding="utf-8")
+            standalone = subprocess.run(
+                [
+                    str(HARNESS),
+                    "--scheme", "spirit",
+                    "--height", "2",
+                    "--leaf-file", str(leaves),
+                    "--warmup", "0",
+                    "--trials", "1",
+                    "--validate-input-only",
+                ],
+                cwd=ROOT,
+                text=True,
+                capture_output=True,
+            )
+            self.assertNotEqual(standalone.returncode, 0)
+            self.assertIn("SPIRIT standalone baseline has been removed", standalone.stderr)
 
     def test_cmake_requires_exact_source_commit_for_source_archive(self):
         with tempfile.TemporaryDirectory() as td:

@@ -2,7 +2,6 @@
 
 #include "tree_project.h"
 #include "tree_rotate.h"
-#include "tree_superrecord_common.h"
 
 #include <algorithm>
 #include <stdexcept>
@@ -52,12 +51,12 @@ void require_mlwe_keys(const bvks::BvGaloisKeys &keys,
   }
 }
 
-tree_superrecord::EncodedSuperRecord decode_level_planes(
+tree_entry_codec::EncodedEntry decode_level_planes(
     const Response &response, const std::vector<RlwePt> &plaintexts,
     const Params &params, size_t level) {
   const size_t planes = params.codec.plane_count;
-  tree_superrecord::EncodedSuperRecord encoded(
-      planes, tree_superrecord::PlaneDigits(params.tree.g, 0));
+  tree_entry_codec::EncodedEntry encoded(
+      planes, tree_entry_codec::PlaneDigits(params.tree.g, 0));
   for (size_t plane = 0; plane < planes; ++plane) {
     const size_t item = level * planes + plane;
     const size_t chunk = item / params.tree.rho;
@@ -81,10 +80,10 @@ tree_superrecord::EncodedSuperRecord decode_level_planes(
 Response answer(const Database &db, ExpandedTreeQuery &query, PirServer &server,
                 size_t client_id, const Params &params,
                 const PirParams &scheme,
-                tree_superrecord::ResponsePacking packing,
+                tree_packing::ResponsePacking packing,
                 Matrix32QueryLayout query_layout) {
   validate_tree_params(params.tree);
-  tree_superrecord::validate_codec_spec(params.codec);
+  tree_entry_codec::validate_codec_spec(params.codec);
   require_database_shape(db, params);
   require(query.alpha.size() == params.tree.N0,
           "expanded query alpha width does not match tree params");
@@ -94,12 +93,13 @@ Response answer(const Database &db, ExpandedTreeQuery &query, PirServer &server,
 
   const bvks::BvGaloisKeys &keys =
       server.client_session_keys(client_id)->bv_galois_keys;
-  if (packing == tree_superrecord::ResponsePacking::MlweMerge) {
+  if (packing == tree_packing::ResponsePacking::MlweMerge) {
     require_mlwe_keys(keys, params);
   }
 
   const size_t items = item_count(params);
-  const size_t chunks = tree_superrecord::ceil_div(items, params.tree.rho);
+  const size_t chunks =
+      (items + params.tree.rho - 1) / params.tree.rho;
   Response response;
   response.chunks.assign(chunks, zero_ciphertext(scheme));
   response.item_offsets.assign(items, 0);
@@ -120,7 +120,7 @@ Response answer(const Database &db, ExpandedTreeQuery &query, PirServer &server,
     if (merge_inputs.empty()) return;
     TIME_START(TREE_MLWE_MERGE_TIME);
     response.chunks[merge_chunk] =
-        tree_superrecord::mlwe_merge_residues(
+        tree_packing::mlwe_merge_residues(
             std::move(merge_inputs), params.tree.rho, keys, scheme);
     TIME_END(TREE_MLWE_MERGE_TIME);
     merge_inputs.clear();
@@ -148,11 +148,11 @@ Response answer(const Database &db, ExpandedTreeQuery &query, PirServer &server,
       const size_t item = level * params.codec.plane_count + plane;
       const size_t chunk = item / params.tree.rho;
       const size_t local = item % params.tree.rho;
-      const size_t offset = tree_superrecord::packed_residue_offset(
+      const size_t offset = tree_packing::packed_residue_offset(
           local, params.tree.rho, packing);
       response.item_offsets[item] = offset;
 
-      if (packing == tree_superrecord::ResponsePacking::MlweMerge) {
+      if (packing == tree_packing::ResponsePacking::MlweMerge) {
         if (!merge_inputs.empty() && chunk != merge_chunk) flush_merge();
         merge_chunk = chunk;
         merge_inputs.push_back(std::move(rotated));
@@ -188,12 +188,12 @@ Response answer(const Database &db, ExpandedTreeQuery &query, PirServer &server,
 std::vector<EntryBits> extract(const Response &response, PirClient &client,
                                const Params &params) {
   validate_tree_params(params.tree);
-  tree_superrecord::validate_codec_spec(params.codec);
+  tree_entry_codec::validate_codec_spec(params.codec);
   const size_t items = item_count(params);
   require(response.item_offsets.size() == items,
           "response item offset count does not match params");
   require(response.chunks.size() ==
-              tree_superrecord::ceil_div(items, params.tree.rho),
+              (items + params.tree.rho - 1) / params.tree.rho,
           "response chunk count does not match params");
 
   std::vector<EntryBits> path;
@@ -205,12 +205,9 @@ std::vector<EntryBits> extract(const Response &response, PirClient &client,
   }
   path.reserve(params.tree.L + 1);
   for (size_t level = 0; level <= params.tree.L; ++level) {
-    const tree_superrecord::EncodedSuperRecord encoded =
+    const tree_entry_codec::EncodedEntry encoded =
         decode_level_planes(response, plaintexts, params, level);
-    std::vector<EntryBits> decoded =
-        tree_superrecord::decode_super_record(encoded, params.codec);
-    require(decoded.size() == 1, "decoded bundle arity is not one");
-    path.push_back(std::move(decoded.front()));
+    path.push_back(tree_entry_codec::decode_entry(encoded, params.codec));
   }
   return path;
 }

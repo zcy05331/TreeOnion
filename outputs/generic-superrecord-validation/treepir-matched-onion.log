@@ -1,4 +1,0 @@
-e256-n1024: 16 measured trials, 3 warmups; log /Users/little_sun/Desktop/little_sun/26Summer/OnionPIRv2/.worktrees/generic-superrecord/outputs/superrecord/treepir-h10-comparison/onion/e256-n1024.log
-Analysis: /Users/little_sun/Desktop/little_sun/26Summer/OnionPIRv2/.worktrees/generic-superrecord/outputs/superrecord/treepir-h10-comparison/onion/e256-n1024-analysis.md; selected minimum-response-count (formal_candidate_selection)
-e256-n1024: saved /Users/little_sun/Desktop/little_sun/26Summer/OnionPIRv2/.worktrees/generic-superrecord/outputs/superrecord/treepir-h10-comparison/onion/e256-n1024.json
-Artifacts: /Users/little_sun/Desktop/little_sun/26Summer/OnionPIRv2/.worktrees/generic-superrecord/outputs/superrecord/treepir-h10-comparison/onion

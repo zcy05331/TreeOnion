@@ -1,9 +1,0 @@
-{
-  "exit_code": 1,
-  "elapsed_seconds": 392.0249730359992,
-  "process_peak_rss_bytes": 77155250176,
-  "ru_maxrss_unit": "KiB",
-  "peak_scope": "single benchmark child process; includes setup, calibration and all candidates",
-  "cgroup_memory_peak_bytes": null,
-  "cgroup_peak_scope": "shared cgroup cumulative peak, when available"
-}

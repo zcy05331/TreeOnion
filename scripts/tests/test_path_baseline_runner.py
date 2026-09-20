@@ -17,13 +17,13 @@ class PathRunnerTests(unittest.TestCase):
         self.assertIn('--leaf-file', command)
 
     def test_protocol_arguments_are_forwarded_as_separate_tokens(self):
-        command = adapter_command('vbpir_pbc', pathlib.Path('/bin/adapter'), 8,
+        command = adapter_command('respire', pathlib.Path('/bin/adapter'), 8,
                                   pathlib.Path('/tmp/leaves'), 1, 2, pathlib.Path('/tmp/result'),
-                                  extra_args=['--first-dim', '256'])
-        self.assertEqual(command[-2:], ['--first-dim', '256'])
+                                  extra_args=['--flag', 'value'])
+        self.assertEqual(command[-2:], ['--flag', 'value'])
 
     def test_summary_preserves_spirit_actual_query_label_and_modeled_response(self):
-        row = {'scheme': 'spirit', 'completed_samples': 1, 'server_ms': 2.0,
+        row = {'scheme': 'spirit_rc', 'completed_samples': 1, 'server_ms': 2.0,
                'logical_mib_s': 1.0, 'query_bytes': 128, 'response_bytes': 256,
                'communication': {'query': 'actual_serialized_including_rc_rgsw_selectors_and_merge_galois_keys_when_present',
                                  'response': 'coefficient_payload_model'}, 'stages_ms': {}}
@@ -38,11 +38,11 @@ class PathRunnerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = pathlib.Path(tmp)
             with patch('path_baselines.runner.run_measured', return_value={'exit_code': 2, 'process_peak_rss_bytes': 1024}):
-                result = run_campaign({'spirit': pathlib.Path(sys.executable)}, root, height=8, warmups=1, trials=2, treepir_trials=1, seed=7)
+                result = run_campaign({'spirit_rc': pathlib.Path(sys.executable)}, root, height=8, warmups=1, trials=2, seed=7)
             self.assertEqual(result['state'], 'complete_with_failures')
             self.assertEqual(result['runs'][0]['state'], 'failed')
             self.assertEqual(result['summaries'], [])
-            self.assertTrue((root/'spirit-process.json').exists())
+            self.assertTrue((root/'spirit_rc-process.json').exists())
             manifest = json.loads((root/'manifest.json').read_text())
             self.assertEqual(manifest['leaves'], trial_leaves(256, 1, 2, 7))
 
@@ -53,7 +53,7 @@ class PathRunnerTests(unittest.TestCase):
             return {'exit_code':0,'process_peak_rss_bytes':1024}
         with tempfile.TemporaryDirectory() as tmp:
             with patch('path_baselines.runner.run_measured', side_effect=fake_process):
-                result = run_campaign({'spirit':pathlib.Path(sys.executable)}, pathlib.Path(tmp), height=8, warmups=1, trials=2, treepir_trials=1, seed=7)
+                result = run_campaign({'spirit_rc':pathlib.Path(sys.executable)}, pathlib.Path(tmp), height=8, warmups=1, trials=2, seed=7)
             self.assertEqual(result['runs'][0]['state'], 'failed')
             self.assertFalse(result['summaries'])
 

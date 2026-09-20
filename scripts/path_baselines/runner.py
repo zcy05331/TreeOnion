@@ -9,8 +9,7 @@ from read_process_peak_memory import run_measured
 from .report import summarize_result, validate_result
 from .workload import PATH_MODE, trial_leaves
 
-SCHEMES = ('spirit', 'spirit_rc', 'vbpir_pbc', 'inspire_layerwise',
-           'treepir_spiral', 'respire')
+SCHEMES = ('spirit_rc', 'respire')
 
 
 def parse_binary(value):
@@ -24,7 +23,7 @@ def adapter_command(scheme, binary, height, leaf_file, warmups, trials, output, 
     command = ([sys.executable, str(binary)] if binary.suffix == '.py' else [str(binary)])
     command += ['--height', str(height), '--leaf-file', str(leaf_file),
                 '--warmup', str(warmups), '--trials', str(trials), '--output', str(output)]
-    if scheme in ('spirit', 'spirit_rc'):
+    if scheme == 'spirit_rc':
         command += ['--scheme', scheme]
     command.extend(extra_args)
     return command
@@ -105,19 +104,18 @@ def write_summary(output, result):
     (output / 'STAGES.md').write_text('\n'.join(stage_lines).rstrip() + '\n')
 
 
-def run_campaign(binaries, output, *, height, warmups, trials, treepir_trials, seed, extra_args=None):
+def run_campaign(binaries, output, *, height, warmups, trials, seed, extra_args=None):
     output = output.resolve()
-    if not 1 <= height <= 30 or not 0 < treepir_trials <= trials:
-        raise ValueError('invalid height or TreePIR trial count')
+    if not 1 <= height <= 30:
+        raise ValueError('invalid height')
     manifest, leaf_file = prepare_campaign(output, height, warmups, trials, seed)
     summaries = []
     for scheme, binary in binaries.items():
-        count = treepir_trials if scheme == 'treepir_spiral' else trials
         manifest['current_scheme'] = scheme
         write_json(output / 'manifest.json', manifest)
         try:
             record, summary = execute_adapter(scheme, binary, output, height, leaf_file,
-                                               manifest['leaves'], warmups, count, (extra_args or {}).get(scheme, []))
+                                               manifest['leaves'], warmups, trials, (extra_args or {}).get(scheme, []))
         except OSError as error:
             record, summary = {'scheme': scheme, 'state': 'failed', 'error': str(error)}, None
         manifest['runs'].append(record)
@@ -141,7 +139,6 @@ def main():
     parser.add_argument('--height', type=int, default=24)
     parser.add_argument('--warmup', type=int, default=3)
     parser.add_argument('--trials', type=int, default=100)
-    parser.add_argument('--treepir-trials', type=int, default=16)
     parser.add_argument('--seed', type=int, default=7)
     parser.add_argument('--output', type=Path, required=True)
     args = parser.parse_args()
@@ -158,5 +155,5 @@ def main():
             parser.error('--adapter-arg requires a selected SCHEME=ARG')
         extra_args.setdefault(name, []).append(arg)
     result = run_campaign(binaries, args.output, height=args.height, warmups=args.warmup,
-                          trials=args.trials, treepir_trials=args.treepir_trials, seed=args.seed, extra_args=extra_args)
+                          trials=args.trials, seed=args.seed, extra_args=extra_args)
     return 0 if result['state'] == 'complete' else 1

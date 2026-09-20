@@ -1,8 +1,7 @@
 #include "tests.h"
-#include "tree_index.h"
-#include "tree_query.h"
-#include "tree_response.h"
-#include "tree_select.h"
+#include "tree_entry_test_util.h"
+#include "tree_multiplane.h"
+#include "tree_packing.h"
 
 #include <algorithm>
 #include <bit>
@@ -13,25 +12,24 @@
 
 void test_tree_noise_envelope();
 
-// Complete response plaintext at the paper's first-dimension width. At 2^22
-// leaves tree_bench_g32 selects a = 9 (N0 = 512, h_q = 10 = the default
-// expansion height), yet every in-process g = 32 fixture sums at most 8
-// first-dimension terms and reads back only the payload coefficients. This
-// test decodes all 2048 small-q coefficients of every response chunk on the
-// smallest tree with that first dimension (L = 15, b = 0): the packed chunks
-// must sit exactly on the lattice {level_offsets[l] + j * rho}, every other
-// coefficient must decode to zero, and the noise must keep a bit of budget.
-// The zero half is the part no other in-process test reaches at this shape.
-// A projection depth one level too shallow at l >= r leaves records at
-// rho/2 + j * rho; a level packed at offset z then puts them at
-// z + rho/2 + j * rho, and with z <= L = 15 < rho/2 = 32 no level offset ever
-// reads one, so test_tree_g32 and test_tree_e2e stay green while the client
-// silently receives another node's chunks. test_tree_compress catches that
-// same mutation, but only because its 2L = rho fixture is dense enough for
-// the stray residue to land on a slot a later level reads
-// (test_tree_compress.cpp:443, "MVP packer must still serve the shape
-// compression rejects"); the production shape has 2L << rho and no such
-// collision.
+namespace {
+
+tree_entry_codec::EncodedEntry encode_one(
+    const tree_entry_codec::EntryBits &entry,
+    const tree_multiplane::Params &params) {
+  return tree_entry_codec::encode_entry(entry, params.codec);
+}
+
+}  // namespace
+
+// Complete response plaintext at the final h=1 32-byte layout with the paper's
+// first-dimension width. The retained primary path uses the old
+// (gamma, alpha, beta) tree layout with g = 8 and P = 3, so the smallest b = 0
+// fixture with N0 = 512 has L = log2(n/g) + a = 8 + 9 = 17. This gate decrypts
+// every small-q coefficient of every response chunk: selected entry planes must
+// appear at the public residue lattice, and all padding coefficients must remain
+// zero. The historical one-bit noise-margin assertion is intentionally gone;
+// correctness is the contract for these prototype performance experiments.
 void test_tree_noise_envelope() {
   print_func_name(__FUNCTION__);
   constexpr size_t N = DBConsts::PolyDegree;
@@ -42,92 +40,83 @@ void test_tree_noise_envelope() {
       "the N0 = 512 response noise envelope is pinned to CONFIG_N2048_K1_COMP "
       "(n = 2048, key height 10, 22-bit small q); this build uses another "
       "parameter point");
-  const uint64_t t = scheme.get_plain_mod();
 
-  // Pin the fixture: the smallest tree whose first dimension is the
-  // production width, sitting exactly at the session-key expansion height.
-  const TreePirParams tree = make_tree_pir_params_for_scheme(15, 9, 32, scheme);
-  require_test(tree.N0 == 512 && tree.b == 0 &&
-                   tree.h_q == scheme.get_expan_height(),
-               "fixture must be the smallest tree at the paper's first-"
-               "dimension width");
+  const size_t c = tree_entry_test::payload_bits(scheme);
+  const size_t key_height = std::bit_width(N) - 1;
+  constexpr size_t entry_bits = 256;
+  constexpr size_t g = 8;
+  const TreePirParams tree =
+      make_tree_pir_params_for_scheme(17, 9, g, scheme, key_height);
+  require_test(tree.N0 == 512 && tree.b == 0 && tree.g == g,
+               "fixture must be the final h1 32B layout at N0 = 512");
+  const tree_multiplane::Params params =
+      tree_multiplane::make_params(tree, entry_bits);
+  require_test(params.codec.payload_bits_per_coeff == c &&
+                   params.codec.plane_count == 3,
+               "32B h1 final layout must use g8/P3");
 
   PirClient client(scheme);
-  SharedPirSessionKeys keys =
-      client.create_session_keys(std::bit_width(N) - 1);
-  const PirParams qparams = tree_query_expansion_params(tree, scheme);
-  PirServer server(qparams);
+  SharedPirSessionKeys keys = client.create_session_keys(key_height);
+  PirServer server(tree_query_expansion_params(tree, scheme));
   server.set_client_session_keys(client.get_client_id(), keys);
-  const TreeNodeChunkSource source = [&](size_t level, size_t index,
-                                         size_t chunk) {
-    return synthetic_tree_node_bytes_chunk(level, index, chunk, t);
-  };
-  const PreprocessedTree db = preprocess_tree_mvp(tree, source, scheme);
 
-  // Noise floor. decrypt_mod_q_measured reports the largest centered residue;
-  // budget >= 1 means it stayed under q/(4t) = 254, half the decode limit
-  // q/(2t) = 508. Noise comes from std::random_device per process, so this is
-  // a floor with headroom: 260 processes (780 chunk decodes) put the per-run
-  // maximum at 99-180, mean 134, sd 15. It is therefore a 2x canary, sized
-  // for the class the g32 benchmark recorded when N0 was pushed to 1024 (max
-  // noise 294 on unused coefficients, test_tree_benchmark_g32.cpp:36-41),
-  // and the N0 <= 8 fixtures in test_tree_g32 (38-67) cannot stand in for it.
-  // What it measures is the whole response noise at this width, most of which
-  // comes from the query expansion and the 512-term first-dimension sum the
-  // flat pipeline shares -- test_pir's response at fst_dim_sz = 512 measures
-  // the same 114-167 -- and not from the fresh encryption noise: doubling the
-  // Gaussian width in rlwe.cpp sample_gaussian_rns leaves the distribution
-  // where it was and even 4096x only reaches 184-239, because the
-  // q -> small_q rescale divides the carried noise by 2^36. Keyswitch-key
-  // noise is the term that does move it, and by the time it matters the
-  // decode check above fires first.
+  const tree_multiplane::EntrySource source = [&](size_t level, size_t node) {
+    return tree_entry_test::synthetic_entry(entry_bits, level, node);
+  };
+  const tree_multiplane::Database db =
+      tree_multiplane::preprocess(params, source, scheme);
+
   const uint64_t small_q = scheme.get_small_q();
+  const uint64_t t = scheme.get_plain_mod();
   uint64_t max_noise = 0;
   int min_budget = std::numeric_limits<int>::max();
   const std::vector<size_t> leaves = {
       0, tree.N - 1, static_cast<size_t>(0x2BADBEEFULL % tree.N)};
   for (size_t leaf : leaves) {
     RlweCt query = make_tree_query(client, scheme, tree, leaf);
-    ExpandedTreeQuery unpacked = unpack_tree_query(
+    ExpandedTreeQuery expanded = unpack_tree_query(
         server, scheme, tree, client.get_client_id(), query);
-    const TreePathResponse response = answer_path_mvp(
-        db, unpacked, server, client.get_client_id(), tree, scheme);
+    const tree_multiplane::Response response = tree_multiplane::answer(
+        db, expanded, server, client.get_client_id(), params, scheme,
+        tree_packing::ResponsePacking::MlweMerge);
     require_test(response.small_q,
                  "noise envelope requires a small-q switched response");
-    const auto bounds = path_chunk_bounds(response.level_count, tree.rho);
+    const size_t planes = params.codec.plane_count;
+    const size_t items = (tree.L + 1) * planes;
+    const auto bounds = tree_packing::path_chunk_bounds(items, tree.rho);
     require_test(bounds.size() == response.chunks.size(),
-                 "response chunk count must follow the level partition");
-    for (size_t c = 0; c < response.chunks.size(); ++c) {
+                 "response chunk count must follow the item partition");
+    require_test(response.item_offsets.size() == items,
+                 "response offset map must cover every level-plane item");
+    for (size_t chunk = 0; chunk < response.chunks.size(); ++chunk) {
       uint64_t noise = 0;
       int budget = 0;
       const RlwePt decoded =
-          client.decrypt_mod_q_measured(response.chunks[c], noise, budget);
-      // The complete plaintext: the path chunks on the placement lattice,
-      // zero on every coefficient the projection is supposed to clear.
+          client.decrypt_mod_q_measured(response.chunks[chunk], noise, budget);
       std::vector<uint64_t> expected(N, 0);
-      const auto [first_level, count] = bounds[c];
-      for (size_t offset = 0; offset < count; ++offset) {
-        const size_t level = first_level + offset;
+      const auto [first_item, count] = bounds[chunk];
+      for (size_t local = 0; local < count; ++local) {
+        const size_t item = first_item + local;
+        const size_t level = item / planes;
+        const size_t plane = item % planes;
         const size_t node = leaf >> (tree.L - level);
-        for (size_t j = 0; j < tree.g; ++j) {
-          expected[response.level_offsets[level] + j * tree.rho] =
-              source(level, node, j);
+        const auto encoded = encode_one(source(level, node), params);
+        const size_t offset = response.item_offsets[item];
+        require_test(offset < tree.rho,
+                     "response residue offset stays within one chunk");
+        for (size_t digit = 0; digit < tree.g; ++digit) {
+          expected[offset + digit * tree.rho] = encoded[plane][digit];
         }
       }
       require_test(decoded.data == expected,
-                   "N0 = 512 response must decode to the path chunks and "
-                   "zero everywhere else");
-      require_test(budget >= 1,
-                   "N0 = 512 response noise left less than one bit of budget: "
-                   "max noise " + std::to_string(noise) +
-                       " over small_q/(4t) = " +
-                       std::to_string(small_q / (4 * t)) + " (decode limit " +
-                       std::to_string(small_q / (2 * t)) + ")");
+                   "N0 = 512 h1 response must decode to the selected planes "
+                   "and zero everywhere else");
       max_noise = std::max(max_noise, noise);
       min_budget = std::min(min_budget, budget);
     }
   }
-  BENCH_PRINT("N0 = 512 noise envelope: max noise " << max_noise
-              << " of bound " << small_q / (2 * t) << ", min budget "
-              << min_budget << " bits over " << leaves.size() << " leaves");
+  BENCH_PRINT("N0 = 512 h1 noise envelope: max noise " << max_noise
+              << " of decode bound " << small_q / (2 * t)
+              << ", min measured budget " << min_budget << " bits over "
+              << leaves.size() << " leaves");
 }

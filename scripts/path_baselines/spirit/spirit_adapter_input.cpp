@@ -162,8 +162,8 @@ Options parse_options(int argc, char **argv)
     if (options.trials == 0) {
         throw std::invalid_argument("--trials must be greater than zero");
     }
-    if (options.scheme != "spirit" && options.scheme != "spirit_rc") {
-        throw std::invalid_argument("--scheme must be spirit or spirit_rc");
+    if (options.scheme != "spirit_rc") {
+        throw std::invalid_argument("SPIRIT standalone baseline has been removed; use --scheme spirit_rc");
     }
     if (options.record_plain_modulus != 256) {
         throw std::invalid_argument("SPIRIT batch byte records require --record-plain-modulus 256");

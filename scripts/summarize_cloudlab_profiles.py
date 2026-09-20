@@ -15,7 +15,7 @@ from typing import Any
 
 
 Row = dict[str, Any]
-SUPPORTED_SCALES = ("1gb", "4gb", "8gb")
+SUPPORTED_SCALES = ("256mb", "512mb", "1gb", "4gb")
 
 
 class ProfileError(Exception):
@@ -125,8 +125,6 @@ def infer_family(data: Any) -> str | None:
         return None
     if isinstance(data.get("cases"), list):
         return "merkle"
-    if isinstance(data.get("candidates"), list):
-        return "generic"
     if data.get("model") == "SEAL+VBPIRTreePIR" or "measured_summary" in data and "results" in data:
         return "treepir"
     if isinstance(data.get("samples"), list):
@@ -212,62 +210,6 @@ def validate_sampled(data: dict[str, Any], path: Path, trials: int | None, leaf_
                 finite_metric(value, path, f"communication.{key}")
 
 
-def validate_generic(data: dict[str, Any], path: Path, trials: int | None, leaf_count: int | None) -> None:
-    require_leaf_count(data, path, leaf_count)
-    expected = expected_trials(data, trials)
-    candidates = data.get("candidates")
-    if not isinstance(candidates, list):
-        raise ProfileError(f"{path}: missing candidates")
-    measured_h1 = False
-    measured_joint = False
-    for candidate in candidates:
-        label = str(candidate.get("label", ""))
-        eligible = candidate.get("eligible", True)
-        samples = candidate.get("samples", [])
-        if not isinstance(samples, list):
-            raise ProfileError(f"{path}: candidate {label} samples is not a list")
-        if not eligible:
-            continue
-        mandatory = bool(candidate.get("mandatory_control"))
-        if mandatory:
-            require_count(len(samples), expected, path, f"candidate {label} samples")
-        if not samples:
-            continue
-        require_count(len(samples), expected, path, f"candidate {label} samples")
-        if candidate.get("is_h1") is True:
-            measured_h1 = True
-        if label == "bundle3" or (
-            isinstance(candidate.get("shape"), dict)
-            and candidate["shape"].get("bundle_arity", 0) not in (None, 1)
-        ):
-            measured_joint = True
-        target_noise = candidate.get("target_noise_result")
-        if isinstance(target_noise, dict):
-            if target_noise.get("decrypts_correctly") is False:
-                raise ProfileError(f"{path}: candidate {label} target noise decrypt failed")
-            if target_noise.get("observed_key_coverage_matches_tag") is False:
-                raise ProfileError(f"{path}: candidate {label} key coverage mismatch")
-        for idx, sample in enumerate(samples):
-            for key in ("server_total_ms", "client_query_ms", "client_decode_ms", "response_serialize_ms"):
-                finite_ms(sample.get(key), path, f"{label}.sample[{idx}].{key}")
-            stages = sample.get("stages_ms")
-            if not isinstance(stages, dict) or not stages:
-                raise ProfileError(f"{path}: candidate {label} sample {idx} missing stages_ms")
-            for stage, value in stages.items():
-                finite_ms(value, path, f"{label}.sample[{idx}].stages_ms.{stage}")
-        wire = candidate.get("wire", {})
-        if wire is not None:
-            if not isinstance(wire, dict):
-                raise ProfileError(f"{path}: candidate {label} wire is not an object")
-            for key, value in wire.items():
-                if value is not None:
-                    finite_metric(value, path, f"{label}.wire.{key}")
-    if not measured_h1:
-        raise ProfileError(f"{path}: missing measured h1 candidate")
-    if not measured_joint:
-        raise ProfileError(f"{path}: missing measured joint/bundled candidate")
-
-
 def validate_treepir(data: dict[str, Any], path: Path, trials: int | None, leaf_count: int | None) -> None:
     require_leaf_count(data, path, leaf_count)
     results = data.get("results")
@@ -307,8 +249,6 @@ def validate_profile(data: dict[str, Any], path: Path, trials: int | None, leaf_
     family = infer_family(data)
     if family == "merkle":
         validate_merkle(data, path, trials, leaf_count)
-    elif family == "generic":
-        validate_generic(data, path, trials, leaf_count)
     elif family == "treepir":
         validate_treepir(data, path, trials, leaf_count)
     elif family == "sampled":
@@ -397,44 +337,6 @@ def collect_sampled(data: dict[str, Any], path: Path, scale: str, peak: int | No
     return rows
 
 
-def collect_generic(data: dict[str, Any], path: Path, scale: str, peak: int | None) -> list[Row]:
-    rows: list[Row] = []
-    for candidate in data["candidates"]:
-        if not candidate.get("eligible", True) or not candidate.get("samples"):
-            continue
-        variant = str(candidate.get("label", candidate.get("row_id", "")))
-        for idx, sample in enumerate(candidate["samples"]):
-            for stage, value in sample["stages_ms"].items():
-                add_value(rows, path, scale, "generic", "generic-superrecord", variant, idx, stage, value, "primary", peak)
-            for stage, key in {
-                "server_total_ms": "server_total_ms",
-                "client_query_ms": "client_query_ms",
-                "client_decode_ms": "client_decode_ms",
-                "response_serialize_ms": "response_serialize_ms",
-            }.items():
-                add_value(rows, path, scale, "generic", "generic-superrecord", variant, idx, stage, sample[key], "primary", peak)
-        for stage in ("preprocess_ms", "session_setup_ms", "noise_gate_ms"):
-            if candidate.get(stage) is not None:
-                add_value(rows, path, scale, "generic", "generic-superrecord", variant, "setup", stage, candidate[stage], "offline", peak)
-        wire = candidate.get("wire", {})
-        if isinstance(wire, dict):
-            add_bytes(rows, path, scale, "generic", "generic-superrecord", variant, "communication",
-                      "query_upload_bytes", wire.get("modeled_seeded_query_bytes"), basis="modeled", peak_rss_bytes=peak)
-            add_bytes(rows, path, scale, "generic", "generic-superrecord", variant, "communication",
-                      "actual_query_wire_bytes", wire.get("actual_query_wire_bytes"), basis="actual", peak_rss_bytes=peak)
-            add_bytes(rows, path, scale, "generic", "generic-superrecord", variant, "communication",
-                      "response_download_bytes", wire.get("actual_response_ciphertext_payload_bytes"), basis="actual", peak_rss_bytes=peak)
-            modeled_query = wire.get("modeled_seeded_query_bytes")
-            actual_response = wire.get("actual_response_ciphertext_payload_bytes")
-            if modeled_query is not None and actual_response is not None:
-                add_bytes(rows, path, scale, "generic", "generic-superrecord", variant, "communication",
-                          "online_total_bytes_mixed", float(modeled_query) + float(actual_response), basis="mixed", peak_rss_bytes=peak)
-        add_bytes(rows, path, scale, "generic", "generic-superrecord", variant, "setup", "helper_key_bytes",
-                  (candidate.get("candidate_metrics") or {}).get("modeled_per_client_eval_key_bytes"),
-                  kind="communication_setup", basis="modeled", peak_rss_bytes=peak)
-    return rows
-
-
 def collect_treepir(data: dict[str, Any], path: Path, scale: str, peak: int | None) -> list[Row]:
     rows: list[Row] = []
     variant = str(data.get("backend_label") or "")
@@ -500,8 +402,6 @@ def collect_rows(path: Path, root: Path | None = None, trials: int | None = None
     scale = scale_from_path(path, root)
     if family == "merkle":
         return collect_merkle(data, path, scale, peak)
-    if family == "generic":
-        return collect_generic(data, path, scale, peak)
     if family == "treepir":
         return collect_treepir(data, path, scale, peak)
     if family == "sampled":
@@ -625,7 +525,7 @@ def directory_files(root: Path) -> list[Path]:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--validate", type=Path, help="validate one profile JSON")
-    parser.add_argument("--directory", type=Path, help="summarize profile JSONs under ROOT/{1gb,8gb}")
+    parser.add_argument("--directory", type=Path, help="summarize profile JSONs under ROOT/{256mb,512mb,1gb,4gb}")
     parser.add_argument("--trials", type=int, help="expected measured-trial count")
     parser.add_argument("--trials100", action="store_const", const=100, dest="trials",
                         help="expect 100 measured trials")

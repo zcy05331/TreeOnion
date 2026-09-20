@@ -244,8 +244,8 @@ void PirTest::test_tree_index() {
                }),
                "accepted an expansion height beyond the session keys");
   // Boundary of that gate (5-argument overload): a registered key height
-  // equal to h_q is accepted, one below it is rejected. test_tree_benchmark_g32
-  // and run_tree_compress_benchmark search a downward with the default key
+  // equal to h_q is accepted, one below it is rejected. The old 32-byte and
+  // compressed-response benchmarks searched a downward with the default key
   // height and take the first accepted shape, so a gate regressed from '>' to
   // '>=' would pass every h_q = 7 fixture above and silently pick the next
   // smaller first dimension for the paper's g = 32 benchmark.

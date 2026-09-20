@@ -8,7 +8,7 @@ Let `n` be the RLWE polynomial degree, `d = 32` the bytes per record, and `rho =
 
 For `n = 2048`, `rho = 64`; a batch of 32 with 48 PBC buckets fits in one final ciphertext. Height 24 contains `2^25 - 1` records, or `1 GiB - 32 bytes`, and each path contains 25 records including the root.
 
-The plain SPIRIT baseline retains upstream's balanced, contiguous row layout. Thus the two variants compare complete supported pipelines, with different public database geometry. They are not a fixed-layout ablation of compression cost.
+Standalone SPIRIT is not a retained baseline in this tree. The adapter keeps only the RC public layout and rejects `--scheme spirit` instead of silently mapping it to response compression.
 
 ## Encrypted rotation and merge
 

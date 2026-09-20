@@ -1,8 +1,0 @@
-Running test: tree_superrecord_noise_probe
-==============================================================================
-                    test_tree_superrecord_noise_probe(Benchmark build)
-==============================================================================
-Noise budget after decryption: 3 (max noise: 60)
-Noise budget after decryption: 3 (max noise: 48)
-Noise budget after decryption: 3 (max noise: 49)
-Tree superrecord noise probe JSON: /users/zcy05331/generic-superrecord-bench-20260904/noise-diagnostic-cached-20260906/outputs/smoke.json

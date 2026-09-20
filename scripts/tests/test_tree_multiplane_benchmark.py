@@ -86,15 +86,22 @@ def run_args(root: pathlib.Path, *extra: str) -> list[str]:
         str(root),
         "--leaf-count",
         str(LEAVES),
-        "--g-values",
-        "8,16",
         "--n0-values",
-        "256",
+        "256,512",
         *extra,
     ]
 
 
 class TreeMultiplaneBenchmarkTests(unittest.TestCase):
+    def test_utilization_first_with_plane_cap_and_minimum_plane_tie_break(self):
+        expected = {128: (4, 3), 256: (8, 3), 384: (32, 1),
+                    512: (16, 3), 1024: (32, 3), 480: (8, 5)}
+        for bits, shape in expected.items():
+            self.assertEqual(bench.select_layout(bits), shape)
+        self.assertEqual(bench.select_layout(256, 8), (32, 1))
+        with self.assertRaises(bench.SweepError):
+            bench.select_layout(100000)
+
     def test_plan_only_prints_exact_cases_without_running_processes(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             with patch.object(sys, "stdout") as stdout, patch.object(bench, "run_measured") as run_measured:
@@ -103,7 +110,7 @@ class TreeMultiplaneBenchmarkTests(unittest.TestCase):
         run_measured.assert_not_called()
         plan = json.loads("".join(call.args[0] for call in stdout.write.call_args_list))
         cases = plan["cases"]
-        self.assertEqual([case["label"] for case in cases], ["g8-n0256", "g16-n0256"])
+        self.assertEqual([case["label"] for case in cases], ["g8-n0256", "g8-n0512"])
         self.assertEqual(cases[0]["command"][0], str(pathlib.Path("/tmp/tree-multiplane-bin").resolve()))
         self.assertEqual(cases[0]["command"][1:3], ["--test", "tree_multiplane_bench"])
         self.assertEqual(cases[0]["environment"]["TREE_MULTIPLANE_G"], "8")
@@ -118,7 +125,7 @@ class TreeMultiplaneBenchmarkTests(unittest.TestCase):
             raw = pathlib.Path(command[command.index("--benchmark-json") + 1])
             g = int(env["TREE_MULTIPLANE_G"])
             n0 = int(env["TREE_MULTIPLANE_N0"])
-            raw.write_text(json.dumps(profile(g=g, n0=n0, experiments=3, mean=20.0 if g == 8 else 5.0)) + "\n")
+            raw.write_text(json.dumps(profile(g=g, n0=n0, experiments=3, mean=20.0 if n0 == 256 else 5.0)) + "\n")
             pathlib.Path(log_path).write_text("ok\n")
             return {"exit_code": 0, "elapsed_seconds": 0.1, "process_peak_rss_bytes": 1234}
 
@@ -127,11 +134,11 @@ class TreeMultiplaneBenchmarkTests(unittest.TestCase):
             with patch.object(bench, "run_measured", fake_run), patch.object(sys, "stdout", StringIO()):
                 self.assertEqual(bench.main(run_args(root)), 0)
 
-            self.assertEqual([item["env"]["TREE_MULTIPLANE_G"] for item in launches], ["8", "16"])
+            self.assertEqual([item["env"]["TREE_MULTIPLANE_G"] for item in launches], ["8", "8"])
             self.assertEqual(launches[0]["command"][launches[0]["command"].index("--experiments") + 1], "3")
             self.assertEqual(launches[0]["command"][launches[0]["command"].index("--warmup") + 1], "3")
             ranking = json.loads((root / "ranking.json").read_text())
-            self.assertEqual([row["label"] for row in ranking["completed"]], ["g16-n0256", "g8-n0256"])
+            self.assertEqual([row["label"] for row in ranking["completed"]], ["g8-n0512", "g8-n0256"])
             self.assertEqual(ranking["completed"][0]["metadata"]["index_layout"], "gamma-alpha-beta")
             manifest = json.loads((root / "manifest.json").read_text())
             self.assertEqual(manifest["state"], "complete")
@@ -140,9 +147,9 @@ class TreeMultiplaneBenchmarkTests(unittest.TestCase):
         def fake_run(command, *, log_path, env=None, cwd=None):
             raw = pathlib.Path(command[command.index("--benchmark-json") + 1])
             pathlib.Path(log_path).write_text("ran\n")
-            if env["TREE_MULTIPLANE_G"] == "8":
+            if env["TREE_MULTIPLANE_N0"] == "256":
                 return {"exit_code": 4, "elapsed_seconds": 0.1, "process_peak_rss_bytes": 5}
-            raw.write_text(json.dumps(profile(g=16, n0=256, experiments=3, mean=3.0)) + "\n")
+            raw.write_text(json.dumps(profile(g=8, n0=512, experiments=3, mean=3.0)) + "\n")
             return {"exit_code": 0, "elapsed_seconds": 0.2, "process_peak_rss_bytes": 6}
 
         with tempfile.TemporaryDirectory() as tmp:
@@ -156,7 +163,7 @@ class TreeMultiplaneBenchmarkTests(unittest.TestCase):
             self.assertTrue((root / "g8-n0256-process.json").exists())
             self.assertTrue((root / "g8-n0256.log").exists())
             ranking = json.loads((root / "ranking.json").read_text())
-            self.assertEqual([row["label"] for row in ranking["completed"]], ["g16-n0256"])
+            self.assertEqual([row["label"] for row in ranking["completed"]], ["g8-n0512"])
             self.assertEqual(ranking["failed"][0]["label"], "g8-n0256")
 
     def test_invalid_shape_metadata_fails_case_without_reusing_as_complete(self) -> None:
@@ -169,7 +176,7 @@ class TreeMultiplaneBenchmarkTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = pathlib.Path(tmp)
             with patch.object(bench, "run_measured", fake_run), patch.object(sys, "stderr", StringIO()):
-                self.assertEqual(bench.main(run_args(root, "--g-values", "8")), 1)
+                self.assertEqual(bench.main(run_args(root, "--n0-values", "256")), 1)
 
             manifest = json.loads((root / "manifest.json").read_text())
             self.assertEqual(manifest["state"], "failed")
@@ -183,7 +190,7 @@ class TreeMultiplaneBenchmarkTests(unittest.TestCase):
             root.mkdir(exist_ok=True)
             (root / "g8-n0256.json").write_text("{}\n")
             with patch.object(bench, "run_measured") as run_measured, patch.object(sys, "stderr", StringIO()):
-                self.assertEqual(bench.main(run_args(root, "--g-values", "8")), 1)
+                self.assertEqual(bench.main(run_args(root, "--n0-values", "256")), 1)
 
         run_measured.assert_not_called()
 
@@ -191,7 +198,7 @@ class TreeMultiplaneBenchmarkTests(unittest.TestCase):
         def fake_run(command, *, log_path, env=None, cwd=None):
             raw = pathlib.Path(command[command.index("--benchmark-json") + 1])
             g = int(env["TREE_MULTIPLANE_G"])
-            raw.write_text(json.dumps(profile(g=g, n0=256, experiments=3, leaf_offset=100 if g == 8 else 200)) + "\n")
+            raw.write_text(json.dumps(profile(g=g, n0=int(env["TREE_MULTIPLANE_N0"]), experiments=3, leaf_offset=100 if env["TREE_MULTIPLANE_N0"] == "256" else 200)) + "\n")
             pathlib.Path(log_path).write_text("ok\n")
             return {"exit_code": 0, "elapsed_seconds": 0.1, "process_peak_rss_bytes": 1}
 

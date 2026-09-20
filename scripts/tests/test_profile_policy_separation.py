@@ -31,31 +31,31 @@ class ProfilePolicySeparationTest(unittest.TestCase):
     def test_directory_files_discovers_all_supported_scale_directories(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            for scale in ("1gb", "4gb", "8gb"):
+            for scale in ("256mb", "512mb", "1gb", "4gb"):
                 (root / scale).mkdir()
-                (root / scale / "generic.json").write_text("{}\n")
-                (root / scale / "generic-process.json").write_text("{}\n")
+                (root / scale / "flat.json").write_text("{}\n")
+                (root / scale / "flat-process.json").write_text("{}\n")
                 (root / scale / "schedule.json").write_text("{}\n")
             self.assertEqual(
                 [path.relative_to(root).as_posix() for path in directory_files(root)],
-                ["1gb/generic.json", "4gb/generic.json", "8gb/generic.json"],
+                ["256mb/flat.json", "512mb/flat.json", "1gb/flat.json", "4gb/flat.json"],
             )
 
     def test_directory_files_uses_root_json_fallback_when_no_scale_directories_exist(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            (root / "generic.json").write_text("{}\n")
+            (root / "flat.json").write_text("{}\n")
             (root / "profile_summary.json").write_text("{}\n")
-            (root / "generic-process.json").write_text("{}\n")
+            (root / "flat-process.json").write_text("{}\n")
             self.assertEqual(
                 [path.name for path in directory_files(root)],
-                ["generic.json"],
+                ["flat.json"],
             )
 
     def test_scale_from_path_labels_4gib_outputs(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            profile = root / "4gb" / "generic.json"
+            profile = root / "4gb" / "flat.json"
             profile.parent.mkdir()
             profile.write_text("{}\n")
             self.assertEqual(scale_from_path(profile, root), "4gb")

@@ -1,9 +1,0 @@
-Running test: tree_multiplane_bench
-==============================================================================
-                    test_tree_multiplane_benchmark(Benchmark build)
-==============================================================================
-Noise budget after decryption: 3 (max noise: 36)
-Noise budget after decryption: 3 (max noise: 44)
-Noise budget after decryption: 3 (max noise: 36)
-Noise budget after decryption: 3 (max noise: 35)
-old gamma/alpha/beta h1: g=16 P=2 N0=8 b=2 server=101.542 ms; 2.46173 MiB/s; response=11264 B

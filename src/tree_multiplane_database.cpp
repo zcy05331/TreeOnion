@@ -1,7 +1,5 @@
 #include "tree_multiplane.h"
 
-#include "tree_superrecord_common.h"
-
 #include <bit>
 #include <span>
 #include <stdexcept>
@@ -16,13 +14,12 @@ void require(bool condition, const char *message) {
   }
 }
 
-tree_superrecord::EncodedSuperRecord encode_entry(const EntryBits &entry,
-                                                  const Params &params) {
-  tree_superrecord::validate_entry(entry);
+tree_entry_codec::EncodedEntry encode_entry(const EntryBits &entry,
+                                            const Params &params) {
+  tree_entry_codec::validate_entry(entry);
   require(entry.bit_length == params.codec.entry_bits,
           "source entry bit length does not match the codec");
-  return tree_superrecord::encode_super_record(
-      std::span<const EntryBits>(&entry, 1), params.codec);
+  return tree_entry_codec::encode_entry(entry, params.codec);
 }
 
 }  // namespace
@@ -38,13 +35,11 @@ Params make_params(const TreePirParams &tree, size_t entry_bits) {
   params.tree = tree;
   params.codec.entry_bits = entry_bits;
   params.codec.payload_bits_per_coeff = payload_bits;
-  params.codec.bundle_arity = 1;
   params.codec.record_coeffs = tree.g;
-  params.codec.plane_count = tree_superrecord::minimal_plane_count(
-      entry_bits, payload_bits, params.codec.bundle_arity,
-      params.codec.record_coeffs);
+  params.codec.plane_count = tree_entry_codec::minimal_plane_count(
+      entry_bits, payload_bits, params.codec.record_coeffs);
   params.codec.plaintext_modulus = tree.t;
-  tree_superrecord::validate_codec_spec(params.codec);
+  tree_entry_codec::validate_codec_spec(params.codec);
   return params;
 }
 
@@ -53,7 +48,7 @@ TreeLevelDatabase pack_level(size_t level, size_t plane, const Params &params,
   require(plane < params.codec.plane_count, "plane index is out of range");
   size_t cached_level = static_cast<size_t>(-1);
   size_t cached_node = static_cast<size_t>(-1);
-  tree_superrecord::EncodedSuperRecord cached;
+  tree_entry_codec::EncodedEntry cached;
   const TreeNodeChunkSource chunks =
       [&](size_t l, size_t node, size_t chunk) -> uint64_t {
     require(chunk < params.tree.g, "chunk index is out of range");
@@ -70,7 +65,7 @@ TreeLevelDatabase pack_level(size_t level, size_t plane, const Params &params,
 Database preprocess(const Params &params, const EntrySource &source,
                     const PirParams &scheme) {
   validate_tree_params(params.tree);
-  tree_superrecord::validate_codec_spec(params.codec);
+  tree_entry_codec::validate_codec_spec(params.codec);
   Database db;
   db.planes.reserve(params.codec.plane_count);
   for (size_t plane = 0; plane < params.codec.plane_count; ++plane) {

@@ -15,7 +15,7 @@ import unittest
 
 SCRIPTS = pathlib.Path(__file__).resolve().parents[1]
 REPO = SCRIPTS.parent
-FIXTURES = REPO / "outputs" / "perf" / "m4_layout_planner_256mb"
+FIXTURES = pathlib.Path(__file__).resolve().parent / "fixtures" / "layer_layout"
 PROFILE = FIXTURES / "layer-layout-256mb.json"
 AB_LEGACY = FIXTURES / "ab_legacy_1.json"
 AB_PROFILED = FIXTURES / "ab_profiled_1.json"
@@ -53,8 +53,6 @@ def layer_heights(report):
     return {layer["level"]: layer["expansion_height"] for layer in case["layers"]}
 
 
-@unittest.skipUnless(all(path.exists() for path in (PROFILE, AB_LEGACY, AB_PROFILED)),
-                     "tracked layout-planner fixtures are missing")
 class SummarizeLayerLayoutProfileTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

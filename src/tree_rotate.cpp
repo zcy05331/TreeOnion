@@ -21,7 +21,7 @@ void require(bool condition, const char *message) {
 
 // RLWE 同态加法 acc += x（系数形式、全 q）。
 // 流水线位置：project_keep_stride 的 T + Subs(T, η) 与路径打包
-//（tree_response 的逐层累加）以它为基本积木；旋转的 CMux（ext_prod_mux）
+//（tree_multiplane::answer 的逐项累加）以它为基本积木；旋转的 CMux（ext_prod_mux）
 // 内部另有自己的逐 limb 加减实现，不经本函数。
 // 数学：Dec(c0 + c1·s) 对加法线性，(c0, c1) 逐分量、逐 RNS limb 模加即可，
 // 噪声只按加法叠加，不放大。

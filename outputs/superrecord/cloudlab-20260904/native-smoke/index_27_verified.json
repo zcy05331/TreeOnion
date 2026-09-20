@@ -1,9 +1,0 @@
-{
-  "pass": true,
-  "height": 27,
-  "leaves_checked": 103,
-  "color_indices_checked": 2781,
-  "cpp_source": "/users/zcy05331/generic-superrecord-bench-20260904/outputs/native-smoke/index_27.json",
-  "original_java_source": "/users/zcy05331/generic-superrecord-bench-20260904/deps/treepir-index-validation/run-20260904-crosscheck/color_indices_27_2.txt",
-  "comparison": "compiled C++ JSON versus original Java output"
-}

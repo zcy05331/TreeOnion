@@ -1,5 +1,0 @@
-Running test: tree_superrecord_bench
-==============================================================================
-                    test_tree_superrecord_benchmark(Benchmark build)
-==============================================================================
-Error: tree_superrecord: encoded digit exceeds 2^c

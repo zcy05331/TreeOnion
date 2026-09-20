@@ -1,10 +1,8 @@
 #include "tests.h"
-#include "tree_compress_bench.h"
 
 #include <vector>
 
 void test_approx_gadget();
-void test_tree_response_merge_e2e();
 void test_tree_multiplane();
 // TimerLogger accumulation, warm-up skipping and cleanup.
 void test_logging();
@@ -30,24 +28,22 @@ void test_ntt_friendly_primes();
 void test_paper_moduli_pin();
 
 // Correctness suite behind `--test all`: every registered test that asserts
-// its result and finishes in seconds to a few minutes. The timed benchmarks
-// (tree_bench, tree_bench_g32, cuckoo_bench), the informational cpu_info and
-// the plan_params search are excluded; merkle_benchmarks and
-// layer_layout_sweep are main.cpp entry points, not PirTest members.
+// its result and finishes in seconds to a few minutes. Timed benchmarks,
+// the informational cpu_info and the plan_params search are excluded;
+// merkle_benchmarks and layer_layout_sweep are main.cpp entry points, not
+// PirTest members.
 static const std::vector<std::string> kRegressionTests = {
     "barrett", "utils_arith", "noise_sampling", "rlwe_enc", "hexl_ntt",
     "bfv", "decrypt_mod_q", "mod_switch", "bv_ks", "ext_prod",
     "ext_prod_mux", "fst_dim", "db_shape", "runtime_layout", "fast_expand",
     "pir", "pir_profile", "server_loader", "shared_session",
     "tree_index", "tree_query", "tree_select", "tree_rotate", "tree_project",
-    "tree_kernel", "tree_e2e", "tree_g32", "tree_multiplane", "tree_compress",
+    "tree_kernel", "tree_multiplane",
     "merkle_baseline", "merkle_benchmark_stats", "layer_layout_planner",
     "merkle_integration", "cuckoo_batch",
-    "tree_superrecord_codec", "tree_superrecord_planner",
-    "tree_superrecord_index", "tree_superrecord_e2e",
-    "tree_superrecord_noise", "tree_superrecord_kernel", "tree_superrecord_alpha",
+    "tree_entry_codec",
     "approx_gadget",
-    "tree_response_merge", "tree_response_merge_e2e",
+    "tree_packing",
     "logging",
     "merkle_profiled_override", "merkle_server_phases", "merkle_trial_schedule",
     "merkle_single_sample_stats", "layer_layout_sweep_dominated",
@@ -100,31 +96,16 @@ void PirTest::run_test(const std::string &test_name) {
   else if (test_name == "tree_select")       test_tree_select();
   else if (test_name == "tree_rotate")       test_tree_rotate();
   else if (test_name == "tree_project")      test_tree_project();
-  else if (test_name == "tree_e2e")          test_tree_e2e();
   else if (test_name == "tree_kernel")       test_tree_kernel();
-  else if (test_name == "tree_bench")        test_tree_benchmark();
-  else if (test_name == "tree_g32")          test_tree_g32();
-  else if (test_name == "tree_bench_g32")    test_tree_benchmark_g32();
   else if (test_name == "tree_multiplane")   test_tree_multiplane();
   else if (test_name == "tree_multiplane_bench") test_tree_multiplane_benchmark();
-  else if (test_name == "tree_compress")     test_tree_compress();
   else if (test_name == "tree_noise_envelope") test_tree_noise_envelope();
-  else if (test_name == "tree_compress_bench") run_tree_compress_benchmark(*this);
   else if (test_name == "cuckoo_batch")      test_cuckoo_batch();
   else if (test_name == "cuckoo_bench")      test_cuckoo_benchmark();
-  else if (test_name == "tree_superrecord_codec")   test_tree_superrecord_codec();
-  else if (test_name == "tree_superrecord_planner") test_tree_superrecord_planner();
-  else if (test_name == "tree_superrecord_index")   test_tree_superrecord_index();
-  else if (test_name == "tree_superrecord_e2e")     test_tree_superrecord_e2e();
-  else if (test_name == "tree_superrecord_noise")   test_tree_superrecord_noise();
-  else if (test_name == "tree_superrecord_kernel")  test_tree_superrecord_kernel();
-  else if (test_name == "tree_superrecord_alpha")   test_tree_superrecord_alpha();
+  else if (test_name == "tree_entry_codec")         test_tree_entry_codec();
   else if (test_name == "approx_gadget")            test_approx_gadget();
   else if (test_name == "gsw_decomp_shapes")        test_gsw_decomp_shapes();
-  else if (test_name == "tree_response_merge")      test_tree_response_merge();
-  else if (test_name == "tree_response_merge_e2e")  test_tree_response_merge_e2e();
-  else if (test_name == "tree_superrecord_noise_probe") test_tree_superrecord_noise_probe();
-  else if (test_name == "tree_superrecord_bench")   test_tree_superrecord_benchmark();
+  else if (test_name == "tree_packing")             test_tree_packing();
   else if (test_name == "decrypt_mod_q")     test_decrypt_mod_q();
   else if (test_name == "mod_switch")        test_mod_switch();
   else if (test_name == "db_shape")          test_db_shape();

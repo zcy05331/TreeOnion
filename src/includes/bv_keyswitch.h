@@ -63,7 +63,7 @@ public:
   std::vector<BvKeySwitchKey> keys;
 
   const BvKeySwitchKey &get(uint32_t galois_k) const;
-  // Non-throwing membership test used by the generic tree path to inspect the
+  // Non-throwing membership test used by tree response packing to inspect the
   // actual automorphism family instead of trusting a claimed height.
   bool contains(uint32_t galois_k) const noexcept;
 };

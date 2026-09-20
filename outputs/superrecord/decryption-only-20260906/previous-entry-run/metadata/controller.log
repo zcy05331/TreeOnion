@@ -1,1 +1,0 @@
-/users/zcy05331/generic-entry-wisconsin-20260906/source/scripts/run_wisconsin_entry_sizes.sh: line 11: 13690 Hangup                  numactl --physcpubind=0 --interleave=all python3 scripts/run_entry_size_sweep.py --binary "$BIN" --source-commit "$SOURCE_COMMIT" --entries 16,48,64,128 --output-dir "$RUN_ROOT/outputs/formal" > "$META/formal.log" 2>&1

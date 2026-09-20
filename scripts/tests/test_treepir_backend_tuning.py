@@ -94,7 +94,7 @@ class ValidationTests(unittest.TestCase):
                          ["vbpir_fd64", "vbpir_fd128", "vbpir_fd256", "sealpir_d1", "sealpir_d2"])
 
 
-FORMAL_LEAVES = [1, 2, 3, *range(10, 26)]
+FORMAL_LEAVES = tuning.trial_leaves(1 << 24, 3, 16, 7)
 PILOT_MEAN_MS = {
     "pilot-vbpir_fd64": 18.0,
     "pilot-vbpir_fd128": 15.0,
@@ -115,7 +115,7 @@ def make_run_root(tmp: str) -> pathlib.Path:
 
 
 def make_fake_run(calls: list, *, failing_pilots: frozenset[str] = frozenset()):
-    """Runner double for height 24: answers the schedule, index-only, pilot and formal launches.
+    """Runner double for height 24: answers the index-only, pilot and formal launches.
 
     A pilot whose output stem is in failing_pilots exits 1 and writes no output, like a
     backend variant that crashed or was killed."""
@@ -130,14 +130,7 @@ def make_fake_run(calls: list, *, failing_pilots: frozenset[str] = frozenset()):
             process_path.write_text(json.dumps({"exit_code": 1, "process_peak_rss_bytes": 1234}) + "\n")
             return json.loads(process_path.read_text())
         process_path.write_text(json.dumps({"exit_code": 0, "process_peak_rss_bytes": 1234}) + "\n")
-        if env.get("SUPERRECORD_PLAN_ONLY") == "1":
-            pathlib.Path(env["SUPERRECORD_OUTPUT_JSON"]).write_text(json.dumps({
-                "leaf_schedule": {
-                    "warmup": [1, 2, 3],
-                    "measured": list(range(10, 26)),
-                }
-            }) + "\n")
-        elif "--validate-index-only" in command:
+        if "--validate-index-only" in command:
             index_only = treepir_doc(24, [0.0] * 16, leaves=FORMAL_LEAVES)
             index_only["validate_index_only"] = True
             for row in index_only["results"]:
@@ -178,13 +171,12 @@ class RunnerTests(unittest.TestCase):
             self.assertTrue((tuning_root / "formal-process.json").exists())
             self.assertTrue((tuning_root / "formal.log").exists())
             self.assertFalse((run_root / "outputs" / "profiling" / "1gb" / "treepir-tuned.json").exists())
-            self.assertEqual((tuning_root / "treepir-leaves-tuned.txt").read_text().splitlines(), [str(x) for x in [1, 2, 3, *range(10, 26)]])
+            self.assertEqual((tuning_root / "treepir-leaves-tuned.txt").read_text().splitlines(), [str(x) for x in FORMAL_LEAVES])
             command_names = [path.stem for _, _, path, _ in calls]
-            self.assertEqual(command_names[0], "schedule-treepir-tuned")
-            self.assertEqual(command_names[1], "vbpir-index-only")
-            self.assertEqual(command_names[2:], ["pilot-vbpir_fd64", "pilot-vbpir_fd128", "pilot-vbpir_fd256", "pilot-sealpir_d1", "pilot-sealpir_d2", "formal"])
+            self.assertEqual(command_names[0], "vbpir-index-only")
+            self.assertEqual(command_names[1:], ["pilot-vbpir_fd64", "pilot-vbpir_fd128", "pilot-vbpir_fd256", "pilot-sealpir_d1", "pilot-sealpir_d2", "formal"])
             self.assertEqual(calls[-1][0][calls[-1][0].index("--trials") + 1], "16")
-            self.assertIn("--first-dim", calls[2][0])
+            self.assertIn("--first-dim", calls[1][0])
             self.assertIn("--pir-d", calls[-1][0])
 
     def test_crashed_pilot_is_recorded_ineligible_and_tuning_continues(self) -> None:
@@ -210,7 +202,7 @@ class RunnerTests(unittest.TestCase):
             self.assertEqual(selection["selected"]["label"], "sealpir_d1")
             final = json.loads((tuning_root / "formal.json").read_text())
             self.assertEqual(final["backend_label"], "sealpir_d1")
-            self.assertEqual([path.stem for _, _, path, _ in calls][2:],
+            self.assertEqual([path.stem for _, _, path, _ in calls][1:],
                              ["pilot-vbpir_fd64", "pilot-vbpir_fd128", "pilot-vbpir_fd256", "pilot-sealpir_d1", "pilot-sealpir_d2", "formal"])
 
     def test_all_pilots_failing_exits_nonzero_without_a_formal_run(self) -> None:
@@ -228,7 +220,7 @@ class RunnerTests(unittest.TestCase):
             tuning_root = run_root / "outputs" / "treepir-backend-tuning" / "1gb"
             self.assertFalse((tuning_root / "formal.json").exists())
             self.assertNotIn("formal", [path.stem for _, _, path, _ in calls])
-            self.assertEqual(len(calls), 2 + 5)
+            self.assertEqual(len(calls), 1 + 5)
 
     def test_unsupported_height_is_rejected_before_any_process_launch(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

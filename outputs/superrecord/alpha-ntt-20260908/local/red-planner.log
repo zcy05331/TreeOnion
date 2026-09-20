@@ -1,5 +1,0 @@
-Running test: tree_superrecord_planner
-==============================================================================
-                    test_tree_superrecord_planner(Benchmark build)
-==============================================================================
-Error: NTT-domain pyramid transforms only its 352 bottom ciphertexts

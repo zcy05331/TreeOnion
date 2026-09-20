@@ -1,5 +1,0 @@
-Running test: tree_superrecord_alpha
-==============================================================================
-                    test_tree_superrecord_alpha(Benchmark build)
-==============================================================================
-ragged alpha NTT equivalence passed; N0=352, transforms 705 -> 352

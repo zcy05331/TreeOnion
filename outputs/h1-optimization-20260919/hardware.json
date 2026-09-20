@@ -1,9 +1,0 @@
-{
-  "system": "macOS-15.7.7-arm64-arm-64bit",
-  "host_architecture": "arm64",
-  "cpu": "Apple M4",
-  "physical_memory_bytes": 17179869184,
-  "logical_cpu_count": 10,
-  "binary_architecture": "build-h1-reference/Onion-PIR: Mach-O 64-bit executable x86_64",
-  "measurement_scope": "local Rosetta; not native AVX512 evidence"
-}

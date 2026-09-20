@@ -5,7 +5,6 @@
 #include "bv_keyswitch.h"
 #include "pir_session.h"
 #include "rlwe.h"
-#include "tree_compress.h"
 #include <random>
 
 class PirClient {
@@ -46,11 +45,6 @@ public:
   GSWCt generate_gsw_from_key();
   // Construct one scheme-level helper bundle for all compatible layouts.
   SharedPirSessionKeys create_session_keys();
-  // [Tree PIR M7] 环切换材料：一个独立采样的小环三值目标密钥 s₂，加上主密钥的
-  // 偶/奇分量 {s_e, s_o} 在 s₂ 下的两组 gadget 密钥切换行（全 q）。keys 半交给
-  // 服务端，把偶对齐的路径响应切换到 R_{n₂}；secret 半留在客户端解码。
-  TreeRingSwitchBundle create_ring_switch_bundle(size_t n2);
-
   // [Tree PIR] 同上密钥束，但 BV Galois 覆盖高度显式给定。树投影对每个
   // j < min(r, level) 应用 Subs(η_j = n/2^j + 1)，无论查询展开高度如何都需要
   // log₂ n 把密钥；默认束只覆盖到编译期 TREE_HEIGHT，故需此版本。

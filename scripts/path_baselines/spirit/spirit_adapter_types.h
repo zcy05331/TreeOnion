@@ -12,7 +12,7 @@ namespace spirit_path_adapter {
 constexpr std::size_t kRecordSizeBytes = 32;
 
 struct Options {
-    std::string scheme = "spirit";
+    std::string scheme = "spirit_rc";
     unsigned height = 0;
     std::string leaf_file;
     std::string output = "-";

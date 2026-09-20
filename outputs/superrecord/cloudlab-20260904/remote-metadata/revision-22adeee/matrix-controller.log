@@ -1,6 +1,0 @@
-valid merkle: /users/zcy05331/generic-superrecord-bench-20260904/revision-22adeee/outputs/profiling/1gb/standard.json
-valid merkle: /users/zcy05331/generic-superrecord-bench-20260904/revision-22adeee/outputs/profiling/1gb/layerwise.json
-valid sampled: /users/zcy05331/generic-superrecord-bench-20260904/revision-22adeee/outputs/profiling/1gb/tree_g32.json
-valid sampled: /users/zcy05331/generic-superrecord-bench-20260904/revision-22adeee/outputs/profiling/1gb/tree_g1.json
-valid sampled: /users/zcy05331/generic-superrecord-bench-20260904/revision-22adeee/outputs/profiling/1gb/tree_compressed.json
-valid sampled: /users/zcy05331/generic-superrecord-bench-20260904/revision-22adeee/outputs/profiling/1gb/cuckoo.json

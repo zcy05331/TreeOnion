@@ -1,9 +1,0 @@
-[ 50%] Building CXX object CMakeFiles/vbpir_treepir.dir/src/batchpirserver.cpp.o
-[ 50%] Building CXX object CMakeFiles/vbpir_treepir.dir/src/batchpirparams.cpp.o
-[ 50%] Building CXX object CMakeFiles/vbpir_treepir.dir/src/client.cpp.o
-[ 50%] Building CXX object CMakeFiles/vbpir_treepir.dir/src/batchpirclient.cpp.o
-[ 62%] Building CXX object CMakeFiles/vbpir_treepir.dir/src/main.cpp.o
-[ 75%] Building CXX object CMakeFiles/vbpir_treepir.dir/src/pirparams.cpp.o
-[ 87%] Building CXX object CMakeFiles/vbpir_treepir.dir/src/server.cpp.o
-[100%] Linking CXX executable bin/vbpir_treepir
-[100%] Built target vbpir_treepir
