@@ -1,0 +1,9 @@
+{
+  "cgroup_memory_peak_bytes": null,
+  "cgroup_peak_scope": "shared cgroup cumulative peak, when available",
+  "elapsed_seconds": 0.108030583,
+  "exit_code": 0,
+  "peak_scope": "single benchmark child process; includes setup, calibration and all candidates",
+  "process_peak_rss_bytes": 21704704,
+  "ru_maxrss_unit": "bytes"
+}

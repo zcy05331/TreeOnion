@@ -37,6 +37,23 @@ void ct_add_inplace(RlweCt &acc, const RlweCt &x, const PirParams &scheme) {
   }
 }
 
+void ntt_ct_add_inplace(RlweCt &acc, const RlweCt &x,
+                        const PirParams &scheme) {
+  constexpr size_t N = DBConsts::PolyDegree;
+  const auto &qs = scheme.get_rns_mods();
+  require(acc.ntt_form && x.ntt_form && acc.c0.size() == x.c0.size() &&
+              acc.c1.size() == x.c1.size() &&
+              acc.c0.size() == acc.c1.size() &&
+              acc.c0.size() == qs.size() * N,
+          "NTT ciphertext addition needs matching NTT-form inputs");
+  for (size_t k = 0; k < qs.size(); ++k) {
+    intel::hexl::EltwiseAddMod(acc.c0.data() + k * N, acc.c0.data() + k * N,
+                               x.c0.data() + k * N, N, qs[k]);
+    intel::hexl::EltwiseAddMod(acc.c1.data() + k * N, acc.c1.data() + k * N,
+                               x.c1.data() + k * N, N, qs[k]);
+  }
+}
+
 
 }  // namespace
 
@@ -220,6 +237,44 @@ AlphaPyramid pyramid_to_ntt(const AlphaPyramid &pyramid,
     ntt.push_back(std::move(out_row));
   }
   return ntt;
+}
+
+AlphaPyramid build_alpha_pyramid_ntt(std::span<const RlweCt> alpha_cts,
+                                     const TreePirParams &tree,
+                                     const PirParams &scheme) {
+  constexpr size_t N = DBConsts::PolyDegree;
+  const auto &qs = scheme.get_rns_mods();
+  require(alpha_cts.size() == tree.N0,
+          "alpha pyramid needs the N0 expanded one-hot ciphertexts");
+  AlphaPyramid pyramid;
+  pyramid.reserve(tree.a + 1);
+  std::vector<RlweCt> base;
+  base.reserve(alpha_cts.size());
+  for (const RlweCt &ct : alpha_cts) {
+    require(!ct.ntt_form && ct.c0.size() == qs.size() * N &&
+                ct.c1.size() == qs.size() * N,
+            "alpha pyramid input must be coefficient-form");
+    RlweCt lifted = ct;
+    for (size_t k = 0; k < qs.size(); ++k) {
+      utils::ntt_fwd(lifted.c0.data() + k * N, N, qs[k]);
+      utils::ntt_fwd(lifted.c1.data() + k * N, N, qs[k]);
+    }
+    lifted.ntt_form = true;
+    base.push_back(std::move(lifted));
+  }
+  pyramid.push_back(std::move(base));
+  for (size_t c = 0; c < tree.a; ++c) {
+    const std::vector<RlweCt> &prev = pyramid.back();
+    std::vector<RlweCt> next;
+    next.reserve(prev.size() / 2);
+    for (size_t j = 0; j < prev.size() / 2; ++j) {
+      RlweCt sum = prev[2 * j];
+      ntt_ct_add_inplace(sum, prev[2 * j + 1], scheme);
+      next.push_back(std::move(sum));
+    }
+    pyramid.push_back(std::move(next));
+  }
+  return pyramid;
 }
 
 namespace {

@@ -46,6 +46,13 @@ response packing and ring compression stages have matching `tree_*.cpp` files.
 `tree_select.cpp` performs online alpha preparation and level selection. Both
 use the interfaces in `tree_select.h`.
 
+The primary h=1 multi-plane path is in `tree_multiplane_database.cpp` and
+`tree_multiplane_response.cpp`, with its contract in `includes/tree_multiplane.h`.
+It reuses the old gamma/alpha/beta coordinates and per-plane selection, shares
+query preparation across planes, and pools level/plane fragments with either
+Projection or MLWE. Its g/P choice does not change the node-to-polynomial
+assignment. The original single-plane path remains an independent baseline.
+
 The generic path uses `tree_superrecord_*`:
 
 | Module | Responsibility |
@@ -85,7 +92,8 @@ points separately. Long test entries are organized into named scenarios; they
 retain the shared fixtures and assertion order.
 
 Timed entry points such as `tree_bench`, `cuckoo_bench` and
-`tree_superrecord_bench` are separate from the in-process correctness suite.
+`tree_superrecord_bench` and `tree_multiplane_bench` are separate from the
+in-process correctness suite.
 The generic benchmark has separate option/report implementation files beside
 its entry file in `tests/`; its prepared runners retain their databases and
 sessions for the complete interleaved trial schedule.

@@ -71,15 +71,43 @@ python3 run.py --build-only
 python3 run.py -t fst_dim
 ```
 
-### Generic super-record tree PIR
+### Primary tree PIR: h=1 with the original index layout
 
-The current primary research algorithm is **Generic h=1**, with joint selection
-of `G`, plane count `P`, and `N0`; other bundle arities remain comparison controls.
-The fixed 1 GiB / 32 B optimization reference is `h1/G8/P3/N0=512/b7`,
-EP3/drop32 with exact KS8 and MLWE response packing. This reference is specific
-to that workload, not a fixed layout for every entry size or database size.
-Local optimization trials and their acceptance limits are recorded in the
-[h1 experiment report](outputs/h1-optimization-20260919/REPORT.md).
+The primary research algorithm fixes **h=1**, permits multiple planes, and uses
+the original **gamma/alpha/beta** indexing from Tree g32. The record width `g`
+is tunable: `rho=n/g`, `P=ceil(entry_bits/(c*g))`, where `c=floor(log2(t))`.
+At level `ell`, `R=2^max(ell-log2(rho),0)`, node `p+u*R` goes in polynomial
+`p` at coefficients `u+digit*rho`. Every plane uses this same assignment and
+the same expanded query. Leaf indices decompose as
+`i=gamma*(N0*2^b)+alpha*2^b+beta`, with power-of-two `N0` and `g`.
+
+`tree_multiplane` tests packing and encrypted retrieval; `tree_multiplane_bench`
+measures one layout, including full-response correctness, profiling and bytes.
+The old `tree_bench_g32` benchmark remains unchanged. For example:
+
+```bash
+TREE_MULTIPLANE_G=8 TREE_MULTIPLANE_N0=512 \
+TREE_MULTIPLANE_ENTRY_BITS=256 TREE_MULTIPLANE_PACKING=mlwe \
+  ./build/Onion-PIR --test tree_multiplane_bench --leaf-count 16777216 \
+  --experiments 50 --warmup 3 --trial-seed 7 --benchmark-json outputs/h1-old-layout.json
+```
+
+Use `scripts/benchmark_tree_multiplane.py` to compare `g` and `N0` candidates
+serially and rank valid points by measured complete server time. `P` and `b`
+are derived, not independent overrides. For 32-byte entries at `t=4099`,
+`(g,P)` examples are `(8,3)`, `(16,2)`, `(32,1)`. `TREE_MULTIPLANE_PACKING`
+also accepts `projection`; `TREE_MULTIPLANE_QUERY_LAYOUT` accepts `interleaved`
+(default) or `split-columns` for a matched query-preparation comparison.
+Gadget parameters remain build-time settings. Noise margins are diagnostic;
+acceptance requires exact decryption of the whole response, including padding.
+
+### Historical Generic super-record path
+
+`tree_superrecord_*` retains its independent sigma-based indexing and supports
+arbitrary bundle arities. Even h1/G32/P1 there assigns nodes to polynomials
+differently from the primary path. Previous Generic h1/G8/P3 timings and the
+[h1 optimization report](outputs/h1-optimization-20260919/REPORT.md) describe
+that historical path; they are not measurements of the restored index layout.
 
 
 `src/tree_superrecord_*` implements the entry-size-aware super-record path

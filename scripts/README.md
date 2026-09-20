@@ -26,6 +26,7 @@ keeps its original nonzero status and displays the last log before cleanup.
 | `run_perf_suite.sh` | Build/run the selected baseline matrix, enforce resource gates and collect unit statuses |
 | `run_superrecord_sweep.py` / `.sh` | Enumerate entry/workload tasks and record raw output plus provenance |
 | `benchmark_gadget_configs.py` | Execute paired gadget configurations, enforce comparability and write the comparison |
+| `benchmark_tree_multiplane.py` | Sweep old gamma/alpha/beta h=1 layouts over g/N0; derive P/b and rank by full measured server time |
 | `run_entry_size_sweep.py` | Run or reuse entry-size cases and produce per-entry selection reports |
 | `run_treepir_backend_tuning.py` | Prepare index schedules, evaluate backend pilots and run the selected formal candidate |
 | `run_tree_t257_comparison.py` | Pair baseline/candidate plaintext-modulus runs under a fixed layout and schedule |

@@ -216,6 +216,7 @@ int run_pir_test(const CommandLineOptions &cli) {
   if (cli.experiments_given) test.bench_measured_trials = cli.num_experiments;
   if (cli.warmup_given) test.bench_warmups = cli.warmup;
   if (cli.trial_seed_given) test.bench_trial_seed = cli.trial_seed;
+  if (!cli.benchmark_json.empty()) test.bench_output_json = cli.benchmark_json;
   test.run_test(cli.test_name);
   return 0;
 }

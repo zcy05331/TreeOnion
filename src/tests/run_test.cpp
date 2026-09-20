@@ -5,6 +5,7 @@
 
 void test_approx_gadget();
 void test_tree_response_merge_e2e();
+void test_tree_multiplane();
 // TimerLogger accumulation, warm-up skipping and cleanup.
 void test_logging();
 // Merkle baselines: a profiled plan off the legacy heights, the phase
@@ -39,7 +40,7 @@ static const std::vector<std::string> kRegressionTests = {
     "ext_prod_mux", "fst_dim", "db_shape", "runtime_layout", "fast_expand",
     "pir", "pir_profile", "server_loader", "shared_session",
     "tree_index", "tree_query", "tree_select", "tree_rotate", "tree_project",
-    "tree_kernel", "tree_e2e", "tree_g32", "tree_compress",
+    "tree_kernel", "tree_e2e", "tree_g32", "tree_multiplane", "tree_compress",
     "merkle_baseline", "merkle_benchmark_stats", "layer_layout_planner",
     "merkle_integration", "cuckoo_batch",
     "tree_superrecord_codec", "tree_superrecord_planner",
@@ -104,6 +105,8 @@ void PirTest::run_test(const std::string &test_name) {
   else if (test_name == "tree_bench")        test_tree_benchmark();
   else if (test_name == "tree_g32")          test_tree_g32();
   else if (test_name == "tree_bench_g32")    test_tree_benchmark_g32();
+  else if (test_name == "tree_multiplane")   test_tree_multiplane();
+  else if (test_name == "tree_multiplane_bench") test_tree_multiplane_benchmark();
   else if (test_name == "tree_compress")     test_tree_compress();
   else if (test_name == "tree_noise_envelope") test_tree_noise_envelope();
   else if (test_name == "tree_compress_bench") run_tree_compress_benchmark(*this);

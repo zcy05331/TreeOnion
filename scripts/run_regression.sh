@@ -384,6 +384,25 @@ PY
     echo "FAILED: a flag-less tree_bench_g32 run no longer measures its default 16 trials" >&2
     exit 1
   fi
+
+  step "[$TAG] old-layout h1 g/P sweep writes valid profiled JSON through the CLI"
+  python3 "$SCRIPTS/benchmark_tree_multiplane.py" --binary "$BIN" \
+    --output-dir "$W/multiplane" --leaf-count 1024 --entry-bits 256 \
+    --g-values 8,16,32 --n0-values 4 --experiments 2 --warmup 1 \
+    --trial-seed 7 --packing mlwe > "$W/multiplane.log" 2>&1
+  python3 - "$W/multiplane/ranking.json" <<'PY'
+import json, sys
+data = json.load(open(sys.argv[1]))
+assert len(data["completed"]) == 3 and not data["failed"], data
+for case in data["completed"]:
+    raw = json.load(open(case["raw_json"]))
+    for sample in raw["samples"]:
+        stages = sample["stages_ms"]
+        assert all(stages[name] > 0 for name in (
+            "query_expand", "selector_completion", "pyramid", "scan_core",
+            "scan_finalize", "rotate", "merge", "switch")), stages
+        assert stages["project"] == stages["pack"] == 0, stages
+PY
 }
 
 run_python_driver_contracts() {  # run_python_driver_contracts <binary> <tag> <work-dir> <abs-binary>

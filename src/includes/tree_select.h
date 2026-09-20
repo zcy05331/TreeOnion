@@ -190,6 +190,13 @@ PreprocessedTree preprocess_tree_mvp(const TreePirParams &tree,
 AlphaPyramid pyramid_to_ntt(const AlphaPyramid &pyramid,
                             const PirParams &scheme);
 
+// Same full binary alpha pyramid, but row 0 is lifted to NTT form first and
+// higher rows are built by NTT-domain modular additions. Inputs remain
+// coefficient-form.
+AlphaPyramid build_alpha_pyramid_ntt(std::span<const RlweCt> alpha_cts,
+                                     const TreePirParams &tree,
+                                     const PirParams &scheme);
+
 // 优化版 SelectLevel：在 NTT 视图上执行与 select_level 完全相同的环运算；
 // 消费 NTT 形式的金字塔，返回与标量路径按位相等的系数形式结果。
 RlweCt select_level_ntt(const TreeLevelDatabaseNtt &db, const LevelPlan &plan,

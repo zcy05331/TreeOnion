@@ -74,6 +74,7 @@ class PirTest {
     std::optional<size_t> bench_measured_trials;
     std::optional<size_t> bench_warmups;
     std::optional<uint64_t> bench_trial_seed;
+    std::optional<std::string> bench_output_json;
     // log2 of --leaf-count (a power of two) or default_height when unset.
     size_t bench_tree_height(size_t default_height) const;
 
@@ -118,6 +119,7 @@ class PirTest {
     // Real-scenario g=32: 32-byte nodes end to end, plus its benchmark.
     void test_tree_g32();
     void test_tree_benchmark_g32();
+    void test_tree_multiplane_benchmark();
     // Milestone 7: d=2 ring-switched response compression gate.
     void test_tree_compress();
     // Cuckoo-hash batch PIR baseline: correctness gate and L=22 benchmark.

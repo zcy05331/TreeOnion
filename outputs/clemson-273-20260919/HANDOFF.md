@@ -1,6 +1,28 @@
 # Scheduled Clemson matrix
 
-Latest user override: run ONLY the Standard OnionPIRv2 1GiB speed baseline
+## Latest algorithm contract (2026-09-20)
+
+The final primary algorithm fixes h=1 and restores the OLD (gamma,alpha,beta)
+indexing, with variable power-of-two g and plane_count P>=1. Tree g32 is a
+parameter point, not a fixed-g restriction. Choose P=ceil(entry_bits/(c*g)),
+c=floor(log2(t)); rho=n/g. Every plane uses node=p+u*R_level and coefficient
+u+digit*rho, sharing the same alpha/beta/gamma query. Do not substitute Generic
+G32/P1: Generic assigns nodes to polynomials differently. Do not schedule the
+old Generic G8/P3 point as the new primary merely because h=1 matches.
+
+The new old-layout multi-plane implementation is now in src/tree_multiplane_*
+with test entries tree_multiplane and tree_multiplane_bench. Local default
+58/58 C++ regressions and the full CLI chain passed. EP3/drop32/exactKS8 passed
+the new crypto suite and14 configurations/34 measured queries plus14 warmups
+across16/32/48/64/128B, Projection/MLWE and both query-buffer layouts. Details
+and raw artifacts are in multiplane-local/. These are small Rosetta correctness
+and profiling-contract checks; native1/4GiB tuning and measurement are pending.
+Select g/P and feasible N0/b by complete measured server time on this machine.
+Keep EP3/drop32/exactKS8 and MLWE as separately validated computational options.
+Do not apply previous Generic speed claims to the restored layout. Original
+Tree g32 EP6/Projection stays an unchanged baseline; h3 is historical only.
+
+Earlier immediate-run override: run ONLY the Standard OnionPIRv2 1GiB speed baseline
 immediately. It has been submitted under
 `/users/zcy05331/standard-onion-1gb-20260920T0132Z`, guarded by idle checks.
 The other project processes15294/20293 were stopped(T) with zero CPU-tick growth
@@ -17,7 +39,7 @@ The immediate Standard1GiB run completed:50/50correct,906.011ms mean,
 1130.230MiB/s original-data throughput,11264Bactualresponsepayload.
 Native57/57regressions passed. Resultsidecars are in `standard-now/`;
 remote metadata/status is `complete`. At06:00validate/reuse it, then proceed
-to h1A/B and the remainingmatrix; do not rerun it solely because step2below
+to the new old-layout h1 validation/tuning and the remainingmatrix; do not rerun it solely because step2below
 describes the initial command.
 
 ## Machine
@@ -81,14 +103,19 @@ Recordserverlatency,stageprofiles,query/responsebytekind,setup,memory,correctnes
    OUT is a fresh1GiB output directory. Report fullserverlatency,logicalMiB/s,
    stageprofile,query/responsebytekind and50/50correctness. Standard retrieves
    one3KiB plaintext block, so it is a speed reference rather than pathworkload.
-3. After the firstStandard baseline, build referenceEP3/drop32 + tiledEP3/drop32.
-   EP3 fullsuite has9 known tests assuming EP6 defaults; comparefailurelist and
-   run actual h1complete-query gates. Then h1fixed-layout A/B: G8/P3/N0=512,b7 at1GiB,b9 at4GiB,expansion10,
-   exactKS8 andMLWE. Two reverse-order rounds of25 produce50samples/arm/size.
-   Existing scripts/benchmark_gadget_configs.py supports this; numactl on the
-   parentrunner propagates CPU/memorypolicy to children.
+3. Rebuild and validate old-layout h1 multi-plane support on the native host
+   before scheduling the primary point. Local P=1 legacy equivalence, P=2/P=3
+   complete decryption, EP3/drop32/exactKS8 and MLWE checks passed as recorded
+   above. Native actual-query gates remain required; the EP3 fullsuite has9 known legacy tests
+   assuming EP6 defaults, so compare failure identities rather than ignore errors.
+   Tune g/P and N0/b on this machine, then run50 primary measurements per size.
+   Use scripts/benchmark_tree_multiplane.py with explicit g/N0 candidates;
+   it invokes tree_multiplane_bench, validates correct full responses and matched
+   query schedules, and ranks complete points by mean full server time.
+   Any prepared-query A/B must use the SAME new old-layout parameters; the
+   previously planned Generic G8/P3/N0=512 A/B is superseded, not evidence for it.
 4. Reprofile Layerwise and Cuckoo tuning on this machine, then measure matrix:
-   Generich1(reference and candidate),Generich3 control,Layerwise tuned,Treeg32,
+   old-layout h1(variable g/P),Layerwise tuned,original Treeg32,
    Cuckoo tuned,TreePIR existing backends,Flat,Standard single-block reference.
    Reuse scripts/run_cloudlab_profile_matrix.sh and existing validators rather
    than inventing incompatible report schemas. Half-countpilotchoices explicit.
