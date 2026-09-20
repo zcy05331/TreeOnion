@@ -45,10 +45,30 @@ Recordserverlatency,stageprofiles,query/responsebytekind,setup,memory,correctnes
 
 1. Prepare a finite serial runner and an idle gate locally. At/after03:00, upload
    only code/scripts/source manifests (exclude docs,papers,private backups).
-2. Build native HEXL1.2.6 and core defaultEP6 + referenceEP3/drop32 + tiledEP3/drop32.
-   Full default regressions must pass. EP3 fullsuite has9 known tests assuming
-   EP6 defaults; comparefailurelist and run actual h1complete-query gates.
-3. h1fixed-layout A/B first: G8/P3/N0=512,b7 at1GiB,b9 at4GiB,expansion10,
+2. FIRST PRIORITY per latest user instruction: build native HEXL1.2.6 and the
+   defaultEP6 core, verify correctness, then run Standard OnionPIRv2 1GiB
+   before h1 tuning or external-backend preparation. Use50 measured queries,
+   3warmups,seed7. Preserve rawJSON,log,process exit andpeakRSS; validate and
+   report this speed baseline promptly. This changes order, not the03:00/idle
+   restriction. Exact case invocation after the time and idle checks:
+
+   ```sh
+   python3 scripts/read_process_peak_memory.py --log "$OUT/standard.log" \
+     --output "$OUT/standard-process.json" -- \
+     numactl --physcpubind=0 --preferred=0 "$DEFAULT_BIN" \
+     --test merkle_benchmarks --benchmark-case standard_onionpir \
+     --leaf-count 16777216 --experiments 50 --warmup 3 --trial-seed 7 \
+     --benchmark-json "$OUT/standard.json"
+   python3 scripts/summarize_cloudlab_profiles.py \
+     --validate "$OUT/standard.json" --trials 50 --leaf-count 16777216
+   ```
+
+   OUT is a fresh1GiB output directory. Report fullserverlatency,logicalMiB/s,
+   stageprofile,query/responsebytekind and50/50correctness. Standard retrieves
+   one3KiB plaintext block, so it is a speed reference rather than pathworkload.
+3. After the firstStandard baseline, build referenceEP3/drop32 + tiledEP3/drop32.
+   EP3 fullsuite has9 known tests assuming EP6 defaults; comparefailurelist and
+   run actual h1complete-query gates. Then h1fixed-layout A/B: G8/P3/N0=512,b7 at1GiB,b9 at4GiB,expansion10,
    exactKS8 andMLWE. Two reverse-order rounds of25 produce50samples/arm/size.
    Existing scripts/benchmark_gadget_configs.py supports this; numactl on the
    parentrunner propagates CPU/memorypolicy to children.
