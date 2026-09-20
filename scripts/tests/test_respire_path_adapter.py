@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import json
+import re
 import subprocess
 import tempfile
 import unittest
@@ -59,6 +60,44 @@ class RespirePathAdapterDryRunTest(unittest.TestCase):
         self.assertIn((1 << 25) - 1, sample["request_indices"][25:])
         self.assertEqual(data["logical_records"], (1 << 25) - 1)
         self.assertEqual(data["backend_records"], 1 << 25)
+
+    def test_h26_dry_run_uses_4gib_geometry(self):
+        data = self.dry_run(26, [0, (1 << 26) - 1], warmup=1, trials=1)
+        sample = data["dry_run_samples"][1]
+        self.assertEqual(data["height"], 26)
+        self.assertEqual(data["leaf_count"], 1 << 26)
+        self.assertEqual(data["logical_records"], (1 << 27) - 1)
+        self.assertEqual(data["backend_records"], 1 << 27)
+        self.assertEqual(len(sample["path_indices"]), 27)
+        self.assertEqual(len(sample["request_indices"]), 32)
+        self.assertEqual(sample["path_indices"][-1], (1 << 27) - 2)
+
+    def test_rust_dispatch_includes_distinct_h26_shape(self):
+        main_rs = (ROOT / "scripts/path_baselines/respire/path_workload/main.rs").read_text(encoding="utf-8")
+        params_rs = (ROOT / "scripts/path_baselines/respire/path_workload/params.rs").read_text(encoding="utf-8")
+        report_rs = (ROOT / "scripts/path_baselines/respire/path_workload/report.rs").read_text(encoding="utf-8")
+        self.assertIn("26 => runner::execute::<params::FormalH26>", main_rs)
+        self.assertIn("pub type FormalH26 = CuckooRespireImpl<32, 49, { 1usize << 27 }, FormalH26Base>;", params_rs)
+        self.assertIn("FactoryParams::batch_256(49, 8, 9, 9)", params_rs)
+        self.assertIn('label: "formal_h26_4gib_batch_256"', params_rs)
+        h24 = re.search(r"FORMAL_H24_SHAPE:.*?nu1: (\d+),\s+nu2: (\d+),", params_rs, re.S)
+        h26 = re.search(r"FORMAL_H26_SHAPE:.*?nu1: (\d+),\s+nu2: (\d+),", params_rs, re.S)
+        self.assertIsNotNone(h24)
+        self.assertIsNotNone(h26)
+        self.assertNotEqual(h24.groups(), h26.groups())
+        h24_nu1, h24_nu2 = map(int, h24.groups())
+        h26_nu1, h26_nu2 = map(int, h26.groups())
+        h24_packed_db_records = 1 << (h24_nu1 + h24_nu2)
+        h26_packed_db_records = 1 << (h26_nu1 + h26_nu2)
+        self.assertEqual(h24_packed_db_records, 1 << 16)
+        self.assertEqual(h26_packed_db_records, 1 << 18)
+        self.assertEqual(h26_packed_db_records // h24_packed_db_records, 4)
+        self.assertEqual(h24_packed_db_records * (2048 // 64), 1 << 21)
+        self.assertEqual(h26_packed_db_records * (2048 // 64), 1 << 23)
+        self.assertIn("packed_bucket_records", report_rs)
+        self.assertIn("2048 / shape.d3", report_rs)
+        self.assertIn("params_query_size", report_rs)
+        self.assertIn("params_response_size", report_rs)
 
     def test_shared_golden_hex_values_are_used(self):
         data = self.dry_run(8, [192], warmup=0, trials=1)

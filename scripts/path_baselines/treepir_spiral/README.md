@@ -22,6 +22,8 @@ and local Homebrew/Anaconda headers/packages:
 ```bash
 python3 scripts/path_baselines/treepir_spiral/build_spiral_cpu.py --height 8 --jobs 2
 python3 scripts/path_baselines/treepir_spiral/build_spiral_cpu.py --height 10 --jobs 2
+python3 scripts/path_baselines/treepir_spiral/build_spiral_cpu.py --height 24 --jobs 2
+python3 scripts/path_baselines/treepir_spiral/build_spiral_cpu.py --height 26 --jobs 2
 ```
 
 The staged source patches are intentionally narrow:
@@ -74,5 +76,6 @@ On this Apple-Silicon host, H8 staged CPU binaries build successfully with the
 local x86 HEXL route and complete a real encrypted shared-DB smoke run with one
 warmup and two measured leaves using exactly H+1 upstream processes. H8/H10 use
 the smallest valid public shape `num_expansions=1, further_dims=1`; H24 color
-buckets require `6,7` to cover their bucket capacity at 256 hashes per Spiral
-plaintext record, while the root bucket remains `1,1`.
+buckets require `6,7` and H26 color buckets require `8,7` to cover their bucket
+capacity at 256 hashes per Spiral plaintext record, while the root bucket
+remains `1,1`.

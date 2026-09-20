@@ -1,0 +1,32 @@
+{
+  "host": "zcy05331@clnode273.clemson.cloudlab.us",
+  "remote_root": "/users/zcy05331/tree-h1-old-layout-20260920T2003Z",
+  "core_source_commit": "0b20cdbbff271b27f7cfa494f7157e048426b7da",
+  "main_algorithm": "h=1, variable g/P, old gamma-alpha-beta layout",
+  "sizes_gib": [
+    1,
+    4
+  ],
+  "entry_bytes": 32,
+  "pilot_g": [
+    8,
+    16,
+    32,
+    4,
+    64
+  ],
+  "pilot_N0": [
+    512,
+    256,
+    1024,
+    128
+  ],
+  "pilot_trials": 8,
+  "formal_trials_per_layout": 50,
+  "warmups": 3,
+  "trial_seed": 7,
+  "cpu_policy": "CPU0; NUMA node0 preferred",
+  "other_jobs": "wait before every heavy operation, never signal other jobs",
+  "source_files": 318,
+  "source_bytes": 673263
+}

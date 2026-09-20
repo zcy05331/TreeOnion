@@ -13,7 +13,7 @@ python3 scripts/path_baselines/respire/respire_path_workload.py \
   --output outputs/profiling/1gb/respire-path.json
 ```
 
-The formal type is `CuckooRespireImpl<32,49,2^25>` with the controlled 32-byte, 1 GiB parameters from the RPM measurement (`batch_256(49,8,8,8)`, `D3=64`). The height-8 type uses the same record size and batch geometry with `NU1=NU2=1` so local encrypted smoke runs have bounded memory.
+The 1 GiB formal type is `CuckooRespireImpl<32,49,2^25>` with the controlled 32-byte parameters from the RPM measurement (`batch_256(49,8,8,8)`, `D3=64`). The 4 GiB formal type is `CuckooRespireImpl<32,49,2^27>` with a distinct public shape (`batch_256(49,8,9,9)`, `D3=64`); reports include the actual exponent `nu1`, `nu2`, derived packed/bucket capacities, and modeled query/response sizes emitted by that compiled type. The height-8 type uses the same record size and batch geometry with `NU1=NU2=1` so local encrypted smoke runs have bounded memory.
 
 Use `--dry-run` to inspect the shared path schedule and plaintext goldens without building Respire.
 

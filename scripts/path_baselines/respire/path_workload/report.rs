@@ -1,5 +1,5 @@
 use crate::cli::Args;
-use crate::params::SOURCE_COMMIT;
+use crate::params::{RespireShape, SOURCE_COMMIT};
 use crate::runner::TrialResult;
 use respire::pir::pir::PIR;
 
@@ -58,6 +58,7 @@ fn sample_json(
 
 pub fn render<P: PIR>(
     args: &Args,
+    shape: RespireShape,
     setup_ns: u128,
     results: &[TrialResult],
     query_bytes: usize,
@@ -86,9 +87,23 @@ pub fn render<P: PIR>(
     out.push_str("\"record_mapping\":\"full_bfs_zero_based\",");
     out.push_str("\"cuckoo_buckets\":49,\"cuckoo_hashes\":3,");
     out.push_str("\"factory\":\"batch_256(49,8,nu1,nu2) with D3=64\",");
-    out.push_str(
-        "\"formal_h24_nu1\":8,\"formal_h24_nu2\":8,\"smoke_h8_nu1\":1,\"smoke_h8_nu2\":1},\n",
-    );
+    let packed_dim1_records = 1usize << shape.nu1;
+    let packed_dim2_records = 1usize << shape.nu2;
+    let packed_db_records = packed_dim1_records * packed_dim2_records;
+    let packed_bucket_records = packed_db_records * (2048 / shape.d3);
+    out.push_str(&format!(
+        "\"shape\":\"{}\",\"nu1\":{},\"nu2\":{},\"d3\":{},\"packed_dim1_records\":{},\"packed_dim2_records\":{},\"packed_db_records\":{},\"bucket_capacity_records\":{},\"params_query_size\":{},\"params_response_size\":{} }},\n",
+        shape.label,
+        shape.nu1,
+        shape.nu2,
+        shape.d3,
+        packed_dim1_records,
+        packed_dim2_records,
+        packed_db_records,
+        packed_bucket_records,
+        query_bytes,
+        response_bytes
+    ));
     out.push_str(&format!(
         "  \"setup\":{{\"preprocess_keygen_ms\":{:.6},\"helper_bytes\":0}},\n",
         ns_to_ms(setup_ns)

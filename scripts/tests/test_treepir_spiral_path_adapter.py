@@ -13,10 +13,10 @@ ADAPTER = REPO / "scripts" / "path_baselines" / "treepir_spiral" / "treepir_spir
 BUILD_SPIRAL = REPO / "scripts" / "path_baselines" / "treepir_spiral" / "build_spiral_cpu.py"
 
 sys.path.insert(0, str(REPO / "scripts" / "path_baselines"))
-from treepir_spiral.build_spiral_cpu import patch_spiral_root
+from treepir_spiral.build_spiral_cpu import PRESETS, patch_spiral_root
 from treepir_spiral.subcsa import balanced_color_sizes, color_path_positions, local_csa_indices
 from treepir_spiral.synthetic_tree import node_bytes, path_indices
-from treepir_spiral.treepir_spiral_path_adapter import canonical_bucket_records
+from treepir_spiral.treepir_spiral_path_adapter import SPIRAL_HASHES_PER_RECORD, canonical_bucket_records, select_spiral_preset
 
 
 def write_fake_spiral(path: pathlib.Path) -> None:
@@ -57,6 +57,25 @@ def write_fake_spiral(path: pathlib.Path) -> None:
 
 
 class TreePirSpiralPathAdapterTests(unittest.TestCase):
+    def test_h26_manifest_build_preset_matches_documented_spiral_shape(self):
+        preset = PRESETS[26]
+        self.assertEqual(preset["build"]["TEXP"], "8")
+        self.assertEqual(preset["build"]["TEXPRIGHT"], "56")
+        self.assertEqual(preset["build"]["TCONV"], "4")
+        self.assertEqual(preset["build"]["TGSW"], "11")
+        self.assertEqual(preset["build"]["QPBITS"], "21")
+        self.assertEqual(preset["build"]["PVALUE"], "256")
+        self.assertEqual(preset["build"]["QNUMFIRST"], "1")
+        self.assertEqual(preset["build"]["QNUMREST"], "0")
+        self.assertEqual(preset["build"]["OUTN"], "2")
+
+    def test_h26_runtime_preset_covers_actual_bucket_capacity(self):
+        max_bucket_records = max(balanced_color_sizes(26))
+        preset = select_spiral_preset(max_bucket_records)
+        total_records = 1 << (int(preset.num_expansions) + int(preset.further_dims))
+        self.assertGreaterEqual(total_records * SPIRAL_HASHES_PER_RECORD, max_bucket_records)
+        self.assertEqual((preset.num_expansions, preset.further_dims), ("8", "7"))
+
     def test_subcsa_port_matches_h10_golden_fixture_prefix(self):
         self.assertEqual(
             local_csa_indices(10, 496),

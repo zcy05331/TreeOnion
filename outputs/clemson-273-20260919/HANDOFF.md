@@ -1,5 +1,22 @@
 # Scheduled Clemson matrix
 
+## Active native run (2026-09-20)
+
+Remote root: `/users/zcy05331/tree-h1-old-layout-20260920T2003Z`.
+tmux session: `tree-h1-matrix-20260920`.
+Core source is frozen at `0b20cdbbff271b27f7cfa494f7157e048426b7da`.
+Both native binaries built; default58/58 and EP3 multi-plane/split-column smoke
+passed. The finite serial queue is prepared under native-20260920T2003Z/.
+Deployment/controller revision is recorded separately in metadata/controller-commit.txt.
+Read metadata/status and metadata/primary-progress.json before any restart;
+do not submit duplicate pilots or formal jobs. Primary uses20 measured pilot
+shapes per scale (g4/8/16/32/64 and N0=128/256/512/1024),8trials+3warmups,
+then50trials per query-buffer layout at the selected g/N0. Seed7 throughout.
+Core baselines, tuned legacy TreePIR and six external modes follow serially.
+Existing Standard1GiB is reused; all heavy operations retain the idle gate.
+The external H26 Respire shape uses exponent parameters9/9, not dimensions16/16.
+H26 native correctness is still to be tested by the queue; no result is implied.
+
 ## Latest algorithm contract (2026-09-20)
 
 The final primary algorithm fixes h=1 and restores the OLD (gamma,alpha,beta)

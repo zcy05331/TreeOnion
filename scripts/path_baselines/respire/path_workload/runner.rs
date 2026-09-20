@@ -1,4 +1,5 @@
 use crate::cli::Args;
+use crate::params::RespireShape;
 use crate::report;
 use crate::workload::{make_plans, read_leaves, record_for, TrialPlan};
 use respire::pir::pir::{PIRRecordBytes, Stats, PIR};
@@ -99,6 +100,7 @@ where
 
 pub fn execute<P: PIR>(
     args: &Args,
+    shape: RespireShape,
     query_bytes: usize,
     response_bytes: usize,
 ) -> Result<String, String>
@@ -116,6 +118,7 @@ where
     let (results, setup_ns) = run::<P>(args.height, &plans);
     Ok(report::render::<P>(
         args,
+        shape,
         setup_ns,
         &results,
         query_bytes,

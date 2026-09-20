@@ -61,6 +61,21 @@ PRESETS = {
         },
         "run": {"num_expansions": "6", "further_dims": "7"},
     },
+    26: {
+        "build": {
+            "TEXP": "8",
+            "TEXPRIGHT": "56",
+            "TCONV": "4",
+            "TGSW": "11",
+            "QPBITS": "21",
+            "PVALUE": "256",
+            "QNUMFIRST": "1",
+            "QNUMREST": "0",
+            "OUTN": "2",
+            "ADDTL_CXX_FLAGS": "",
+        },
+        "run": {"num_expansions": "8", "further_dims": "7"},
+    },
 }
 
 

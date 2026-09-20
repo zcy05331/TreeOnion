@@ -12,16 +12,24 @@ fn main() {
     let json = match args.height {
         8 => runner::execute::<params::SmokeH8>(
             &args,
+            params::SMOKE_H8_SHAPE,
             params::SmokeH8::params_query_size(),
             params::SmokeH8::params_response_info().0,
         ),
         24 => runner::execute::<params::FormalH24>(
             &args,
+            params::FORMAL_H24_SHAPE,
             params::FormalH24::params_query_size(),
             params::FormalH24::params_response_info().0,
         ),
+        26 => runner::execute::<params::FormalH26>(
+            &args,
+            params::FORMAL_H26_SHAPE,
+            params::FormalH26::params_query_size(),
+            params::FormalH26::params_response_info().0,
+        ),
         _ => Err(
-            "supported heights are 8 for local smoke and 24 for formal Respire path runs"
+            "supported heights are 8 for local smoke and 24/26 for formal Respire path runs"
                 .to_string(),
         ),
     };
