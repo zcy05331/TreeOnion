@@ -4,8 +4,9 @@ import tempfile
 import unittest
 from contextlib import redirect_stderr
 from io import StringIO
+from unittest.mock import patch
 
-from scripts.clemson_external_matrix import CommandResult, MatrixRunner, parse_args
+from scripts.clemson_external_matrix import CommandResult, MatrixRunner, main, parse_args
 
 
 REPO = pathlib.Path(__file__).resolve().parents[2]
@@ -24,6 +25,12 @@ def prepared_root(tmp: pathlib.Path) -> pathlib.Path:
 
 
 class ClemsonExternalMatrixTests(unittest.TestCase):
+    def test_failed_matrix_returns_nonzero_to_the_parent_queue(self):
+        argv = ["--root", "/tmp/x", "--source-commit", HEX, "--hexl-root", "/tmp/hexl"]
+        for state, expected in (("complete", 0), ("planned", 0), ("complete_with_failures", 1)):
+            with self.subTest(state=state), patch.object(MatrixRunner, "run", return_value={"state": state}):
+                self.assertEqual(main(argv), expected)
+
     def test_parse_rejects_non_finite_heights_and_bad_commit(self):
         with redirect_stderr(StringIO()):
             with self.assertRaises(SystemExit):

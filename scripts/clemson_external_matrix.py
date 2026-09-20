@@ -653,8 +653,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 def main(argv: list[str] | None = None) -> int:
     try:
         args = parse_args(argv)
-        MatrixRunner(args).run()
-        return 0
+        result = MatrixRunner(args).run()
+        return 0 if result["state"] in ("complete", "planned") else 1
     except MatrixError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
