@@ -24,11 +24,12 @@ MODES = (
     "spirit_rc",
     "respire",
 )
-SCALE_BY_HEIGHT = {22: "256mib", 23: "512mib", 24: "1gib", 26: "4gib"}
+SCALE_BY_HEIGHT = {22: "256mib", 23: "512mib", 24: "1gib", 25: "2gib", 26: "4gib"}
 RESPIRE_SHAPES = {
     22: {"nu1": 7, "nu2": 7, "d3": 64},
     23: {"nu1": 8, "nu2": 7, "d3": 64},
     24: {"nu1": 8, "nu2": 8, "d3": 64},
+    25: {"nu1": 9, "nu2": 8, "d3": 64},
     26: {"nu1": 9, "nu2": 9, "d3": 64},
 }
 SPIRIT_COMMIT = "7e4c114807d5a83ae5cbad17c514df1dbc32dfc3"
@@ -504,7 +505,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--source-commit", required=True)
     parser.add_argument("--hexl-root", type=Path, required=True)
     parser.add_argument("--wait-idle", type=Path)
-    parser.add_argument("--heights", nargs="+", type=int, default=[22, 23, 24, 26])
+    parser.add_argument("--heights", nargs="+", type=int, default=[22, 23, 24, 25, 26])
     parser.add_argument("--modes", nargs="+", choices=MODES, default=list(MODES))
     parser.add_argument("--warmups", type=int, default=3)
     parser.add_argument("--trials", type=int, default=50)
@@ -518,7 +519,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         parser.error("--source-commit must be a full 40-character lowercase hex Git revision")
     for height in args.heights:
         if height not in SCALE_BY_HEIGHT:
-            parser.error("--heights currently supports only 22, 23, 24 and 26 for finite 256MiB/512MiB/1GiB/4GiB matrix points")
+            parser.error("--heights currently supports only 22, 23, 24, 25 and 26 for finite 256MiB/512MiB/1GiB/2GiB/4GiB matrix points")
     if args.warmups < 0 or args.trials <= 0:
         parser.error("warmups must be nonnegative and trials must be positive")
     return args

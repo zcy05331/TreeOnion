@@ -17,7 +17,7 @@ class TreePirMatrixTests(unittest.TestCase):
             with patch.object(sys, "argv", ["run_treepir_matrix", "--root", str(root)]), \
                     patch.object(matrix.tuning, "run_one_height", return_value=True) as run:
                 self.assertEqual(matrix.main(), 0)
-            self.assertEqual([call.args[1] for call in run.call_args_list], [22, 23, 24, 26])
+            self.assertEqual([call.args[1] for call in run.call_args_list], [22, 23, 24, 25, 26])
             args = run.call_args_list[0].args[0]
             self.assertEqual((args.trials, args.pilot_trials, args.warmups, args.trial_seed), (8, 8, 3, 7))
             self.assertEqual(json.loads((root / "metadata/treepir-progress.json").read_text())["state"], "complete")
@@ -27,9 +27,9 @@ class TreePirMatrixTests(unittest.TestCase):
             root = Path(directory)
             (root / "metadata").mkdir()
             with patch.object(sys, "argv", ["run_treepir_matrix", "--root", str(root)]), \
-                    patch.object(matrix.tuning, "run_one_height", side_effect=[False, True, True, True]) as run:
+                    patch.object(matrix.tuning, "run_one_height", side_effect=[False, True, True, True, True]) as run:
                 self.assertEqual(matrix.main(), 1)
-            self.assertEqual(run.call_count, 4)
+            self.assertEqual(run.call_count, 5)
             status = json.loads((root / "metadata/treepir-progress.json").read_text())
             self.assertEqual(status["heights"]["22"]["state"], "failed")
             self.assertEqual(status["state"], "complete_with_failures")

@@ -13,12 +13,15 @@ from read_process_peak_memory import run_measured
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, required=True)
-    root = parser.parse_args().root.resolve()
+    parser.add_argument("--heights", nargs="+", type=int, default=[22, 23, 24, 25, 26])
+    parsed = parser.parse_args()
+    root = parsed.root.resolve()
+    args_heights = parsed.heights
     args = tuning.parse_args([
         "--run-root", str(root),
         "--vbpir-bin", str(root / "deps/TreePIR/VBPIR_TreePIR/build/bin/vbpir_treepir"),
         "--sealpir-binary", str(root / "build-treepir-sealpir/treepir_sealpir_adapter"),
-        "--heights", "22", "23", "24", "26", "--trials", "8", "--pilot-trials", "8",
+        "--heights", *[str(h) for h in args_heights], "--trials", "8", "--pilot-trials", "8",
         "--warmups", "3", "--trial-seed", "7"])
     progress = {"state": "running", "heights": {}, "path_semantics": "legacy_colored_path_omits_root",
                 "note": "VBPIR and SealPIRplus backend tuning for the retained TreePIR baseline"}

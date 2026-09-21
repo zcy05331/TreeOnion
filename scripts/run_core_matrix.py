@@ -19,9 +19,11 @@ SCALES = {
     "256mb": 1 << 22,
     "512mb": 1 << 23,
     "1gb": 1 << 24,
+    "2gb": 1 << 25,
     "4gb": 1 << 26,
 }
-SCALE_ORDER = ("256mb", "512mb", "1gb", "4gb")
+SCALE_ORDER = ("256mb", "512mb", "1gb", "2gb", "4gb")
+CASES = ("standard", "layerwise", "cuckoo", "flat")
 
 
 def cuckoo_heights(scale: str) -> tuple[int, ...]:
@@ -80,10 +82,24 @@ class Runner:
 
 
 class CoreMatrix:
-    def __init__(self, paths: Paths, *, standard_1g_source: Path | None = None, runner: Runner | None = None) -> None:
+    def __init__(
+        self,
+        paths: Paths,
+        *,
+        standard_1g_source: Path | None = None,
+        runner: Runner | None = None,
+        scales: tuple[str, ...] = SCALE_ORDER,
+        cases: tuple[str, ...] = CASES,
+        standard_reference_expansion_height: int | None = None,
+    ) -> None:
         self.paths = paths
         self.standard_1g_source = standard_1g_source
         self.runner = runner or Runner()
+        self.scales = tuple(scales)
+        self.cases = tuple(cases)
+        # When set, the standard rows pin the reference expansion height so
+        # every scale is measured with one first-dimension geometry.
+        self.standard_reference_expansion_height = standard_reference_expansion_height
         self.status_path = paths.output / "status.json"
         self.rows: list[dict[str, Any]] = []
 
@@ -98,6 +114,9 @@ class CoreMatrix:
                 "output": str(self.paths.output),
                 "default_binary": str(self.paths.default_bin),
                 "ep3_binary": str(self.paths.ep3_bin),
+                "scales": list(self.scales),
+                "cases": list(self.cases),
+                "standard_reference_expansion_height": self.standard_reference_expansion_height,
                 "rows": self.rows,
             },
         )
@@ -271,6 +290,11 @@ class CoreMatrix:
     def standard(self, scale: str) -> bool:
         folder = self.paths.output / scale
         leaf_count = SCALES[scale]
+        geometry: list[str] = []
+        row_extra: dict[str, Any] = {}
+        if self.standard_reference_expansion_height is not None:
+            geometry = ["--reference-expansion-height", str(self.standard_reference_expansion_height)]
+            row_extra["reference_expansion_height"] = self.standard_reference_expansion_height
         return self.measured_call(
             scale=scale,
             case="standard",
@@ -288,6 +312,7 @@ class CoreMatrix:
                 str(WARMUPS),
                 "--trial-seed",
                 str(TRIAL_SEED),
+                *geometry,
                 "--benchmark-json",
                 str(folder / "standard.json"),
             ],
@@ -295,6 +320,7 @@ class CoreMatrix:
             process_path=folder / "standard-process.json",
             log_path=folder / "standard.log",
             trials=STANDARD_TRIALS,
+            row_extra=row_extra or None,
         )
 
     def layerwise_profile(self, scale: str) -> bool:
@@ -542,26 +568,32 @@ class CoreMatrix:
         self.paths.output.mkdir(parents=True, exist_ok=True)
         self.paths.metadata.mkdir(parents=True, exist_ok=True)
         self.save_status()
-        for scale in SCALE_ORDER:
-            if scale == "1gb":
-                self.reuse_standard_1gb()
-            else:
-                self.standard(scale)
-            if self.layerwise_profile(scale):
-                self.layerwise_tuned(scale)
-            else:
-                self.append_row(scale, "layerwise_tuned", "skipped", reason="layerwise profile failed")
-            pilots_ok = True
-            for height in cuckoo_heights(scale):
-                pilots_ok = self.cuckoo_pilot(scale, height) and pilots_ok
-            if pilots_ok:
-                chosen = self.select_cuckoo(scale)
-                if chosen is not None:
-                    self.cuckoo_tuned(scale, chosen)
-            else:
-                self.append_row(scale, "tuning/cuckoo/selection", "skipped", reason="one or more pilots failed")
-                self.append_row(scale, "cuckoo_tuned", "skipped", reason="cuckoo selection unavailable")
-            self.flat(scale)
+        for scale in self.scales:
+            if "standard" in self.cases:
+                # A pinned reference geometry must be measured, not copied from
+                # a reference run made under the default rule.
+                if scale == "1gb" and self.standard_reference_expansion_height is None:
+                    self.reuse_standard_1gb()
+                else:
+                    self.standard(scale)
+            if "layerwise" in self.cases:
+                if self.layerwise_profile(scale):
+                    self.layerwise_tuned(scale)
+                else:
+                    self.append_row(scale, "layerwise_tuned", "skipped", reason="layerwise profile failed")
+            if "cuckoo" in self.cases:
+                pilots_ok = True
+                for height in cuckoo_heights(scale):
+                    pilots_ok = self.cuckoo_pilot(scale, height) and pilots_ok
+                if pilots_ok:
+                    chosen = self.select_cuckoo(scale)
+                    if chosen is not None:
+                        self.cuckoo_tuned(scale, chosen)
+                else:
+                    self.append_row(scale, "tuning/cuckoo/selection", "skipped", reason="one or more pilots failed")
+                    self.append_row(scale, "cuckoo_tuned", "skipped", reason="cuckoo selection unavailable")
+            if "flat" in self.cases:
+                self.flat(scale)
         failed = [row for row in self.rows if row["status"] == "failed"]
         self.save_status("failed" if failed else "complete")
         return 1 if failed else 0
@@ -589,13 +621,27 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--root", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path)
     parser.add_argument("--standard-1gb-source", type=Path)
+    parser.add_argument("--scales", nargs="+", choices=SCALE_ORDER, default=list(SCALE_ORDER))
+    parser.add_argument("--cases", nargs="+", choices=CASES, default=list(CASES))
+    parser.add_argument(
+        "--standard-reference-expansion-height",
+        type=int,
+        choices=range(1, 11),
+        help="pin the standard case's reference expansion height instead of the default rule",
+    )
     return parser.parse_args(argv)
 
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     paths = make_paths(args.root.resolve(), args.output_dir.resolve() if args.output_dir else None)
-    matrix = CoreMatrix(paths, standard_1g_source=args.standard_1gb_source.resolve() if args.standard_1gb_source else None)
+    matrix = CoreMatrix(
+        paths,
+        standard_1g_source=args.standard_1gb_source.resolve() if args.standard_1gb_source else None,
+        scales=tuple(scale for scale in SCALE_ORDER if scale in args.scales),
+        cases=tuple(case for case in CASES if case in args.cases),
+        standard_reference_expansion_height=args.standard_reference_expansion_height,
+    )
     return matrix.run()
 
 

@@ -15,7 +15,7 @@ from typing import Any, Callable
 from path_baselines.workload import trial_leaves
 
 
-SUPPORTED_HEIGHTS = {22: "256mb", 23: "512mb", 24: "1gb", 26: "4gb", 27: "8gb"}
+SUPPORTED_HEIGHTS = {22: "256mb", 23: "512mb", 24: "1gb", 25: "2gb", 26: "4gb", 27: "8gb"}
 DEFAULT_VBPIR_DIMS = (64, 128, 256)
 H27_VBPIR_DIMS = (128, 256)
 SEALPIR_DIMS = (1, 2)

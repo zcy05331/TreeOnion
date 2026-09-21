@@ -149,8 +149,8 @@ def main() -> int:
     args = parse_args()
     if args.trials <= 0:
         raise SystemExit("--trials must be greater than zero")
-    if args.height not in (8, 22, 23, 24, 26):
-        raise SystemExit("supported heights are 8, 22, 23, 24, and 26")
+    if args.height not in (8, 22, 23, 24, 25, 26):
+        raise SystemExit("supported heights are 8, 22, 23, 24, 25, and 26")
     if args.dry_run:
         text = json.dumps(dry_run(args), indent=2) + "\n"
         if args.output == "-":

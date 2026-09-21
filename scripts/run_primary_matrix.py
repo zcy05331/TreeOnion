@@ -88,7 +88,7 @@ class PrimaryMatrix:
         if self.progress.exists():
             raise RuntimeError("primary queue already has progress; preserve it and inspect before retrying")
         self.update()
-        scales = (("256mib", 22), ("512mib", 23), ("1gib", 24), ("4gib", 26))
+        scales = (("256mib", 22), ("512mib", 23), ("1gib", 24), ("2gib", 25), ("4gib", 26))
         for scale, height in scales:
             pilots = [self.run_case(scale, height, "pilots", g, n0, "interleaved", 8)
                       for g, n0 in candidate_shapes()]

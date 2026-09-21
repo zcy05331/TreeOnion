@@ -229,13 +229,13 @@ class RunnerTests(unittest.TestCase):
             stderr = io.StringIO()
 
             with contextlib.redirect_stderr(stderr):
-                code = tuning.main(["--run-root", str(run_root), "--heights", "25"], runner=make_fake_run(calls))
+                code = tuning.main(["--run-root", str(run_root), "--heights", "21"], runner=make_fake_run(calls))
 
             self.assertEqual(code, 1)
             # By output stem, not by the raw call tuples: a regression here would otherwise
             # print a multi-kilobyte diff of commands and environments instead of the names.
             self.assertEqual([path.stem for _, _, path, _ in calls], [])
-            self.assertIn("unsupported TreePIR height: 25", stderr.getvalue())
+            self.assertIn("unsupported TreePIR height: 21", stderr.getvalue())
             self.assertFalse((run_root / "outputs" / "treepir-backend-tuning").exists())
 
 

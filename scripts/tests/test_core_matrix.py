@@ -126,14 +126,20 @@ class CoreMatrixTests(unittest.TestCase):
         root, result = self.run_matrix(runner)
 
         self.assertEqual(result, 0)
-        self.assertEqual(runner.waits, 29)
+        self.assertEqual(runner.waits, 38)
         status = json.loads((root / "outputs" / "core-matrix" / "status.json").read_text())
         self.assertEqual(status["state"], "complete")
         labels = [(row["scale"], row["case"], row["status"]) for row in status["rows"]]
         self.assertIn(("256mb", "standard", "complete"), labels)
         self.assertIn(("512mb", "standard", "complete"), labels)
         self.assertIn(("1gb", "standard_reused", "complete"), labels)
+        self.assertIn(("2gb", "standard", "complete"), labels)
         self.assertIn(("4gb", "standard", "complete"), labels)
+        two_gb = [row for row in status["rows"] if row["scale"] == "2gb"]
+        self.assertTrue(all(row["status"] == "complete" for row in two_gb))
+        self.assertEqual({row["case"] for row in two_gb if row["case"].startswith("tuning/cuckoo/h")},
+                         {"tuning/cuckoo/h7", "tuning/cuckoo/h8", "tuning/cuckoo/h9", "tuning/cuckoo/h10"})
+        self.assertTrue(all("--reference-expansion-height" not in command for command in runner.commands))
         self.assertNotIn("generic", {row["case"] for row in status["rows"]})
         self.assertNotIn("tree_g32", {row["case"] for row in status["rows"]})
         self.assertFalse(any("tree_superrecord_bench" in command for command in runner.commands for command in command))
@@ -204,6 +210,48 @@ class CoreMatrixTests(unittest.TestCase):
         self.assertEqual(flat["primary_case"], "merkle_flat")
         self.assertEqual(flat["cli_case_selection"], "merkle_paths")
         self.assertIn("merkle_layerwise", flat["cli_case_note"])
+
+    def test_scale_and_case_filters_with_pinned_standard_geometry_measure_instead_of_reusing(self) -> None:
+        runner = FakeRunner()
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        root = pathlib.Path(tmp.name)
+        paths = make_paths(root)
+        source = make_standard_source(root)
+        result = matrix.CoreMatrix(
+            paths,
+            standard_1g_source=source,
+            runner=runner,
+            scales=("256mb", "512mb", "1gb"),
+            cases=("standard",),
+            standard_reference_expansion_height=10,
+        ).run()
+
+        self.assertEqual(result, 0)
+        status = json.loads((root / "outputs/core-matrix/status.json").read_text())
+        self.assertEqual(status["scales"], ["256mb", "512mb", "1gb"])
+        self.assertEqual(status["cases"], ["standard"])
+        self.assertEqual(status["standard_reference_expansion_height"], 10)
+        self.assertEqual([(row["scale"], row["case"]) for row in status["rows"]],
+                         [("256mb", "standard"), ("512mb", "standard"), ("1gb", "standard")])
+        self.assertTrue(all(row["status"] == "complete" and row["reference_expansion_height"] == 10
+                            for row in status["rows"]))
+        children = [command[command.index("--") + 1:] for command in runner.commands
+                    if command[1].endswith("read_process_peak_memory.py")]
+        self.assertEqual(len(children), 3)
+        for child in children:
+            self.assertEqual(child[child.index("--reference-expansion-height") + 1], "10")
+            self.assertEqual(child[child.index("--benchmark-case") + 1], "standard_onionpir")
+        self.assertEqual(runner.waits, 3)
+
+    def test_main_rejects_unknown_scale_and_out_of_range_geometry(self) -> None:
+        with self.assertRaises(SystemExit):
+            matrix.parse_args(["--root", "/tmp/x", "--scales", "3gb"])
+        with self.assertRaises(SystemExit):
+            matrix.parse_args(["--root", "/tmp/x", "--standard-reference-expansion-height", "11"])
+        args = matrix.parse_args(["--root", "/tmp/x", "--scales", "2gb", "--cases", "flat", "standard"])
+        self.assertEqual(args.scales, ["2gb"])
+        self.assertEqual(sorted(args.cases), ["flat", "standard"])
 
     def test_failed_layer_profile_skips_layerwise_formal_but_continues_independent_cases(self) -> None:
         runner = FakeRunner(fail_layer_profile_scales={"1gb"})

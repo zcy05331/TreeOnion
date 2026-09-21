@@ -61,8 +61,11 @@ class ExternalMatrixTests(unittest.TestCase):
                 "256mib:spirit_rc", "256mib:respire",
                 "512mib:spirit_rc", "512mib:respire",
                 "1gib:spirit_rc", "1gib:respire",
+                "2gib:spirit_rc", "2gib:respire",
                 "4gib:spirit_rc", "4gib:respire",
             })
+            two_gib = state["formal"]["2gib:respire"]["command"]
+            self.assertEqual(two_gib[two_gib.index("--height") + 1], "25")
             command = state["formal"]["512mib:spirit_rc"]["command"]
             self.assertEqual(command[command.index("--scheme") + 1], "spirit_rc")
             self.assertEqual(command[command.index("--height") + 1], "23")

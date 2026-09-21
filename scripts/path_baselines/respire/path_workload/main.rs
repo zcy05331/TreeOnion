@@ -34,6 +34,12 @@ fn main() {
             params::FormalH24::params_query_size(),
             params::FormalH24::params_response_info().0,
         ),
+        25 => runner::execute::<params::FormalH25>(
+            &args,
+            params::FORMAL_H25_SHAPE,
+            params::FormalH25::params_query_size(),
+            params::FormalH25::params_response_info().0,
+        ),
         26 => runner::execute::<params::FormalH26>(
             &args,
             params::FORMAL_H26_SHAPE,
@@ -41,7 +47,7 @@ fn main() {
             params::FormalH26::params_response_info().0,
         ),
         _ => Err(
-            "supported heights are 8 for local smoke and 22/23/24/26 for formal Respire path runs"
+            "supported heights are 8 for local smoke and 22/23/24/25/26 for formal Respire path runs"
                 .to_string(),
         ),
     };

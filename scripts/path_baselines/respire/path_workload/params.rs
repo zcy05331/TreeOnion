@@ -55,6 +55,20 @@ pub const FORMAL_H23_SHAPE: RespireShape = RespireShape {
     d3: 64,
 };
 
+const FORMAL_H25_PARAMS: RespireParamsExpanded = {
+    let mut params = FactoryParams::batch_256(49, 8, 9, 8);
+    params.D3 = 64;
+    params.expand().expand()
+};
+type FormalH25Base = respire!(FORMAL_H25_PARAMS);
+pub type FormalH25 = CuckooRespireImpl<32, 49, { 1usize << 26 }, FormalH25Base>;
+pub const FORMAL_H25_SHAPE: RespireShape = RespireShape {
+    label: "formal_h25_2gib_batch_256",
+    nu1: 9,
+    nu2: 8,
+    d3: 64,
+};
+
 const FORMAL_H26_PARAMS: RespireParamsExpanded = {
     let mut params = FactoryParams::batch_256(49, 8, 9, 9);
     params.D3 = 64;
