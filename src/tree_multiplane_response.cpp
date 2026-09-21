@@ -114,6 +114,8 @@ Response answer(const Database &db, ExpandedTreeQuery &query, PirServer &server,
   }
   TIME_END(TREE_PYRAMID_TIME);
 
+  // 一次应答共用一份矩阵核输出缓冲，跨层、跨 plane 复用。
+  ScanScratch scan_scratch;
   std::vector<RlweCt> merge_inputs;
   size_t merge_chunk = 0;
   const auto flush_merge = [&] {
@@ -134,7 +136,7 @@ Response answer(const Database &db, ExpandedTreeQuery &query, PirServer &server,
           use_m32 ? select_level_m32(
                         plane_db.m32[level], plan, pyramid_m32,
                         std::span<GSWCt>(query.beta_selectors), server,
-                        params.tree, scheme)
+                        params.tree, scheme, scan_scratch)
                   : select_level_ntt(
                         plane_db.ntt[level], plan, pyramid_ntt,
                         std::span<GSWCt>(query.beta_selectors), server,

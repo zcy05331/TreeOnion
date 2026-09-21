@@ -226,3 +226,16 @@ RlweCt select_level_m32(const TreeLevelDatabaseM32 &db, const LevelPlan &plan,
                         const AlphaPyramidM32 &pyramid_m32,
                         std::span<GSWCt> beta_selectors, PirServer &mux,
                         const TreePirParams &tree, const PirParams &scheme);
+
+// 矩阵核两个 CRT limb 的输出缓冲。每层每个 plane 都重新分配会让顶层 16 MB 的
+// 缓冲在每次查询里反复经历 mmap 与首次触页，而且这些缺页落在 scan_core 的
+// 计时段内；应答路径为一次查询保留一份，按最大层的 N·rows·2 只增不减地复用。
+// level_mat_mat_32 会写满每一个元素，所以复用不需要清零。
+struct ScanScratch {
+  std::vector<uint64_t> lo, hi;
+};
+RlweCt select_level_m32(const TreeLevelDatabaseM32 &db, const LevelPlan &plan,
+                        const AlphaPyramidM32 &pyramid_m32,
+                        std::span<GSWCt> beta_selectors, PirServer &mux,
+                        const TreePirParams &tree, const PirParams &scheme,
+                        ScanScratch &scratch);

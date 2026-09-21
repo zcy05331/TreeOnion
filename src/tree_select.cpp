@@ -405,6 +405,16 @@ RlweCt select_level_m32(const TreeLevelDatabaseM32 &db, const LevelPlan &plan,
                         const AlphaPyramidM32 &pyramid_m32,
                         std::span<GSWCt> beta_selectors, PirServer &mux,
                         const TreePirParams &tree, const PirParams &scheme) {
+  ScanScratch scratch;
+  return select_level_m32(db, plan, pyramid_m32, beta_selectors, mux, tree,
+                          scheme, scratch);
+}
+
+RlweCt select_level_m32(const TreeLevelDatabaseM32 &db, const LevelPlan &plan,
+                        const AlphaPyramidM32 &pyramid_m32,
+                        std::span<GSWCt> beta_selectors, PirServer &mux,
+                        const TreePirParams &tree, const PirParams &scheme,
+                        ScanScratch &scratch) {
   constexpr size_t N = DBConsts::PolyDegree;
   const CompositeRnsTables &crt = scheme.get_composite_rns();
   // 守卫组：复合配置才有 m32 核；视图与 plan 必须同层；金字塔行号、行宽都
@@ -423,16 +433,18 @@ RlweCt select_level_m32(const TreeLevelDatabaseM32 &db, const LevelPlan &plan,
   // 输出布局与金字塔 B 布局同构：out[(coeff·rows + row)·2 + comp]。
   TIME_START(TREE_SCAN_TIME);
   const size_t out_elems = N * db.rows * 2;
-  // level_mat_mat_32 会写满两个缓冲的每一个元素，因此这里不走 vector 的
-  // 值初始化——那一遍清零随后会被完全覆写。
-  const std::unique_ptr<uint64_t[]> out_lo(new uint64_t[out_elems]);
-  const std::unique_ptr<uint64_t[]> out_hi(new uint64_t[out_elems]);
+  // 输出缓冲只增不减地复用：level_mat_mat_32 会写满每一个元素，所以既不
+  // 清零也不缩小。首次到达某个尺寸时扩容一次，之后的层与查询直接复用。
+  if (scratch.lo.size() < out_elems) scratch.lo.resize(out_elems);
+  if (scratch.hi.size() < out_elems) scratch.hi.resize(out_elems);
+  uint64_t *const out_lo = scratch.lo.data();
+  uint64_t *const out_hi = scratch.hi.data();
   TIME_START(TREE_SCAN_CORE_TIME);
   level_mat_mat_32(db.lo.data(), pyramid_m32.lo[pyramid_row].data(),
-                   out_lo.get(), db.rows, db.cols, N, crt.q1,
+                   out_lo, db.rows, db.cols, N, crt.q1,
                    pyramid_m32.query_layout);
   level_mat_mat_32(db.hi.data(), pyramid_m32.hi[pyramid_row].data(),
-                   out_hi.get(), db.rows, db.cols, N, crt.q2,
+                   out_hi, db.rows, db.cols, N, crt.q2,
                    pyramid_m32.query_layout);
   TIME_END(TREE_SCAN_CORE_TIME);
 
