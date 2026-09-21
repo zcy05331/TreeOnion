@@ -69,6 +69,7 @@ struct CommandLineOptions {
   uint64_t trial_seed = MerkleBenchmarkOptions{}.trial_seed;
   std::string benchmark_json;
   bool run_optional_4gb = false;
+  size_t reference_expansion_height = 0;  // 0 = default rule
   BenchmarkCaseSelection benchmark_case = BenchmarkCaseSelection::all;
   // Layerwise layout planner / sweep flags.
   std::string layout_profile_json;
@@ -122,6 +123,14 @@ CommandLineOptions parse_command_line(int argc, char *argv[]) {
       }
     } else if (std::strcmp(argv[i], "--run-optional-4gb") == 0) {
       cli.run_optional_4gb = true;
+    } else if (std::strcmp(argv[i], "--reference-expansion-height") == 0) {
+      cli.reference_expansion_height = parse_size_argument(
+          "--reference-expansion-height", require_value(argc, argv, i));
+      if (cli.reference_expansion_height == 0 ||
+          cli.reference_expansion_height > 10) {
+        throw std::invalid_argument(
+            "--reference-expansion-height must be in 1..10");
+      }
     } else if (std::strcmp(argv[i], "--layout-profile-json") == 0) {
       cli.layout_profile_json = require_value(argc, argv, i);
     } else if (std::strcmp(argv[i], "--layout-sweep-all") == 0) {
@@ -177,6 +186,7 @@ int run_merkle_benchmarks(const CommandLineOptions &cli) {
   options.measured_trials = cli.num_experiments;
   options.trial_seed = cli.trial_seed;
   options.run_optional_4gb = cli.run_optional_4gb;
+  options.reference_expansion_height = cli.reference_expansion_height;
   options.case_selection = cli.benchmark_case;
   options.layer_planner.total_padding_budget = cli.layer_padding_budget;
   options.layer_planner.allow_profile_fallback =

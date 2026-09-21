@@ -167,6 +167,12 @@ struct BenchmarkWorkload {
   uint64_t node_bytes = 0;
   uint64_t nodes_per_plaintext = 0;
   std::string paper_row;
+  // Reference (flat) database geometry actually used by the standard case
+  // and as the layerwise planner envelope: BFV expansion height, first
+  // dimension size and remaining plaintext rows.
+  uint64_t reference_expansion_height = 0;
+  uint64_t reference_fst_dim_sz = 0;
+  uint64_t reference_other_dim_sz = 0;
   uint64_t warmups = 0;
   uint64_t measured_trials = 0;
   uint64_t trial_seed = 0;
@@ -211,6 +217,8 @@ struct MerkleBenchmarkOptions {
   // Opt-in resource-gated 2^26-leaf (4 GB) workload; it always measures a
   // fixed 4 trials regardless of measured_trials.
   bool run_optional_4gb = false;
+  // See MerkleWorkload::reference_expansion_height; 0 keeps the default rule.
+  size_t reference_expansion_height = 0;
   BenchmarkCaseSelection case_selection = BenchmarkCaseSelection::all;
   // Layerwise layout planner policy (legacy padding-first by default).
   // layer_planner.profile is the primary-tier profile; layer_profiles may

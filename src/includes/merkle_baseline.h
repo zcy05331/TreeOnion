@@ -17,6 +17,11 @@ struct MerkleWorkload {
   size_t leaf_count;
   size_t tree_height;
   size_t node_bytes;
+  // 0 keeps make_benchmark_reference's default rule (expansion height 10 from
+  // 2^24 leaves, the smallest feasible height below). A nonzero value pins
+  // the reference expansion height, so small databases can be measured with
+  // the same first-dimension geometry as the 1 GiB row.
+  size_t reference_expansion_height = 0;
 };
 
 // Minimal per-level database shape. params changes layout only and remains

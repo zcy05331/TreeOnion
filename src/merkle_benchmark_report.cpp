@@ -382,7 +382,12 @@ std::string benchmark_report_json(const BenchmarkReport &report) {
       << workload.nodes_per_plaintext
       << ",\n    \"paper_row\": ";
   write_string(out, workload.paper_row);
-  out << ",\n    \"warmups\": " << workload.warmups
+  out << ",\n    \"reference_expansion_height\": "
+      << workload.reference_expansion_height
+      << ",\n    \"reference_fst_dim_sz\": " << workload.reference_fst_dim_sz
+      << ",\n    \"reference_other_dim_sz\": "
+      << workload.reference_other_dim_sz
+      << ",\n    \"warmups\": " << workload.warmups
       << ",\n    \"measured_trials\": " << workload.measured_trials
       << ",\n    \"trial_seed\": " << workload.trial_seed
       << ",\n    \"warmup_leaf_indices\": ";

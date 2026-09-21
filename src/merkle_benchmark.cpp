@@ -66,6 +66,10 @@ PirParams make_benchmark_reference(const MerkleWorkload &workload) {
   }
 
   const size_t target_num_pt = flat_target_num_pt(workload);
+  if (workload.reference_expansion_height != 0) {
+    return scheme.with_layout(
+        {target_num_pt, workload.reference_expansion_height, true});
+  }
   if (workload.leaf_count >= (size_t{1} << 24)) {
     return scheme.with_layout({target_num_pt, 10, true});
   }
@@ -293,8 +297,8 @@ BenchmarkReport run_merkle_benchmark_suite(
     throw std::invalid_argument(
         "Primary Merkle benchmark is capped at 2^27 leaves");
   }
-  const MerkleWorkload workload =
-      make_benchmark_workload(options.leaf_count);
+  MerkleWorkload workload = make_benchmark_workload(options.leaf_count);
+  workload.reference_expansion_height = options.reference_expansion_height;
   if (workload.leaf_count > (size_t{1} << 24)) {
     const uint64_t estimated =
         estimate_merkle_benchmark_peak_bytes(workload.leaf_count);
@@ -343,6 +347,9 @@ BenchmarkReport run_merkle_benchmark_suite(
   report.workload.node_bytes = workload.node_bytes;
   report.workload.nodes_per_plaintext = 96;
   report.workload.paper_row = paper_row_for(workload);
+  report.workload.reference_expansion_height = reference.get_expan_height();
+  report.workload.reference_fst_dim_sz = reference.get_fst_dim_sz();
+  report.workload.reference_other_dim_sz = reference.get_other_dim_sz();
   report.workload.warmups = options.warmups;
   report.workload.measured_trials = options.measured_trials;
   report.workload.trial_seed = options.trial_seed;
