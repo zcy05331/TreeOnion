@@ -63,7 +63,17 @@ for root in (OLD,NEW):
     for r in s["summary_rows"]:
         sc,mode=r["scale_mode"].split(":"); i=[x[1] for x in sizes].index(sc)
         name={"spirit_rc":"SPIRIT+RC","respire":"Respire"}[mode]
-        put(name,i,r["server_ms"],logical(sizes[i][2]),r["query_bytes"],r["response_bytes"],None,"")
+        q,keys=r["query_bytes"],None
+        if mode=="spirit_rc":
+            # The adapter bills reusable key material to every query; split it out.
+            det=load(Path(r["raw"].replace("/users/zcy05331/tree-h1-final-20260920T2105Z",str(OLD)).replace("/users/zcy05331/tree-h1-addendum-20260921T2057Z",str(NEW))))
+            if det:
+                t=det["samples"][0]["details"]
+                keys=t["query_galois_key_bytes"]+t["query_rc_galois_key_bytes"]
+                q=t["query_vector_bytes"]+t["query_packed_secret_bytes"]+t["query_rc_selector_bytes"]
+        elif mode=="respire":
+            keys=(11*24+2*4+8*2)*14336  # crate params_public_param_size dominant term
+        put(name,i,r["server_ms"],logical(sizes[i][2]),q,r["response_bytes"],keys,"")
 
 order=["Ours h1 g8/P3","Standard OnionPIR (single block)","Layerwise tuned","Layerwise + response merging (64-slot strided)","SPIRIT+RC","Cuckoo batch tuned","TreePIR","Flat","Respire"]
 hdr="| 256 MiB | 512 MiB | 1 GiB | 2 GiB | 4 GiB |"
@@ -77,18 +87,78 @@ lines.append("## Throughput (MB/s = logical bytes / mean server time per complet
 lines.append("| Scheme "+hdr); lines.append("|---|---:|---:|---:|---:|---:|")
 for k in order:
     v=T.get(k,[None]*5); lines.append(f"| {k} | "+" | ".join(cell(x,'tp',lambda t: f'{t:.0f}') for x in v)+" |")
+# marginal throughput between adjacent sizes: separates fixed cost from scan efficiency
+lines.append("\n## Marginal throughput (MB/s between adjacent sizes, and the implied ceiling)\n")
+lines.append("| Scheme | 256-512 MiB | 512 MiB-1 GiB | 1-2 GiB | 2-4 GiB | ceiling |"); lines.append("|---|---:|---:|---:|---:|---:|")
+GiB=2**30; szs=[0.25,0.5,1.0,2.0,4.0]
+for k in order:
+    v=T.get(k,[None]*5); cells=[]; last=None
+    for i in range(4):
+        a,b=v[i],v[i+1]
+        if not a or not b: cells.append("—"); continue
+        t=(szs[i+1]-szs[i])*GiB/(b["ms"]-a["ms"])/1e3; cells.append(f"{t:.0f}"); last=t
+    lines.append(f"| {k} | "+" | ".join(cells)+f" | {f'{last:.0f}' if last else '—'} |")
+lines.append("\nA scheme's own curve is flat in this table; a jump means the row changed backend (TreePIR switches from vbpir to sealpir_d2 at 4 GiB). SPIRIT+RC has 3.2 times our marginal throughput and about 5.7 times our fixed cost, which is why it crosses over near 1.4 GiB.\n")
+
 lines.append("\n## Server time per path (ms)\n")
 lines.append("| Scheme "+hdr); lines.append("|---|---:|---:|---:|---:|---:|")
 for k in order:
     v=T.get(k,[None]*5); lines.append(f"| {k} | "+" | ".join(cell(x,'ms',lambda t: f'{t:.1f}') for x in v)+" |")
-lines.append("\n## Communication per path\n")
-lines.append("| Scheme | | 256 MiB | 512 MiB | 1 GiB | 2 GiB | 4 GiB |"); lines.append("|---|---|---:|---:|---:|---:|---:|")
+lines.append("\n## Per-stage throughput at 1 GiB (MB/s = logical bytes / stage time)\n")
+lines.append("| Stage | Ours | Standard | Layerwise | Cuckoo | Respire |"); lines.append("|---|---:|---:|---:|---:|---:|")
+for row in (('query expansion',14434,13071,2845,676,103),('first dimension',1460,1669,1474,454,181),('RGSW fold / other dimensions',19544,12074,7574,2064,121),('whole path',1120,1317,859,240,42)):
+    lines.append("| "+row[0]+" | "+" | ".join(str(x) for x in row[1:])+" |")
+lines.append("\nOurs and Standard are capped by the first dimension alone; every other stage runs above 12 GB/s. Cuckoo pays expansion and first dimension once per bucket (37 buckets at 1 GiB). Respire runs every stage below 200 MB/s, with expansion and fold slower than its own first dimension, because each of its 49 buckets pays a full expansion and a full 256-to-1 fold.\n")
+
+lines.append("\n## What response merging costs Layerwise\n")
+lines.append("| Size | Layerwise MB/s | with merging MB/s | ratio | scanned bytes ratio | response |"); lines.append("|---|---:|---:|---:|---:|---:|")
+for c,(lab,) in zip(("256mb","512mb","1gb","2gb","4gb"),[(x,) for x in ("256 MiB","512 MiB","1 GiB","2 GiB","4 GiB")]):
+    a=T.get("Layerwise tuned"); b=T.get("Layerwise + response merging (64-slot strided)")
+    i=["256mb","512mb","1gb","2gb","4gb"].index(c)
+    if a[i] and b[i]:
+        lines.append(f"| {lab} | {a[i]['tp']:.0f} | {b[i]['tp']:.0f} | {b[i]['tp']/a[i]['tp']:.2f} | 1.49 | {b[i]['r']/1024:.1f} KB |")
+lines.append("\nThe throughput ratio tracks the inverse of the scanned-byte ratio, so the merge itself is nearly free and the whole cost is the strided layout holding 64 instead of 96 nodes per plaintext. Marginal throughput falls from 1421 to 924 MB/s.\n")
+
+lines.append("\n## Communication\n")
+lines.append("Split into what a client uploads once per session (offline) and what one path retrieval costs (online). SPIRIT+RC's adapter charges its reusable key material to every query; it is separated here using the adapter's own per-sample breakdown.\n")
+lines.append("### Offline, once per session\n")
+lines.append("| Scheme | 256 MiB | 512 MiB | 1 GiB | 2 GiB | 4 GiB | Kind |"); lines.append("|---|---:|---:|---:|---:|---:|---|")
+offline_kind = {
+  "Ours h1 g8/P3": "BV Galois + RGSW(s) keys, seeded model",
+  "Standard OnionPIR (single block)": "BV Galois + RGSW(s) keys, seeded model",
+  "Layerwise tuned": "same key bundle shared by every level",
+  "Layerwise + response merging (64-slot strided)": "same key bundle, also covers the merge automorphisms",
+  "Cuckoo batch tuned": "same key bundle shared by every bucket",
+  "Flat": "same key bundle",
+  "TreePIR": "GaloisKeys + RelinKeys, actual uncompressed bytes",
+  "SPIRIT+RC": "SPIRIT Galois + RC selector/merge keys, actual bytes (see notes)",
+  "Respire": "public parameters, crate formula (see notes)",
+}
 for k in order:
     v=T.get(k,[None]*5)
-    for label,key in (("query","q"),("response","r"),("helper keys","k")):
-        if k in ("SPIRIT+RC","Respire") and key=="k": continue
-        lines.append(f"| {k if key=='q' else ''} | {label} | "+" | ".join(cell(x,key,kb) for x in v)+" |")
-lines.append("\nQuery bytes: Ours/Standard/Layerwise/Flat/Cuckoo are seed-compressed protocol models (one 14.5 KB packed BFV query per PIR call); SPIRIT+RC and TreePIR are actual serialized bytes; Respire is its parameter model. Response bytes are actual serialized bytes everywhere. Helper keys are uploaded once per session; SPIRIT's adapter has no key serializer and Respire reports none.\n")
+    lines.append(f"| {k} | "+" | ".join(cell(x,'k',kb) for x in v)+f" | {offline_kind.get(k,'')} |")
+lines.append("\n### Online query, per path\n")
+lines.append("| Scheme "+hdr); lines.append("|---|---:|---:|---:|---:|---:|")
+for k in order:
+    v=T.get(k,[None]*5); lines.append(f"| {k} | "+" | ".join(cell(x,'q',kb) for x in v)+" |")
+lines.append("\n### Online response, per path\n")
+lines.append("| Scheme "+hdr); lines.append("|---|---:|---:|---:|---:|---:|")
+for k in order:
+    v=T.get(k,[None]*5); lines.append(f"| {k} | "+" | ".join(cell(x,'r',kb) for x in v)+" |")
+lines.append("\n### Online total, per path\n")
+lines.append("| Scheme "+hdr); lines.append("|---|---:|---:|---:|---:|---:|")
+for k in order:
+    v=T.get(k,[None]*5)
+    lines.append(f"| {k} | "+" | ".join("—" if x is None or x.get('q') is None or x.get('r') is None else kb(x['q']+x['r']) for x in v)+" |")
+lines.append("""
+Measurement kinds. Query bytes for Ours, Standard, Layerwise, Flat and Cuckoo are the seed-compressed protocol model, one 14.5 KB packed BFV query per PIR call; those schemes upload only keys offline and the server keeps its own preprocessed database. TreePIR and SPIRIT+RC report actual serialized bytes. Respire reports its parameter model. Response bytes are actual serialized bytes for every scheme.
+
+SPIRIT+RC. The adapter counts the RC selector expansion keys, the merge Galois keys and SPIRIT's own Galois keys inside every query. Its per-sample breakdown separates them: the key material is 3.30 MB at every size (SPIRIT Galois 657 KB, RC selector keys 2.38 MB, RC merge Galois 401 KB) and is listed as offline above, leaving the LWE query vector plus the packed secret and the RC selector ciphertext as the online query. Two further offline terms are not in the table. The client hint that its SimplePIR-style first dimension needs has no serializer in the adapter, so it is unmeasured. Its public metadata, the PBC routing tables and bucket layouts, is 0.94, 1.88, 3.75 and 7.50 GiB at the four sizes, reported by the adapter as an in-memory model rather than a wire requirement because it is reconstructible from public seeds and the layout.
+
+Respire. The adapter hardcodes zero offline bytes, but the crate's own `params_public_param_size` charges automorphism, RLWE-to-GSW and scalar-to-vector public parameters: (11 x 24 + 2 x 4 + 8 x 2) elements x 14336 B = 3.94 MiB, plus a compression term of a few hundred KB, independent of database size. That figure is derived from the formula, not measured here, and the crate notes its randomness compression is not actually implemented.
+
+TreePIR. Its 4 GiB row uses the SealPIR backend because every VBPIR candidate ran out of memory, which is why its keys jump from 37.57 MB to 846.77 MB and its query and response jump with them.
+""")
 lines.append("## Provenance\n")
 lines.append("Three run roots on the same host, same source lineage, one leaf schedule per size (seed 7):\n")
 lines.append("- `tree-h1-final-20260920T2105Z` (commit eac95e8): TreePIR and the external baselines at 256 MiB, 512 MiB, 1 GiB, 4 GiB.")
