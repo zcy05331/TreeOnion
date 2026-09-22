@@ -135,6 +135,7 @@ run_python_tests() {
     scripts.tests.test_treepir_backend_tuning
     scripts.tests.test_treepir_matrix
     scripts.tests.test_spiral_pbc_matrix
+    scripts.tests.test_kspir_pbc_matrix
     scripts.tests.test_wait_for_idle
   )
   ( cd "$ROOT" && ONIONPIR_BENCH_BIN="$ABS_BIN" \
