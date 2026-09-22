@@ -66,6 +66,31 @@ RlwePt make_layer_merkle_plaintext(size_t level, size_t plaintext_index,
                                    const MerkleWorkload &workload,
                                    const PirParams &params);
 
+// Strided level layout for the merged-response layerwise variant. A plaintext
+// holds rho = 64 node slots; slot j keeps digit i of its node at coefficient
+// i * 64 + j (22 twelve-bit digits per 32-byte node, 10 zero digits of slack),
+// so multiplying the level result by X^{-j} moves the wanted node onto the
+// stride grid {i * 64} and the MLWE residue merge can pack up to 64 level
+// results into one response ciphertext. The slot of a level-local node index
+// is its top six bits; for every served level those are the same six leading
+// leaf bits, so one gamma selector set rotates every level. The price is
+// 64 instead of 96 nodes per plaintext (two thirds coefficient utilization).
+constexpr size_t kStridedNodesPerPlaintext = 64;
+constexpr size_t kStridedLevelSlotBits = 6;   // log2(64)
+constexpr size_t kStridedDigitsPerNode = 22;  // ceil(256 / 12)
+RlwePt encode_merkle_nodes_strided(std::span<const MerkleNode> nodes,
+                                   const PirParams &params);
+MerkleNode decode_merkle_node_strided(const RlwePt &pt, size_t slot,
+                                      const PirParams &params);
+// level <= 6 has a single plaintext (shift 0); above that the level's 2^level
+// nodes split into 2^(level - 6) plaintexts of 64 slots.
+size_t strided_level_shift(size_t level);
+size_t strided_level_plaintext(size_t level, size_t local);
+size_t strided_level_slot(size_t level, size_t local);
+RlwePt make_layer_merkle_plaintext_strided(size_t level, size_t plaintext_index,
+                                           const MerkleWorkload &workload,
+                                           const PirParams &params);
+
 // Minimize padded plaintext count per level while retaining the reference
 // scheme parameters and maximum remaining-dimension count.
 TargetPlaintextLayout select_target_plaintext_layout(

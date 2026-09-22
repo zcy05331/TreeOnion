@@ -172,6 +172,32 @@ CommunicationStats communication_stats(
   return result;
 }
 
+CommunicationStats communication_stats_merged(const PirParams &reference,
+                                              size_t query_count,
+                                              size_t merged_response_bytes,
+                                              uint64_t plain_response_bytes) {
+  if (query_count == 0) {
+    throw std::invalid_argument("query count must be positive");
+  }
+  CommunicationStats result;
+  result.pir_call_count = query_count;
+  result.modeled_query_bytes_per_pir = reference.get_BFV_size(true);
+  result.online_query_bytes_modeled = checked_multiply(
+      result.pir_call_count, result.modeled_query_bytes_per_pir,
+      "modeled online query bytes");
+  result.online_response_bytes_actual = checked_add(
+      merged_response_bytes, plain_response_bytes,
+      "merged online response bytes");
+  result.online_total_bytes_mixed = checked_add(
+      result.online_query_bytes_modeled, result.online_response_bytes_actual,
+      "mixed online bytes");
+  result.helper_key_bytes_modeled = modeled_helper_key_bytes(reference);
+  result.first_session_total_bytes_mixed = checked_add(
+      result.helper_key_bytes_modeled, result.online_total_bytes_mixed,
+      "mixed first-session bytes");
+  return result;
+}
+
 void validate_matching_path_communication(const CommunicationStats &flat,
                                           const CommunicationStats &layerwise) {
   if (flat.pir_call_count != layerwise.pir_call_count ||

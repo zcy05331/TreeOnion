@@ -4,10 +4,13 @@
 #include "layer_layout_planner.h"
 #include "logging.h"
 #include "server.h"
+#include "tree_packing.h"
+#include "tree_rotate.h"
 #include "utils.h"
 
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <memory>
 #include <optional>
 #include <sstream>
@@ -206,6 +209,8 @@ std::map<std::string, double> pipeline_profile_average(
           {"first_dim_core", ms(total.first_dim_core)},
           {"first_dim_finalize", ms(total.first_dim_finalize)},
           {"other_dim", ms(total.other_dim)},
+          {"response_rotate", ms(total.response_rotate)},
+          {"response_merge", ms(total.response_merge)},
           {"mod_switch", ms(total.mod_switch)}};
 }
 
@@ -638,6 +643,363 @@ BenchmarkCaseExecution run_merkle_layerwise_case(
   }
   result.communication = communication_stats(
       reference, workload.tree_height - direct_levels, response_shape,
+      direct_plain_bytes);
+  finalize_case_statistics(result);
+  return execution;
+}
+
+// ============================================================================
+// Layerwise with the tree scheme's response merging
+// ============================================================================
+//
+// Same independent per-level OnionPIR calls as merkle_layerwise, but every
+// level is stored in strided 64-slot plaintexts (merkle_baseline.h) so the
+// level result can be treated like one tree-scheme item: the server rotates
+// it privately by X^{-gamma} with a gamma selector set the client sends once
+// per path (gamma = the six leading leaf bits, the slot of every served level),
+// and merges all level results into one response ciphertext with
+// tree_packing::mlwe_merge_residues, which also projects away the 63 other
+// slots. One modulus switch and one serialized ciphertext follow. Levels that
+// fit one plaintext are still returned in the clear.
+
+BenchmarkCaseExecution run_merkle_layerwise_merged_case(
+    const MerkleWorkload &workload, const PirParams &reference,
+    const BenchmarkTrialPlan &trials) {
+  return run_merkle_layerwise_merged_case(workload, reference, trials,
+                                          LayerPlannerConfig{});
+}
+
+BenchmarkCaseExecution run_merkle_layerwise_merged_case(
+    const MerkleWorkload &workload, const PirParams &reference,
+    const BenchmarkTrialPlan &trials, const LayerPlannerConfig &planner) {
+  validate_trial_plan(workload, reference, trials);
+  constexpr size_t kRho = kStridedNodesPerPlaintext;
+  constexpr size_t kGammaBits = kStridedLevelSlotBits;
+  constexpr size_t N = DBConsts::PolyDegree;
+  if (workload.tree_height <= kGammaBits) {
+    throw std::invalid_argument(
+        "Merged layerwise needs a tree taller than the 64-node slot height");
+  }
+  // Expansion view for the shared gamma selectors: one first-dimension slot
+  // plus kGammaBits gadget row groups, in the smallest capacity that fits.
+  size_t gamma_height = 0;
+  while ((size_t{1} << gamma_height) < 1 + kGammaBits * reference.get_l()) {
+    ++gamma_height;
+  }
+  const PirParams gamma_params =
+      reference.with_query_shape({1, kGammaBits, gamma_height});
+  // The BV Galois keys must cover the gamma expansion and the merge
+  // automorphisms (N >> v) + 1, v < kGammaBits, even when a small reference
+  // expands lower than that; production references (h = 10) already do.
+  const size_t key_height = std::max(
+      {reference.get_expan_height(), gamma_height, kGammaBits});
+
+  const auto setup_start = BenchmarkClock::now();
+  bool used_fallback = false;
+  std::vector<LayerLayout> layouts =
+      plan_layer_layouts(workload.tree_height, kRho, reference, planner,
+                         &used_fallback);
+  PirClient client(reference);
+  SharedPirSessionKeys keys = client.create_session_keys(key_height);
+  for (size_t v = 0; v < kGammaBits; ++v) {
+    if (!keys->bv_galois_keys.contains(static_cast<uint32_t>((N >> v) + 1))) {
+      throw std::runtime_error(
+          "session keys do not cover the merge automorphisms");
+    }
+  }
+  PirServer gamma_server(gamma_params);
+  gamma_server.set_client_session_keys(client.get_client_id(), keys);
+  std::vector<std::unique_ptr<PirServer>> servers;
+  servers.reserve(layouts.size());
+  std::vector<std::vector<uint8_t>> direct_level_bytes(layouts.size());
+  PirServer *response_server = nullptr;
+  for (const LayerLayout &layout : layouts) {
+    if (layout.direct_return) {
+      std::vector<uint8_t> &bytes = direct_level_bytes.at(layout.level - 1);
+      bytes.reserve(layout.node_count * sizeof(MerkleNode));
+      for (size_t local = 0; local < layout.node_count; ++local) {
+        const MerkleNode node = synthetic_merkle_node(layout.level, local);
+        bytes.insert(bytes.end(), node.begin(), node.end());
+      }
+      servers.push_back(nullptr);
+      continue;
+    }
+    auto server = std::make_unique<PirServer>(layout.params);
+    server->set_client_session_keys(client.get_client_id(), keys);
+    PlaintextSource source = [&](size_t index, RlwePt &out) {
+      out = make_layer_merkle_plaintext_strided(layout.level, index, workload,
+                                                layout.params);
+    };
+    server->load_data(layout.target_num_pt, source);
+    if (response_server == nullptr) response_server = server.get();
+    servers.push_back(std::move(server));
+  }
+  if (response_server == nullptr) {
+    throw std::runtime_error("Merged layerwise has no PIR-served level");
+  }
+  const BenchmarkDuration setup_time = elapsed_since(setup_start);
+
+  using ProfileClock = std::chrono::steady_clock;
+  auto run_trial = [&](size_t leaf) {
+    PathTrialOutput trial;
+    trial.path.reserve(workload.tree_height);
+    std::vector<MerkleNode> by_level(workload.tree_height + 1);
+    const size_t client_id = client.get_client_id();
+    const size_t gamma = leaf >> (workload.tree_height - kGammaBits);
+    ProfileClock::time_point mark;
+    const auto lap = [&](std::chrono::nanoseconds PirPipelineProfile::*slot) {
+      const auto now = ProfileClock::now();
+      trial.pipeline.*slot += now - mark;
+      mark = now;
+    };
+
+    // One gamma selector query per path, expanded and completed like the
+    // selector rows of an ordinary packed query.
+    auto start = BenchmarkClock::now();
+    RlweCt gamma_query = client.fresh_zero_ct();
+    std::vector<size_t> gamma_indices{0};
+    for (size_t v = 0; v < kGammaBits; ++v) {
+      gamma_indices.push_back((gamma >> v) & 1U);
+    }
+    client.add_gsw_to_query(gamma_params, gamma_query, gamma_indices);
+    trial.timing.client_query += elapsed_since(start);
+    start = BenchmarkClock::now();
+    mark = ProfileClock::now();
+    TIME_START(EXPAND_TIME);
+    std::vector<RlweCt> gamma_rows =
+        gamma_server.expand_query(client_id, gamma_query);
+    TIME_END(EXPAND_TIME);
+    lap(&PirPipelineProfile::expand);
+    TIME_START(CONVERT_TIME);
+    std::vector<GSWCt> gamma_selectors =
+        gamma_server.complete_selectors(client_id, gamma_rows);
+    TIME_END(CONVERT_TIME);
+    lap(&PirPipelineProfile::convert);
+    trial.timing.server_compute += elapsed_since(start);
+
+    std::vector<RlweCt> items;
+    std::vector<size_t> item_levels;
+    for (size_t level = workload.tree_height; level >= 1; --level) {
+      const LayerLayout &layout = layouts.at(level - 1);
+      const size_t local =
+          merkle_sibling_local(leaf, workload.tree_height, level);
+      if (layout.direct_return) {
+        const std::vector<uint8_t> &level_bytes =
+            direct_level_bytes.at(level - 1);
+        start = BenchmarkClock::now();
+        const std::vector<uint8_t> wire(level_bytes);
+        trial.timing.server_compute += elapsed_since(start);
+        start = BenchmarkClock::now();
+        MerkleNode node;
+        std::copy_n(wire.begin() + local * sizeof(MerkleNode),
+                    sizeof(MerkleNode), node.begin());
+        trial.timing.response_load_decrypt_extract += elapsed_since(start);
+        by_level[level] = node;
+        trial.direct_levels += 1;
+        trial.plain_response_bytes += wire.size();
+      } else {
+        if (strided_level_slot(level, local) != gamma) {
+          throw std::logic_error(
+              "strided slot of a served level differs from the shared gamma");
+        }
+        const size_t plaintext_index = strided_level_plaintext(level, local);
+        start = BenchmarkClock::now();
+        RlweCt query =
+            client.fast_generate_query(layout.params, plaintext_index);
+        trial.timing.client_query += elapsed_since(start);
+
+        PirServer &server = *servers.at(level - 1);
+        start = BenchmarkClock::now();
+        mark = ProfileClock::now();
+        TIME_START(EXPAND_TIME);
+        std::vector<RlweCt> expanded = server.expand_query(client_id, query);
+        TIME_END(EXPAND_TIME);
+        lap(&PirPipelineProfile::expand);
+        TIME_START(CONVERT_TIME);
+        std::vector<GSWCt> selectors =
+            server.complete_selectors(client_id, expanded);
+        TIME_END(CONVERT_TIME);
+        lap(&PirPipelineProfile::convert);
+        TIME_START(FST_DIM_TIME);
+        expanded.resize(layout.params.get_fst_dim_sz());
+        std::vector<RlweCt> candidates =
+            server.evaluate_first_dim(expanded, &trial.pipeline);
+        TIME_END(FST_DIM_TIME);
+        mark = ProfileClock::now();  // first-dim sub-stages recorded inside
+        TIME_START(OTHER_DIM_TIME);
+        RlweCt selected = server.evaluate_other_dim(candidates, selectors);
+        TIME_END(OTHER_DIM_TIME);
+        lap(&PirPipelineProfile::other_dim);
+        // X^{-gamma}: bit v of gamma selects a shift by 2^v.
+        for (size_t v = 0; v < kGammaBits; ++v) {
+          selected = rot_select(selected, gamma_selectors[v], size_t{1} << v,
+                                server, reference);
+        }
+        lap(&PirPipelineProfile::response_rotate);
+        trial.timing.server_compute += elapsed_since(start);
+        items.push_back(std::move(selected));
+        item_levels.push_back(level);
+      }
+      if (level == 1) break;
+    }
+
+    // Merge every served level into one ciphertext, then one modulus switch.
+    start = BenchmarkClock::now();
+    mark = ProfileClock::now();
+    RlweCt merged = tree_packing::mlwe_merge_residues(
+        std::move(items), kRho, keys->bv_galois_keys, reference);
+    lap(&PirPipelineProfile::response_merge);
+    TIME_START(MOD_SWITCH);
+    response_server->switch_response_to_small_q(merged);
+    TIME_END(MOD_SWITCH);
+    lap(&PirPipelineProfile::mod_switch);
+    trial.timing.server_compute += elapsed_since(start);
+
+    std::stringstream wire;
+    start = BenchmarkClock::now();
+    const size_t merged_bytes = response_server->save_resp_to_stream(merged, wire);
+    trial.timing.response_serialize += elapsed_since(start);
+
+    start = BenchmarkClock::now();
+    RlweCt reconstructed = client.load_resp_from_stream(wire);
+    const RlwePt plaintext = client.decrypt_mod_q(reconstructed);
+    for (size_t i = 0; i < item_levels.size(); ++i) {
+      const size_t offset = tree_packing::packed_residue_offset(
+          i, kRho, tree_packing::ResponsePacking::MlweMerge);
+      by_level[item_levels[i]] =
+          decode_merkle_node_strided(plaintext, offset, reference);
+    }
+    trial.timing.response_load_decrypt_extract += elapsed_since(start);
+
+    // Oracle comparison outside every timer, root-first like the other cases.
+    for (size_t level = workload.tree_height; level >= 1; --level) {
+      const size_t local =
+          merkle_sibling_local(leaf, workload.tree_height, level);
+      if (by_level[level] != synthetic_merkle_node(level, local)) {
+        throw std::runtime_error("Merged layerwise Merkle node mismatch");
+      }
+      trial.path.push_back(by_level[level]);
+      if (level == 1) break;
+    }
+    trial.response_bytes = {merged_bytes};
+    return trial;
+  };
+
+  ServerPhaseAccumulator phases;
+  for (size_t leaf : trials.warmup_leaf_indices) {
+    (void)run_trial(leaf);
+    phases.end_trial(false);
+  }
+
+  TrialTiming timing_total;
+  std::vector<size_t> response_shape;
+  BenchmarkCaseExecution execution;
+  PirPipelineProfile pipeline_total;
+  for (size_t leaf : trials.measured_leaf_indices) {
+    PathTrialOutput trial = run_trial(leaf);
+    phases.end_trial(true);
+    pipeline_total += trial.pipeline;
+    add_online_timing(timing_total, trial.timing);
+    execution.result.sample_leaf_indices.push_back(
+        static_cast<uint64_t>(leaf));
+    execution.result.server_compute_samples_ms.push_back(
+        milliseconds(trial.timing.server_compute));
+    execution.result.client_query_samples_ms.push_back(
+        milliseconds(trial.timing.client_query));
+    execution.result.response_serialize_samples_ms.push_back(
+        milliseconds(trial.timing.response_serialize));
+    execution.result.response_load_decrypt_extract_samples_ms.push_back(
+        milliseconds(trial.timing.response_load_decrypt_extract));
+    execution.result.pipeline_profile_samples_ms.push_back(
+        pipeline_profile_sample(leaf, trial.pipeline));
+    if (response_shape.empty()) {
+      response_shape = trial.response_bytes;
+    } else {
+      require_response_shape(response_shape, trial.response_bytes);
+    }
+    execution.measured_paths.push_back(std::move(trial.path));
+  }
+
+  BenchmarkCaseResult &result = execution.result;
+  result.name = "merkle_layerwise_merged";
+  result.correctness_passed = true;
+  result.raw_dataset_bytes = raw_merkle_bytes(workload);
+  size_t direct_levels = 0;
+  uint64_t direct_plain_bytes = 0;
+  for (const LayerLayout &layout : layouts) {
+    if (!layout.direct_return) continue;
+    direct_levels += 1;
+    direct_plain_bytes = checked_add(
+        direct_plain_bytes,
+        checked_multiply(layout.node_count, workload.node_bytes,
+                         "direct-return level bytes"),
+        "direct-return level total");
+  }
+  result.direct_return_levels = direct_levels;
+  result.direct_return_response_bytes = direct_plain_bytes;
+  for (const LayerLayout &layout : layouts) {
+    if (layout.direct_return) {
+      const uint64_t raw = checked_multiply(
+          layout.node_count, workload.node_bytes, "direct level raw bytes");
+      result.paper_plaintext_database_bytes = checked_add(
+          result.paper_plaintext_database_bytes, raw,
+          "layer paper plaintext database total");
+      result.logical_padded_database_bytes = checked_add(
+          result.logical_padded_database_bytes, raw,
+          "layer padded database total");
+      result.physical_preprocessed_storage_bytes = checked_add(
+          result.physical_preprocessed_storage_bytes, raw,
+          "layer physical database total");
+      result.raw_application_scan_bytes = checked_add(
+          result.raw_application_scan_bytes, raw,
+          "layer raw application total");
+      continue;
+    }
+    result.paper_plaintext_database_bytes = checked_add(
+        result.paper_plaintext_database_bytes,
+        checked_multiply(layout.target_num_pt, layout.params.get_pt_size(),
+                         "layer paper plaintext database bytes"),
+        "layer paper plaintext database total");
+    result.logical_padded_database_bytes = checked_add(
+        result.logical_padded_database_bytes,
+        checked_multiply(layout.params.get_num_pt(),
+                         layout.params.get_pt_size(),
+                         "layer padded database bytes"),
+        "layer padded database total");
+    result.physical_preprocessed_storage_bytes = checked_add(
+        result.physical_preprocessed_storage_bytes,
+        physical_database_bytes(layout.params),
+        "layer physical database total");
+    result.raw_application_scan_bytes = checked_add(
+        result.raw_application_scan_bytes,
+        checked_multiply(layout.node_count, workload.node_bytes,
+                         "layer raw application bytes"),
+        "layer raw application total");
+  }
+  result.paper_plaintext_scan_bytes = result.paper_plaintext_database_bytes;
+  result.logical_padded_scan_bytes = result.logical_padded_database_bytes;
+  result.useful_response_bytes = checked_multiply(
+      workload.tree_height, workload.node_bytes,
+      "layer useful response bytes");
+  result.timing = average_online_timing(
+      timing_total, trials.measured_leaf_indices.size());
+  result.timing.setup = setup_time;
+  result.server_phase_ms = phases.averages();
+  result.pipeline_profile_ms = pipeline_profile_average(
+      pipeline_total, trials.measured_leaf_indices.size());
+  result.layer_layout_policy = layer_layout_policy_name(
+      used_fallback ? LayerLayoutPolicy::legacy_padding : planner.policy);
+  for (const LayerLayout &layout : layouts) {
+    LayerLayoutRecord record;
+    record.level = layout.level;
+    record.direct_return = layout.direct_return;
+    record.features = compute_layer_layout_features(layout.params);
+    result.layers.push_back(std::move(record));
+  }
+  // Served levels each cost one packed query, plus the shared gamma query;
+  // the response is one merged ciphertext plus the direct-return bytes.
+  result.communication = communication_stats_merged(
+      reference, workload.tree_height - direct_levels + 1, response_shape.at(0),
       direct_plain_bytes);
   finalize_case_statistics(result);
   return execution;

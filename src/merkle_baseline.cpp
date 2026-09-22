@@ -304,3 +304,96 @@ uint64_t sum_padded_bytes(const std::vector<LayerLayout> &layouts) {
   }
   return total;
 }
+
+// ============================================================================
+// Strided level layout (merged-response layerwise variant)
+// ============================================================================
+
+size_t strided_level_shift(size_t level) {
+  return level > kStridedLevelSlotBits ? level - kStridedLevelSlotBits : 0;
+}
+
+size_t strided_level_plaintext(size_t level, size_t local) {
+  return local & ((size_t{1} << strided_level_shift(level)) - 1);
+}
+
+size_t strided_level_slot(size_t level, size_t local) {
+  return local >> strided_level_shift(level);
+}
+
+RlwePt encode_merkle_nodes_strided(std::span<const MerkleNode> nodes,
+                                   const PirParams &params) {
+  if (nodes.size() > kStridedNodesPerPlaintext) {
+    throw std::invalid_argument(
+        "A strided plaintext holds at most 64 Merkle nodes");
+  }
+  if (params.get_poly_degree() <
+      kStridedDigitsPerNode * kStridedNodesPerPlaintext) {
+    throw std::invalid_argument(
+        "Strided Merkle layout needs 22 x 64 coefficients");
+  }
+  RlwePt result;
+  result.data.assign(params.get_poly_degree(), 0);
+  for (size_t slot = 0; slot < nodes.size(); ++slot) {
+    const MerkleNode &node = nodes[slot];
+    for (size_t digit = 0; digit < kStridedDigitsPerNode; ++digit) {
+      uint64_t value = 0;
+      for (size_t b = 0; b < kBitsPerMerkleCoefficient; ++b) {
+        const size_t bit = digit * kBitsPerMerkleCoefficient + b;
+        if (bit >= 8 * sizeof(MerkleNode)) break;
+        value |= static_cast<uint64_t>((node[bit / 8] >> (bit % 8)) & 1U) << b;
+      }
+      if (value >= params.get_plain_mod()) {
+        throw std::runtime_error("Strided Merkle codec produced an invalid coefficient");
+      }
+      result.data[digit * kStridedNodesPerPlaintext + slot] = value;
+    }
+  }
+  return result;
+}
+
+MerkleNode decode_merkle_node_strided(const RlwePt &pt, size_t slot,
+                                      const PirParams &params) {
+  if (slot >= kStridedNodesPerPlaintext) {
+    throw std::invalid_argument("Strided Merkle slot must be below 64");
+  }
+  if (pt.data.size() != params.get_poly_degree()) {
+    throw std::invalid_argument("Merkle plaintext has the wrong coefficient count");
+  }
+  MerkleNode node{};
+  for (size_t digit = 0; digit < kStridedDigitsPerNode; ++digit) {
+    const uint64_t value = pt.data[digit * kStridedNodesPerPlaintext + slot];
+    if (value >= (uint64_t{1} << kBitsPerMerkleCoefficient)) {
+      throw std::invalid_argument("Strided Merkle digit is not 12-bit");
+    }
+    for (size_t b = 0; b < kBitsPerMerkleCoefficient; ++b) {
+      const size_t bit = digit * kBitsPerMerkleCoefficient + b;
+      if (bit >= 8 * sizeof(MerkleNode)) break;
+      if ((value >> b) & 1U) node[bit / 8] |= static_cast<uint8_t>(1U << (bit % 8));
+    }
+  }
+  return node;
+}
+
+RlwePt make_layer_merkle_plaintext_strided(size_t level, size_t plaintext_index,
+                                           const MerkleWorkload &workload,
+                                           const PirParams &params) {
+  validate_workload(workload);
+  if (level == 0 || level > workload.tree_height) {
+    throw std::invalid_argument("Merkle layer must be in [1, H]");
+  }
+  const size_t level_nodes = size_t{1} << level;
+  const size_t shift = strided_level_shift(level);
+  if (plaintext_index >= (size_t{1} << shift)) {
+    throw std::invalid_argument("Layer Merkle plaintext index is out of range");
+  }
+  // Slot-major: plaintext p holds the nodes whose low bits equal p, one per
+  // slot, so the slot is the node's top bits.
+  const size_t slots = std::min(level_nodes, kStridedNodesPerPlaintext);
+  std::vector<MerkleNode> nodes;
+  nodes.reserve(slots);
+  for (size_t slot = 0; slot < slots; ++slot) {
+    nodes.push_back(synthetic_merkle_node(level, (slot << shift) | plaintext_index));
+  }
+  return encode_merkle_nodes_strided(nodes, params);
+}

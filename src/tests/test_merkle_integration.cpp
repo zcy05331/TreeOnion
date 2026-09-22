@@ -640,3 +640,63 @@ void test_layer_layout_sweep_dominated() {
               << " dominated), " << frontier.measurements.size()
               << " on the default frontier sweep; flags round-trip through JSON");
 }
+
+// Merged-response layerwise: the strided codec round-trips, the case
+// retrieves the same oracle paths as plain layerwise, and the whole path
+// comes back as one ciphertext plus the direct-return levels.
+void test_merkle_layerwise_merged() {
+  require_applicable(paper_config_active(),
+                     paper_config_reason("the Merkle benchmark suite"));
+  const MerkleWorkload small{size_t{1} << 8, 8, 32};
+  const PirParams reference = make_benchmark_reference(small);
+  const BenchmarkTrialPlan trials =
+      make_benchmark_trial_plan(small.leaf_count, 1, 3, 0x6d65726765ULL);
+
+  std::vector<MerkleNode> nodes;
+  for (size_t slot = 0; slot < kStridedNodesPerPlaintext; ++slot) {
+    nodes.push_back(synthetic_merkle_node(8, 3 * slot + 1));
+  }
+  const RlwePt strided = encode_merkle_nodes_strided(nodes, reference);
+  for (size_t slot = 0; slot < nodes.size(); ++slot) {
+    require_test(decode_merkle_node_strided(strided, slot, reference) ==
+                     nodes[slot],
+                 "strided codec round trip");
+  }
+  // Level 8 splits into 4 plaintexts; node 129 = slot 32 (top six bits of
+  // 129 >> 2) of plaintext 1 (low two bits).
+  require_test(strided_level_plaintext(8, 129) == 1 &&
+                   strided_level_slot(8, 129) == 32,
+               "strided level coordinates");
+  require_test(decode_merkle_node_strided(
+                   make_layer_merkle_plaintext_strided(8, 1, small, reference),
+                   32, reference) == synthetic_merkle_node(8, 129),
+               "strided level plaintext places nodes slot-major");
+
+  BenchmarkCaseExecution merged =
+      run_merkle_layerwise_merged_case(small, reference, trials);
+  BenchmarkCaseExecution layerwise =
+      run_merkle_layerwise_case(small, reference, trials);
+  require_test(merged.result.correctness_passed, "merged correctness");
+  require_test(merged.result.name == "merkle_layerwise_merged", "merged name");
+  require_test(merged.measured_paths == layerwise.measured_paths,
+               "merged/layerwise path mismatch");
+  // H=8: levels 1..6 (126 nodes) are direct, levels 7 and 8 are served by two
+  // packed queries plus the shared gamma query; the response is one
+  // ciphertext plus the 4032 direct bytes, versus two ciphertexts for plain
+  // layerwise.
+  require_test(merged.result.direct_return_levels == 6 &&
+                   merged.result.direct_return_response_bytes == 4032,
+               "merged direct-return levels");
+  require_test(merged.result.communication.pir_call_count == 3,
+               "merged query count");
+  const uint64_t one_ct =
+      (layerwise.result.communication.online_response_bytes_actual - 4032) /
+      2;
+  require_test(merged.result.communication.online_response_bytes_actual ==
+                   one_ct + 4032,
+               "merged response is one ciphertext plus direct bytes");
+  require_test(merged.result.pipeline_profile_ms.at("response_merge") > 0.0 &&
+                   merged.result.pipeline_profile_ms.at("response_rotate") > 0.0,
+               "merged pipeline records rotate and merge stages");
+  require_test(merged.result.layers.size() == 8, "merged layer records");
+}
