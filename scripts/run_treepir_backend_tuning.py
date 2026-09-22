@@ -62,11 +62,17 @@ def vbpir_first_dims(height: int) -> tuple[int, ...]:
     return H27_VBPIR_DIMS if height == 27 else DEFAULT_VBPIR_DIMS
 
 
-def candidates_for_height(height: int) -> list[Candidate]:
-    return [
+def candidates_for_height(height: int, allowed: list[str] | None = None) -> list[Candidate]:
+    candidates = [
         *(Candidate(f"vbpir_fd{dim}", "vbpir", {"first_dim": dim}) for dim in vbpir_first_dims(height)),
         *(Candidate(f"sealpir_d{dim}", "sealpir", {"pir_d": dim}) for dim in SEALPIR_DIMS),
     ]
+    if allowed is None:
+        return candidates
+    unknown = sorted(set(allowed) - {candidate.label for candidate in candidates})
+    if unknown:
+        raise TuningError(f"unknown TreePIR candidates for height {height}: {', '.join(unknown)}")
+    return [candidate for candidate in candidates if candidate.label in allowed]
 
 
 def load_json(path: Path) -> Any:
@@ -232,7 +238,7 @@ def run_pilot_candidates(args, height, runner, *, tuning_dir, leaves, leaf_file,
     """Evaluate each backend on the pilot prefix of the shared leaf schedule."""
     candidate_results: list[CandidateResult] = []
     pilot_leaves = leaves[:args.warmups + args.pilot_trials]
-    for candidate in candidates_for_height(height):
+    for candidate in candidates_for_height(height, args.candidates):
         output = tuning_dir / f"pilot-{candidate.label}.json"
         log = tuning_dir / f"pilot-{candidate.label}.log"
         command = command_for_candidate(candidate, vbpir=vbpir, sealpir=sealpir, height=height, leaf_file=leaf_file,
@@ -272,6 +278,9 @@ def run_formal_candidate(args, height, runner, *, folder, tuning_dir, scale, lea
     formal_result = validate_candidate_result(selected_candidate, selected, height=height, trials=args.trials,
                                               warmups=args.warmups, leaves=leaves)
     formal_result.raise_if_ineligible(final_json)
+    if best.mean_server_ms is None:
+        # Single-candidate runs skip the pilot; the formal mean stands in for it.
+        best.mean_server_ms = formal_result.mean_server_ms
     selected["backend_label"] = best.label
     selected["backend_family"] = selected_candidate.backend
     selected["candidate_eligibility"] = [result.as_dict() for result in candidate_results]
@@ -281,7 +290,9 @@ def run_formal_candidate(args, height, runner, *, folder, tuning_dir, scale, lea
         "warmups": args.warmups,
         "pilot_trials": args.pilot_trials,
         "global_optimality_claim": "none",
-        "candidate_families": ["VBPIR", "SealPIRplus"],
+        "candidate_families": sorted({{"vbpir": "VBPIR", "sealpir": "SealPIRplus"}[c.backend]
+                                      for c in candidates_for_height(height, args.candidates)}),
+        "candidate_labels": [c.label for c in candidates_for_height(height, args.candidates)],
         "note": "This runner is the retained TreePIR baseline tuner; removed standalone TreePIR+Spiral experiments are not part of the final baseline set.",
     }
     final_json.write_text(json.dumps(selected, indent=2) + "\n")
@@ -357,13 +368,18 @@ def run_one_height(args: argparse.Namespace, height: int, runner: Callable[..., 
         return False
     leaves, leaf_file, index_json = prepared
 
-    candidate_by_label = {candidate.label: candidate for candidate in candidates_for_height(height)}
-    candidate_results = run_pilot_candidates(
-        args, height, runner, tuning_dir=tuning_dir, leaves=leaves, leaf_file=leaf_file,
-        index_json=index_json, vbpir=vbpir, sealpir=sealpir, env=env,
-    )
-
-    best = select_best_candidate(candidate_results)
+    candidates = candidates_for_height(height, args.candidates)
+    candidate_by_label = {candidate.label: candidate for candidate in candidates}
+    if len(candidates) == 1:
+        # Nothing to choose between: the pilot would only repeat the formal run.
+        best = CandidateResult(candidates[0].label, True, None, "single candidate; pilot skipped")
+        candidate_results = [best]
+    else:
+        candidate_results = run_pilot_candidates(
+            args, height, runner, tuning_dir=tuning_dir, leaves=leaves, leaf_file=leaf_file,
+            index_json=index_json, vbpir=vbpir, sealpir=sealpir, env=env,
+        )
+        best = select_best_candidate(candidate_results)
     selected_candidate = candidate_by_label[best.label]
     return run_formal_candidate(
         args, height, runner, folder=folder, tuning_dir=tuning_dir, scale=scale,
@@ -383,11 +399,18 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--trial-seed", type=int, default=7)
     parser.add_argument("--vbpir-bin", type=Path)
     parser.add_argument("--sealpir-binary", type=Path)
+    parser.add_argument("--candidates", nargs="+",
+                        help="restrict the backend candidates to these labels, e.g. sealpir_d2")
     args = parser.parse_args(argv)
     if args.trials <= 0 or args.warmups < 0 or args.pilot_trials <= 0:
         parser.error("--trials and --pilot-trials must be positive; --warmups must be nonnegative")
     for height in args.heights:
         scale_for_height(height)
+        if args.candidates is not None:
+            try:
+                candidates_for_height(height, args.candidates)
+            except TuningError as exc:
+                parser.error(str(exc))
     return args
 
 

@@ -14,6 +14,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, required=True)
     parser.add_argument("--heights", nargs="+", type=int, default=[22, 23, 24, 25, 26])
+    parser.add_argument("--candidates", nargs="+", help="forwarded to the backend tuner")
     parsed = parser.parse_args()
     root = parsed.root.resolve()
     args_heights = parsed.heights
@@ -22,7 +23,8 @@ def main():
         "--vbpir-bin", str(root / "deps/TreePIR/VBPIR_TreePIR/build/bin/vbpir_treepir"),
         "--sealpir-binary", str(root / "build-treepir-sealpir/treepir_sealpir_adapter"),
         "--heights", *[str(h) for h in args_heights], "--trials", "8", "--pilot-trials", "8",
-        "--warmups", "3", "--trial-seed", "7"])
+        "--warmups", "3", "--trial-seed", "7",
+        *(["--candidates", *parsed.candidates] if parsed.candidates else [])])
     progress = {"state": "running", "heights": {}, "path_semantics": "legacy_colored_path_omits_root",
                 "note": "VBPIR and SealPIRplus backend tuning for the retained TreePIR baseline"}
     status = root / "metadata/treepir-progress.json"

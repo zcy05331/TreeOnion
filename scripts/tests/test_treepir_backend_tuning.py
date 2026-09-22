@@ -179,6 +179,39 @@ class RunnerTests(unittest.TestCase):
             self.assertIn("--first-dim", calls[1][0])
             self.assertIn("--pir-d", calls[-1][0])
 
+    def test_single_candidate_skips_the_pilot_and_records_the_restriction(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            run_root = make_run_root(tmp)
+            calls: list = []
+            with contextlib.redirect_stdout(io.StringIO()):
+                code = tuning.main(["--run-root", str(run_root), *TUNING_ARGS, "--candidates", "sealpir_d2"],
+                                   runner=make_fake_run(calls))
+            self.assertEqual(code, 0)
+            self.assertEqual([path.stem for _, _, path, _ in calls], ["vbpir-index-only", "formal"])
+            final = json.loads((run_root / "outputs" / "treepir-backend-tuning" / "1gb" / "formal.json").read_text())
+            self.assertEqual(final["backend_label"], "sealpir_d2")
+            self.assertEqual(final["comparison_regime"]["candidate_families"], ["SealPIRplus"])
+            self.assertEqual(final["comparison_regime"]["candidate_labels"], ["sealpir_d2"])
+            self.assertEqual(final["candidate_eligibility"][0]["reason"], "single candidate; pilot skipped")
+            self.assertIn("--pir-d", calls[-1][0])
+            self.assertEqual(calls[-1][0][calls[-1][0].index("--pir-d") + 1], "2")
+
+    def test_restricted_candidates_pilot_only_those_labels(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            run_root = make_run_root(tmp)
+            calls: list = []
+            with contextlib.redirect_stdout(io.StringIO()):
+                code = tuning.main(["--run-root", str(run_root), *TUNING_ARGS, "--candidates", "sealpir_d1", "sealpir_d2"],
+                                   runner=make_fake_run(calls))
+            self.assertEqual(code, 0)
+            self.assertEqual([path.stem for _, _, path, _ in calls],
+                             ["vbpir-index-only", "pilot-sealpir_d1", "pilot-sealpir_d2", "formal"])
+
+    def test_unknown_candidate_label_is_rejected(self) -> None:
+        with contextlib.redirect_stderr(io.StringIO()):
+            with self.assertRaises(SystemExit):
+                tuning.parse_args(["--run-root", "/tmp/x", "--heights", "24", "--candidates", "sealpir_d9"])
+
     def test_crashed_pilot_is_recorded_ineligible_and_tuning_continues(self) -> None:
         # One backend variant dying must not end a multi-hour tuning session: the pilot is
         # recorded as "process exit N" and the formal run selects among the survivors.
