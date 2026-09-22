@@ -23,13 +23,20 @@ SCALES = {
     "4gb": 1 << 26,
 }
 SCALE_ORDER = ("256mb", "512mb", "1gb", "2gb", "4gb")
-CASES = ("standard", "layerwise", "cuckoo", "flat")
+CASES = ("standard", "layerwise", "layerwise_merged", "cuckoo", "flat")
+# The default matrix keeps the four original baselines; the merged-response
+# layerwise variant is an explicit opt-in.
+DEFAULT_CASES = ("standard", "layerwise", "cuckoo", "flat")
 
 
-def cuckoo_heights(scale: str) -> tuple[int, ...]:
+def cuckoo_heights(scale: str, reference_expansion_height: int | None = None) -> tuple[int, ...]:
     # make_benchmark_reference chooses h=7 below 1 GiB and h=10 from 1 GiB.
-    # The C++ Cuckoo benchmark rejects heights above that reference envelope.
-    return (7,) if SCALES[scale] < (1 << 24) else (7, 8, 9, 10)
+    # The C++ Cuckoo benchmark rejects heights above that reference envelope,
+    # so a pinned reference height widens (or narrows) the pilot range.
+    envelope = reference_expansion_height
+    if envelope is None:
+        envelope = 7 if SCALES[scale] < (1 << 24) else 10
+    return tuple(height for height in (7, 8, 9, 10) if height <= envelope)
 
 WARMUPS = 3
 TRIAL_SEED = 7
@@ -44,6 +51,8 @@ PATH_SEMANTICS = {
     "standard": "single_plaintext_block",
     "tuning/layerwise/profile": "legacy_merkle_paths_omit_root",
     "layerwise_tuned": "legacy_merkle_paths_omit_root",
+    "tuning/layerwise_merged/profile": "legacy_merkle_paths_omit_root",
+    "layerwise_merged_tuned": "legacy_merkle_paths_omit_root",
     "flat": "legacy_merkle_paths_omit_root",
     "cuckoo_tuned": "legacy_merkle_paths_omit_root",
 }
@@ -89,17 +98,18 @@ class CoreMatrix:
         standard_1g_source: Path | None = None,
         runner: Runner | None = None,
         scales: tuple[str, ...] = SCALE_ORDER,
-        cases: tuple[str, ...] = CASES,
-        standard_reference_expansion_height: int | None = None,
+        cases: tuple[str, ...] = DEFAULT_CASES,
+        reference_expansion_height: int | None = None,
     ) -> None:
         self.paths = paths
         self.standard_1g_source = standard_1g_source
         self.runner = runner or Runner()
         self.scales = tuple(scales)
         self.cases = tuple(cases)
-        # When set, the standard rows pin the reference expansion height so
-        # every scale is measured with one first-dimension geometry.
-        self.standard_reference_expansion_height = standard_reference_expansion_height
+        # When set, every Merkle-derived case (standard, layerwise, cuckoo,
+        # flat) pins the reference expansion height so all scales share one
+        # first-dimension geometry instead of the smallest feasible height.
+        self.reference_expansion_height = reference_expansion_height
         self.status_path = paths.output / "status.json"
         self.rows: list[dict[str, Any]] = []
 
@@ -116,7 +126,7 @@ class CoreMatrix:
                 "ep3_binary": str(self.paths.ep3_bin),
                 "scales": list(self.scales),
                 "cases": list(self.cases),
-                "standard_reference_expansion_height": self.standard_reference_expansion_height,
+                "reference_expansion_height": self.reference_expansion_height,
                 "rows": self.rows,
             },
         )
@@ -287,14 +297,21 @@ class CoreMatrix:
             return
         self.update_row(row, "complete", exit_code=0)
 
+    def geometry_args(self) -> list[str]:
+        if self.reference_expansion_height is None:
+            return []
+        return ["--reference-expansion-height", str(self.reference_expansion_height)]
+
+    def geometry_row(self) -> dict[str, Any]:
+        if self.reference_expansion_height is None:
+            return {}
+        return {"reference_expansion_height": self.reference_expansion_height}
+
     def standard(self, scale: str) -> bool:
         folder = self.paths.output / scale
         leaf_count = SCALES[scale]
-        geometry: list[str] = []
-        row_extra: dict[str, Any] = {}
-        if self.standard_reference_expansion_height is not None:
-            geometry = ["--reference-expansion-height", str(self.standard_reference_expansion_height)]
-            row_extra["reference_expansion_height"] = self.standard_reference_expansion_height
+        geometry = self.geometry_args()
+        row_extra = self.geometry_row()
         return self.measured_call(
             scale=scale,
             case="standard",
@@ -323,8 +340,9 @@ class CoreMatrix:
             row_extra=row_extra or None,
         )
 
-    def layerwise_profile(self, scale: str) -> bool:
-        folder = self.paths.output / scale / "tuning" / "layerwise"
+    def layerwise_profile(self, scale: str, *, merged: bool = False) -> bool:
+        variant = "layerwise_merged" if merged else "layerwise"
+        folder = self.paths.output / scale / "tuning" / variant
         profile = folder / "profile.json"
         process_path = folder / "profile-process.json"
         log_path = folder / "profile.log"
@@ -332,12 +350,13 @@ class CoreMatrix:
         folder.mkdir(parents=True, exist_ok=True)
         row = self.append_row(
             scale,
-            "tuning/layerwise/profile",
+            f"tuning/{variant}/profile",
             "running",
             json=str(profile),
             process=str(process_path),
             log=str(log_path),
             trials=PILOT_TRIALS,
+            **self.geometry_row(),
         )
         wait = self.run_wait_idle()
         row["wait_idle"] = {"exit_code": wait.returncode, "stdout": wait.stdout, "stderr": wait.stderr}
@@ -369,6 +388,8 @@ class CoreMatrix:
             str(TRIAL_SEED),
             "--layer-padding-budget",
             "1.1",
+            *(["--layer-nodes-per-plaintext", "64"] if merged else []),
+            *self.geometry_args(),
             "--layout-profile-json",
             str(profile),
         ]
@@ -406,19 +427,21 @@ class CoreMatrix:
         if not isinstance(measurements, list) or not measurements:
             raise MatrixError(f"{profile_path}: missing measurements")
 
-    def layerwise_tuned(self, scale: str) -> bool:
+    def layerwise_tuned(self, scale: str, *, merged: bool = False) -> bool:
         folder = self.paths.output / scale
         leaf_count = SCALES[scale]
-        profile = folder / "tuning" / "layerwise" / "profile.json"
+        variant = "layerwise_merged" if merged else "layerwise"
+        profile = folder / "tuning" / variant / "profile.json"
+        case = f"{variant}_tuned"
         return self.measured_call(
             scale=scale,
-            case="layerwise_tuned",
+            case=case,
             command=[
                 str(self.paths.default_bin),
                 "--test",
                 "merkle_benchmarks",
                 "--benchmark-case",
-                "merkle_layerwise",
+                "merkle_layerwise_merged" if merged else "merkle_layerwise",
                 "--leaf-count",
                 str(leaf_count),
                 "--experiments",
@@ -433,13 +456,15 @@ class CoreMatrix:
                 str(profile),
                 "--layer-padding-budget",
                 "1.1",
+                *self.geometry_args(),
                 "--benchmark-json",
-                str(folder / "layerwise_tuned.json"),
+                str(folder / f"{case}.json"),
             ],
-            json_path=folder / "layerwise_tuned.json",
-            process_path=folder / "layerwise_tuned-process.json",
-            log_path=folder / "layerwise_tuned.log",
+            json_path=folder / f"{case}.json",
+            process_path=folder / f"{case}-process.json",
+            log_path=folder / f"{case}.log",
             trials=CORE_TRIALS,
+            row_extra=self.geometry_row() or None,
         )
 
     def flat(self, scale: str) -> bool:
@@ -462,6 +487,7 @@ class CoreMatrix:
                 str(WARMUPS),
                 "--trial-seed",
                 str(TRIAL_SEED),
+                *self.geometry_args(),
                 "--benchmark-json",
                 str(folder / "flat.json"),
             ],
@@ -473,6 +499,7 @@ class CoreMatrix:
                 "primary_case": "merkle_flat",
                 "cli_case_selection": "merkle_paths",
                 "cli_case_note": "existing merkle_paths selection emits merkle_flat and merkle_layerwise; use merkle_flat as the Flat primary row",
+                **self.geometry_row(),
             },
         )
 
@@ -495,13 +522,18 @@ class CoreMatrix:
                 str(WARMUPS),
                 "--trial-seed",
                 str(TRIAL_SEED),
+                *self.geometry_args(),
             ],
             json_path=json_path,
             process_path=folder / f"h{height}-process.json",
             log_path=folder / f"h{height}.log",
             trials=PILOT_TRIALS,
             env={"BENCHMARK_OUTPUT_JSON": str(json_path), "CUCKOO_LAYOUT_HEIGHT": str(height)},
+            row_extra=self.geometry_row() or None,
         )
+
+    def heights(self, scale: str) -> tuple[int, ...]:
+        return cuckoo_heights(scale, self.reference_expansion_height)
 
     def select_cuckoo(self, scale: str) -> int | None:
         folder = self.paths.output / scale / "tuning" / "cuckoo"
@@ -519,8 +551,8 @@ class CoreMatrix:
             "--leaf-count",
             str(SCALES[scale]),
             "--heights",
-            ",".join(map(str, cuckoo_heights(scale))),
-            *[str(folder / f"h{height}.json") for height in cuckoo_heights(scale)],
+            ",".join(map(str, self.heights(scale))),
+            *[str(folder / f"h{height}.json") for height in self.heights(scale)],
         ]
         result = self.runner.run(command, cwd=self.paths.source)
         row["command"] = command
@@ -556,12 +588,14 @@ class CoreMatrix:
                 str(WARMUPS),
                 "--trial-seed",
                 str(TRIAL_SEED),
+                *self.geometry_args(),
             ],
             json_path=json_path,
             process_path=folder / "cuckoo_tuned-process.json",
             log_path=folder / "cuckoo_tuned.log",
             trials=CUCKOO_TRIALS,
             env={"BENCHMARK_OUTPUT_JSON": str(json_path), "CUCKOO_LAYOUT_HEIGHT": str(height)},
+            row_extra=self.geometry_row() or None,
         )
 
     def run(self) -> int:
@@ -572,7 +606,7 @@ class CoreMatrix:
             if "standard" in self.cases:
                 # A pinned reference geometry must be measured, not copied from
                 # a reference run made under the default rule.
-                if scale == "1gb" and self.standard_reference_expansion_height is None:
+                if scale == "1gb" and self.reference_expansion_height is None:
                     self.reuse_standard_1gb()
                 else:
                     self.standard(scale)
@@ -581,9 +615,14 @@ class CoreMatrix:
                     self.layerwise_tuned(scale)
                 else:
                     self.append_row(scale, "layerwise_tuned", "skipped", reason="layerwise profile failed")
+            if "layerwise_merged" in self.cases:
+                if self.layerwise_profile(scale, merged=True):
+                    self.layerwise_tuned(scale, merged=True)
+                else:
+                    self.append_row(scale, "layerwise_merged_tuned", "skipped", reason="layerwise_merged profile failed")
             if "cuckoo" in self.cases:
                 pilots_ok = True
-                for height in cuckoo_heights(scale):
+                for height in self.heights(scale):
                     pilots_ok = self.cuckoo_pilot(scale, height) and pilots_ok
                 if pilots_ok:
                     chosen = self.select_cuckoo(scale)
@@ -622,12 +661,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--output-dir", type=Path)
     parser.add_argument("--standard-1gb-source", type=Path)
     parser.add_argument("--scales", nargs="+", choices=SCALE_ORDER, default=list(SCALE_ORDER))
-    parser.add_argument("--cases", nargs="+", choices=CASES, default=list(CASES))
+    parser.add_argument("--cases", nargs="+", choices=CASES, default=list(DEFAULT_CASES))
     parser.add_argument(
-        "--standard-reference-expansion-height",
+        "--reference-expansion-height",
         type=int,
         choices=range(1, 11),
-        help="pin the standard case's reference expansion height instead of the default rule",
+        help="pin the Merkle reference expansion height for every case instead of the default rule",
     )
     return parser.parse_args(argv)
 
@@ -640,7 +679,7 @@ def main(argv: list[str] | None = None) -> int:
         standard_1g_source=args.standard_1gb_source.resolve() if args.standard_1gb_source else None,
         scales=tuple(scale for scale in SCALE_ORDER if scale in args.scales),
         cases=tuple(case for case in CASES if case in args.cases),
-        standard_reference_expansion_height=args.standard_reference_expansion_height,
+        reference_expansion_height=args.reference_expansion_height,
     )
     return matrix.run()
 

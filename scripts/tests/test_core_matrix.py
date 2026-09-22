@@ -211,7 +211,7 @@ class CoreMatrixTests(unittest.TestCase):
         self.assertEqual(flat["cli_case_selection"], "merkle_paths")
         self.assertIn("merkle_layerwise", flat["cli_case_note"])
 
-    def test_scale_and_case_filters_with_pinned_standard_geometry_measure_instead_of_reusing(self) -> None:
+    def test_scale_and_case_filters_with_pinned_geometry_measure_instead_of_reusing(self) -> None:
         runner = FakeRunner()
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
@@ -224,14 +224,14 @@ class CoreMatrixTests(unittest.TestCase):
             runner=runner,
             scales=("256mb", "512mb", "1gb"),
             cases=("standard",),
-            standard_reference_expansion_height=10,
+            reference_expansion_height=10,
         ).run()
 
         self.assertEqual(result, 0)
         status = json.loads((root / "outputs/core-matrix/status.json").read_text())
         self.assertEqual(status["scales"], ["256mb", "512mb", "1gb"])
         self.assertEqual(status["cases"], ["standard"])
-        self.assertEqual(status["standard_reference_expansion_height"], 10)
+        self.assertEqual(status["reference_expansion_height"], 10)
         self.assertEqual([(row["scale"], row["case"]) for row in status["rows"]],
                          [("256mb", "standard"), ("512mb", "standard"), ("1gb", "standard")])
         self.assertTrue(all(row["status"] == "complete" and row["reference_expansion_height"] == 10
@@ -244,11 +244,48 @@ class CoreMatrixTests(unittest.TestCase):
             self.assertEqual(child[child.index("--benchmark-case") + 1], "standard_onionpir")
         self.assertEqual(runner.waits, 3)
 
+    def test_pinned_geometry_reaches_layerwise_cuckoo_flat_and_widens_small_cuckoo_pilots(self) -> None:
+        runner = FakeRunner()
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        root = pathlib.Path(tmp.name)
+        paths = make_paths(root)
+        result = matrix.CoreMatrix(
+            paths,
+            runner=runner,
+            scales=("256mb",),
+            cases=("layerwise", "layerwise_merged", "cuckoo", "flat"),
+            reference_expansion_height=10,
+        ).run()
+        self.assertEqual(result, 0)
+        status = json.loads((root / "outputs/core-matrix/status.json").read_text())
+        cases = [row["case"] for row in status["rows"]]
+        self.assertEqual(cases, [
+            "tuning/layerwise/profile", "layerwise_tuned",
+            "tuning/layerwise_merged/profile", "layerwise_merged_tuned",
+            "tuning/cuckoo/h7", "tuning/cuckoo/h8", "tuning/cuckoo/h9", "tuning/cuckoo/h10",
+            "tuning/cuckoo/selection", "cuckoo_tuned", "flat",
+        ])
+        self.assertTrue(all(row["status"] == "complete" for row in status["rows"]))
+        children = [command[command.index("--") + 1:] for command in runner.commands
+                    if command[1].endswith("read_process_peak_memory.py")]
+        self.assertEqual(len(children), 10)
+        for child in children:
+            self.assertEqual(child[child.index("--reference-expansion-height") + 1], "10")
+        merged_profile = [c for c in children if "--layout-profile-json" in c and "layerwise_merged" in c[c.index("--layout-profile-json") + 1]]
+        self.assertEqual(len(merged_profile), 1)
+        self.assertEqual(merged_profile[0][merged_profile[0].index("--layer-nodes-per-plaintext") + 1], "64")
+        plain_profile = [c for c in children if "--layout-profile-json" in c and "layerwise_merged" not in c[c.index("--layout-profile-json") + 1]]
+        self.assertNotIn("--layer-nodes-per-plaintext", plain_profile[0])
+        merged_formal = [c for c in children if "--benchmark-case" in c and c[c.index("--benchmark-case") + 1] == "merkle_layerwise_merged"]
+        self.assertEqual(len(merged_formal), 1)
+        self.assertTrue(merged_formal[0][merged_formal[0].index("--layer-layout-profile") + 1].endswith("tuning/layerwise_merged/profile.json"))
+
     def test_main_rejects_unknown_scale_and_out_of_range_geometry(self) -> None:
         with self.assertRaises(SystemExit):
             matrix.parse_args(["--root", "/tmp/x", "--scales", "3gb"])
         with self.assertRaises(SystemExit):
-            matrix.parse_args(["--root", "/tmp/x", "--standard-reference-expansion-height", "11"])
+            matrix.parse_args(["--root", "/tmp/x", "--reference-expansion-height", "11"])
         args = matrix.parse_args(["--root", "/tmp/x", "--scales", "2gb", "--cases", "flat", "standard"])
         self.assertEqual(args.scales, ["2gb"])
         self.assertEqual(sorted(args.cases), ["flat", "standard"])
