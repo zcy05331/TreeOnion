@@ -1,0 +1,20 @@
+[package]
+name = "spiral_pbc"
+version = "0.1.0"
+edition = "2021"
+description = "Spiral PIR behind the same PBC cuckoo framework as the OnionPIR cuckoo baseline"
+publish = false
+
+[[bin]]
+name = "spiral_pbc"
+path = "src/main.rs"
+
+[dependencies]
+# Complete spiral-rs (server + client); menonsamir/spiral-rs is a trimmed core
+# for YPIR and points here for the working version.
+spiral-rs = { git = "https://github.com/blyssprivacy/sdk", rev = "fdb7206517c249603b0c91b65f1f29f95272107c", features = ["server"] }
+serde_json = "1.0"
+
+[profile.release]
+opt-level = 3
+debug = false
