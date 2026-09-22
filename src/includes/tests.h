@@ -75,6 +75,9 @@ class PirTest {
     std::optional<size_t> bench_warmups;
     std::optional<uint64_t> bench_trial_seed;
     std::optional<std::string> bench_output_json;
+    // --reference-expansion-height: pins the Merkle reference geometry that
+    // cuckoo_bench derives its bucket envelope from (see MerkleWorkload).
+    std::optional<size_t> bench_reference_expansion_height;
     // log2 of --leaf-count (a power of two) or default_height when unset.
     size_t bench_tree_height(size_t default_height) const;
 

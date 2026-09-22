@@ -207,6 +207,9 @@ enum class BenchmarkCaseSelection {
   standard_onionpir,
   merkle_paths,
   merkle_layerwise,
+  // Layerwise with the tree scheme's response merging: strided 64-node level
+  // plaintexts, one shared gamma selector set, one merged response ciphertext.
+  merkle_layerwise_merged,
 };
 
 struct MerkleBenchmarkOptions {
@@ -237,6 +240,11 @@ struct LayerLayoutSweepOptions {
   uint64_t trial_seed = 5723628103747520850ULL;
   double padding_budget = 1.01;
   bool include_dominated = false;  // also time Pareto-dominated candidates
+  // 96 profiles the bit-packed layerwise levels; 64 profiles the strided
+  // levels of the merged-response variant (see kStridedNodesPerPlaintext).
+  size_t nodes_per_plaintext = 96;
+  // See MerkleWorkload::reference_expansion_height; 0 keeps the default rule.
+  size_t reference_expansion_height = 0;
 };
 LayerLayoutProfile run_layer_layout_sweep(const LayerLayoutSweepOptions &options);
 // Parses a --layer-padding-budget ratio; rejects anything below 1.0.
@@ -255,6 +263,12 @@ BenchmarkTrialPlan make_benchmark_trial_plan(size_t leaf_count, size_t warmups,
 uint64_t modeled_helper_key_bytes(const PirParams &reference);
 // plain_response_bytes: response bytes sent outside any PIR call (the
 // layerwise direct-return levels); they join online_response_bytes_actual.
+// query_count packed queries answered by one merged response ciphertext
+// (plus any plaintext direct-return bytes).
+CommunicationStats communication_stats_merged(const PirParams &reference,
+                                              size_t query_count,
+                                              size_t merged_response_bytes,
+                                              uint64_t plain_response_bytes);
 CommunicationStats communication_stats(
     const PirParams &reference, size_t pir_call_count,
     const std::vector<size_t> &actual_response_bytes,
@@ -287,6 +301,15 @@ BenchmarkCaseExecution run_merkle_layerwise_case(
     const MerkleWorkload &workload, const PirParams &reference,
     const BenchmarkTrialPlan &trials);
 BenchmarkCaseExecution run_merkle_layerwise_case(
+    const MerkleWorkload &workload, const PirParams &reference,
+    const BenchmarkTrialPlan &trials, const LayerPlannerConfig &planner);
+// Layerwise levels served from strided 64-node plaintexts, rotated privately
+// by one shared gamma selector set and merged into a single response
+// ciphertext with the tree scheme's MLWE residue merge. Requires H >= 7.
+BenchmarkCaseExecution run_merkle_layerwise_merged_case(
+    const MerkleWorkload &workload, const PirParams &reference,
+    const BenchmarkTrialPlan &trials);
+BenchmarkCaseExecution run_merkle_layerwise_merged_case(
     const MerkleWorkload &workload, const PirParams &reference,
     const BenchmarkTrialPlan &trials, const LayerPlannerConfig &planner);
 

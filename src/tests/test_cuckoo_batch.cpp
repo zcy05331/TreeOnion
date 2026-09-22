@@ -730,8 +730,12 @@ void PirTest::test_cuckoo_benchmark() {
   // Explicit benchmark variant: retain the original 1.5x failure evidence,
   // then measure one extra bucket with unchanged hash seed and leaf schedule.
   ++params.num_buckets;
-  const PirParams reference =
-      make_benchmark_reference(make_benchmark_workload(leaf_count));
+  MerkleWorkload reference_workload = make_benchmark_workload(leaf_count);
+  if (bench_reference_expansion_height) {
+    reference_workload.reference_expansion_height =
+        *bench_reference_expansion_height;
+  }
+  const PirParams reference = make_benchmark_reference(reference_workload);
 
   const auto setup_start = Clock::now();
   std::vector<CuckooBucket> buckets =

@@ -70,6 +70,7 @@ struct CommandLineOptions {
   std::string benchmark_json;
   bool run_optional_4gb = false;
   size_t reference_expansion_height = 0;  // 0 = default rule
+  size_t layer_nodes_per_plaintext = 96;  // layer_layout_sweep: 96 or 64
   BenchmarkCaseSelection benchmark_case = BenchmarkCaseSelection::all;
   // Layerwise layout planner / sweep flags.
   std::string layout_profile_json;
@@ -116,10 +117,12 @@ CommandLineOptions parse_command_line(int argc, char *argv[]) {
         cli.benchmark_case = BenchmarkCaseSelection::merkle_paths;
       } else if (value == "merkle_layerwise") {
         cli.benchmark_case = BenchmarkCaseSelection::merkle_layerwise;
+      } else if (value == "merkle_layerwise_merged") {
+        cli.benchmark_case = BenchmarkCaseSelection::merkle_layerwise_merged;
       } else {
         throw std::invalid_argument(
-            "--benchmark-case must be all, standard_onionpir, or "
-            "merkle_paths, or merkle_layerwise");
+            "--benchmark-case must be all, standard_onionpir, merkle_paths, "
+            "merkle_layerwise, or merkle_layerwise_merged");
       }
     } else if (std::strcmp(argv[i], "--run-optional-4gb") == 0) {
       cli.run_optional_4gb = true;
@@ -130,6 +133,14 @@ CommandLineOptions parse_command_line(int argc, char *argv[]) {
           cli.reference_expansion_height > 10) {
         throw std::invalid_argument(
             "--reference-expansion-height must be in 1..10");
+      }
+    } else if (std::strcmp(argv[i], "--layer-nodes-per-plaintext") == 0) {
+      cli.layer_nodes_per_plaintext = parse_size_argument(
+          "--layer-nodes-per-plaintext", require_value(argc, argv, i));
+      if (cli.layer_nodes_per_plaintext != 96 &&
+          cli.layer_nodes_per_plaintext != 64) {
+        throw std::invalid_argument(
+            "--layer-nodes-per-plaintext must be 96 or 64");
       }
     } else if (std::strcmp(argv[i], "--layout-profile-json") == 0) {
       cli.layout_profile_json = require_value(argc, argv, i);
@@ -173,6 +184,8 @@ int run_layout_sweep(const CommandLineOptions &cli) {
   sweep.trial_seed = cli.trial_seed;
   sweep.padding_budget = cli.layer_padding_budget;
   sweep.include_dominated = cli.layout_sweep_all;
+  sweep.nodes_per_plaintext = cli.layer_nodes_per_plaintext;
+  sweep.reference_expansion_height = cli.reference_expansion_height;
   const LayerLayoutProfile profile = run_layer_layout_sweep(sweep);
   save_layer_layout_profile(profile, cli.layout_profile_json);
   std::cout << "Layer layout profile: " << cli.layout_profile_json << '\n';
@@ -226,6 +239,9 @@ int run_pir_test(const CommandLineOptions &cli) {
   if (cli.experiments_given) test.bench_measured_trials = cli.num_experiments;
   if (cli.warmup_given) test.bench_warmups = cli.warmup;
   if (cli.trial_seed_given) test.bench_trial_seed = cli.trial_seed;
+  if (cli.reference_expansion_height != 0) {
+    test.bench_reference_expansion_height = cli.reference_expansion_height;
+  }
   if (!cli.benchmark_json.empty()) test.bench_output_json = cli.benchmark_json;
   test.run_test(cli.test_name);
   return 0;

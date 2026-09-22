@@ -93,8 +93,17 @@ std::vector<BenchmarkCaseResult> execute_case_set(
   if (selection != BenchmarkCaseSelection::all &&
       selection != BenchmarkCaseSelection::standard_onionpir &&
       selection != BenchmarkCaseSelection::merkle_paths &&
-      selection != BenchmarkCaseSelection::merkle_layerwise) {
+      selection != BenchmarkCaseSelection::merkle_layerwise &&
+      selection != BenchmarkCaseSelection::merkle_layerwise_merged) {
     throw std::invalid_argument("Unknown benchmark case selection");
+  }
+  if (selection == BenchmarkCaseSelection::merkle_layerwise_merged) {
+    BenchmarkCaseExecution merged =
+        run_merkle_layerwise_merged_case(workload, reference, trials, planner);
+    merged.result.name += name_suffix;
+    std::vector<BenchmarkCaseResult> results;
+    results.push_back(std::move(merged.result));
+    return results;
   }
 
   std::vector<BenchmarkCaseResult> results;
@@ -431,12 +440,20 @@ LayerLayoutProfile run_layer_layout_sweep(
   if (!(options.padding_budget >= 1.0)) {
     throw std::invalid_argument("layer padding budget must be >= 1.0");
   }
-  const MerkleWorkload workload = make_benchmark_workload(options.leaf_count);
+  if (options.nodes_per_plaintext != 96 &&
+      options.nodes_per_plaintext != kStridedNodesPerPlaintext) {
+    throw std::invalid_argument(
+        "layer layout sweep supports 96 (bit-packed) or 64 (strided) nodes "
+        "per plaintext");
+  }
+  MerkleWorkload workload = make_benchmark_workload(options.leaf_count);
+  workload.reference_expansion_height = options.reference_expansion_height;
   const PirParams reference = make_benchmark_reference(workload);
   const BenchmarkTrialPlan trials = make_benchmark_trial_plan(
       workload.leaf_count, options.warmups, options.measured_trials,
       options.trial_seed);
-  constexpr size_t kNodesPerPt = 96;
+  const size_t kNodesPerPt = options.nodes_per_plaintext;
+  const bool strided = kNodesPerPt == kStridedNodesPerPlaintext;
 
   LayerLayoutProfile profile;
   profile.environment = detect_layer_layout_environment(
@@ -476,15 +493,19 @@ LayerLayoutProfile run_layer_layout_sweep(
       auto server = std::make_unique<PirServer>(params);
       server->set_client_session_keys(client.get_client_id(), keys);
       PlaintextSource source = [&](size_t index, RlwePt &out) {
-        out = make_layer_merkle_plaintext(level, index, workload, params);
+        out = strided ? make_layer_merkle_plaintext_strided(level, index,
+                                                            workload, params)
+                      : make_layer_merkle_plaintext(level, index, workload,
+                                                    params);
       };
       server->load_data(candidate.layout.target_num_pt, source);
 
       const auto run_query = [&](size_t leaf) {
         const size_t local =
             merkle_sibling_local(leaf, workload.tree_height, level);
-        RlweCt query =
-            client.fast_generate_query(params, local / kNodesPerPt);
+        RlweCt query = client.fast_generate_query(
+            params, strided ? strided_level_plaintext(level, local)
+                            : local / kNodesPerPt);
         const auto start = BenchmarkClock::now();
         RlweCt response = server->make_query(client.get_client_id(), query);
         const double ms = milliseconds(elapsed_since(start));
@@ -492,8 +513,11 @@ LayerLayoutProfile run_layer_layout_sweep(
         std::stringstream wire;
         (void)server->save_resp_to_stream(response, wire);
         const RlwePt pt = client.decrypt_mod_q(client.load_resp_from_stream(wire));
-        if (decode_merkle_node(pt, local % kNodesPerPt, params) !=
-            synthetic_merkle_node(level, local)) {
+        const MerkleNode decoded =
+            strided ? decode_merkle_node_strided(
+                          pt, strided_level_slot(level, local), params)
+                    : decode_merkle_node(pt, local % kNodesPerPt, params);
+        if (decoded != synthetic_merkle_node(level, local)) {
           throw std::runtime_error(
               "layer layout sweep: candidate response decoded to the wrong "
               "sibling at level " + std::to_string(level));
