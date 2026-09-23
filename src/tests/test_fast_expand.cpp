@@ -42,7 +42,7 @@ void PirTest::test_fast_expand_query() {
     }
   }
 
-  std::mt19937_64 rng(0x66617374ULL);
+  ChaChaRng rng(0x66617374ULL);
   const std::vector<size_t> query_indices = {0, num_pt - 1,
                                              rng() % num_pt};
   for (size_t query_idx : query_indices) {

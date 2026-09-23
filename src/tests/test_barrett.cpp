@@ -36,7 +36,7 @@ void check_case(uint128_t x, uint64_t q) {
 }
 
 // Random uint128_t uniformly over [0, 2^width) for width in [1, 128].
-uint128_t random_u128(std::mt19937_64 &rng, size_t width) {
+uint128_t random_u128(ChaChaRng &rng, size_t width) {
   if (width == 0) return 0;
   if (width <= 64) {
     const uint64_t mask = (width == 64) ? ~uint64_t{0} : ((uint64_t{1} << width) - 1);
@@ -48,7 +48,7 @@ uint128_t random_u128(std::mt19937_64 &rng, size_t width) {
   return hi | static_cast<uint128_t>(rng());
 }
 
-uint64_t sample_prime(std::mt19937_64 &rng, size_t bit_width) {
+uint64_t sample_prime(ChaChaRng &rng, size_t bit_width) {
   const uint64_t base = utils::generate_prime(bit_width);
   return base; // Deterministic given bit_width; sufficient for this test.
 }
@@ -58,7 +58,7 @@ uint64_t sample_prime(std::mt19937_64 &rng, size_t bit_width) {
 void PirTest::test_barrett() {
   print_func_name(__FUNCTION__);
 
-  std::mt19937_64 rng(0xBA77E77Fu);
+  ChaChaRng rng(0xBA77E77Fu);
 
   // === 64-bit-input reducer: correctness over common and edge moduli ===
   const std::array<uint64_t, 12> q_u64_set = {

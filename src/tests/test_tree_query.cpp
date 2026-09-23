@@ -149,7 +149,7 @@ void PirTest::test_tree_query() {
     }
 
     const double sigma = scheme.get_noise_std_dev();
-    std::mt19937_64 rng(0x7472656551756572ULL);
+    ChaChaRng rng(0x7472656551756572ULL);
     std::vector<uint64_t> x_msg(N, 0), y_msg(N, 0);
     x_msg[0] = 5; x_msg[1] = 7;
     y_msg[0] = 3; y_msg[1] = 9;

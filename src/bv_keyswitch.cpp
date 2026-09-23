@@ -202,7 +202,7 @@ const BvKeySwitchKey &BvGaloisKeys::get(uint32_t galois_k) const {
 // [0, q_k) for each limb. out has size N * K.
 static void sample_gaussian_shared_rns(uint64_t *out, size_t N,
                                        const std::vector<uint64_t> &qs,
-                                       double sigma, std::mt19937_64 &rng) {
+                                       double sigma, ChaChaRng &rng) {
   std::normal_distribution<double> dist(0.0, sigma);
   std::vector<int64_t> e(N);
   for (size_t i = 0; i < N; ++i) e[i] = std::llround(dist(rng));
@@ -228,7 +228,7 @@ static void sample_gaussian_shared_rns(uint64_t *out, size_t N,
 static void build_ksk_row_rns(const std::vector<uint64_t> &msg_ntt,
                               const RlweSk &sk,
                               const std::vector<uint64_t> &qs,
-                              double sigma, std::mt19937_64 &rng,
+                              double sigma, ChaChaRng &rng,
                               BvRlweCt &ct) {
   constexpr size_t N = DBConsts::PolyDegree;
   const size_t K = qs.size();
@@ -258,7 +258,7 @@ static void build_ksk_row_rns(const std::vector<uint64_t> &msg_ntt,
 
 BvKeySwitchKey gen_bv_ks_key(const PirParams &pir_params,
                              const RlweSk &sk, uint32_t galois_k,
-                             std::mt19937_64 &rng) {
+                             ChaChaRng &rng) {
   const double sigma = pir_params.get_noise_std_dev();
   constexpr size_t N = DBConsts::PolyDegree;
   constexpr size_t K = DBConsts::RnsMods.size();
@@ -302,7 +302,7 @@ BvGaloisKeys gen_bv_galois_keys(const PirParams &pir_params,
   const size_t expan_height = pir_params.get_expan_height();
   constexpr size_t N = DBConsts::PolyDegree;
 
-  std::mt19937_64 rng(std::random_device{}());
+  ChaChaRng rng;
 
   result.keys.reserve(expan_height);
   // creates 2049, 1025, 513, ... keys.

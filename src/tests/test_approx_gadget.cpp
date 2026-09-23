@@ -59,7 +59,7 @@ void check_decomposition_shape(size_t ell, size_t low_bits) {
   const uint64_t q = params.get_rns_mods()[0];
   RlweCt ct;
   ct.resize(N);
-  std::mt19937_64 rng(0x6469676974626f75ULL);
+  ChaChaRng rng(0x6469676974626f75ULL);
   for (size_t i = 0; i < N; ++i) {
     ct.c0[i] = rng() % q;
     ct.c1[i] = rng() % q;
@@ -140,7 +140,7 @@ void check_ext_product(size_t ell, size_t low_bits) {
       approx_base_log2(params.get_ct_mod_width(), ell, low_bits);
   GSWEval eval(params, ell, base_log2, low_bits);
 
-  std::mt19937_64 rng(0x415050524f584750ULL + ell);
+  ChaChaRng rng(0x415050524f584750ULL + ell);
   RlweSk sk = gen_secret_key(N, q, rng);
   std::vector<uint64_t> one(N, 0), zero(N, 0), msg(N, 0);
   one[0] = 1;
@@ -191,7 +191,7 @@ void check_shipped_shape(const PirParams &params, size_t ell,
 
   RlweCt ct;
   ct.resize(N);
-  std::mt19937_64 rng(0x6469676974ULL);
+  ChaChaRng rng(0x6469676974ULL);
   for (size_t i = 0; i < N; ++i) {
     ct.c0[i] = rng() % q;
     ct.c1[i] = rng() % q;

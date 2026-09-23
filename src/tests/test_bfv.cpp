@@ -17,7 +17,7 @@ void PirTest::bfv_example() {
   const double sigma = pir_params.get_noise_std_dev();
   BENCH_PRINT("N=" << N << "  q=" << q << "  t=" << t);
 
-  std::mt19937_64 rng(0x626676ULL);
+  ChaChaRng rng(0x626676ULL);
   RlweSk sk = gen_secret_key(N, q, rng);
 
   // ============== BFV + BFV addition (coefficient form) ==============

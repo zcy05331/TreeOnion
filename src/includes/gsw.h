@@ -3,6 +3,7 @@
 #include "rlwe.h"
 #include <random>
 #include <vector>
+#include "csprng.h"
 
 
 // [RGSW flat layout] GSWCt 是 external_product 消费的扁平 2*l x 2
@@ -98,7 +99,7 @@ class GSWEval {
       @param rng       - randomness source for a, e.
     */
     GSWCt plain_to_gsw(std::vector<uint64_t> const &plaintext,
-                               const RlweSk &sk, std::mt19937_64 &rng);
+                               const RlweSk &sk, ChaChaRng &rng);
 
     // Transform the given GSWCt from polynomial representation to NTT representation.
     void gsw_ntt_forward(GSWCt &gsw);

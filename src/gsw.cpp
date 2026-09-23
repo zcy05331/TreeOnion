@@ -376,7 +376,7 @@ void GSWEval::query_to_gsw(std::vector<RlweCt> query, GSWCt gsw_key,
 }
 
 GSWCt GSWEval::plain_to_gsw(std::vector<uint64_t> const &plaintext,
-                                    const RlweSk &sk, std::mt19937_64 &rng) {
+                                    const RlweSk &sk, ChaChaRng &rng) {
   constexpr size_t N = DBConsts::PolyDegree;
   const size_t K = pir_params_.K();
   const auto &rns_mods_arr = pir_params_.get_rns_mods();

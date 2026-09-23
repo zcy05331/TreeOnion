@@ -16,7 +16,7 @@ void PirTest::test_pir() {
   // Pre-generate all query indices so gen_data() only records what we need.
   // Deterministic schedule: the first and last plaintext rows are always
   // queried, the rest come from a fixed seed so a failure can be replayed.
-  std::mt19937_64 rng(0x6f6e696f6e706972ULL);
+  ChaChaRng rng(0x6f6e696f6e706972ULL);
   const size_t num_pt = pir_params.get_num_pt();
   std::vector<size_t> query_indices(num_experiments);
   for (size_t i = 0; i < num_experiments; i++) {

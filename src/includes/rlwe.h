@@ -2,6 +2,7 @@
 #include <cstdint>
 #include <random>
 #include <vector>
+#include "csprng.h"
 
 // ---------------------------------------------------------------------------
 // Minimal RLWE types replacing seal::Ciphertext / seal::SecretKey / seal::Plaintext.
@@ -55,7 +56,7 @@ struct RlwePt {
 // ---------------------------------------------------------------------------
 
 // Sample a fresh ternary secret key and convert it to NTT form.
-RlweSk gen_secret_key(size_t N, uint64_t q, std::mt19937_64 &rng);
+RlweSk gen_secret_key(size_t N, uint64_t q, ChaChaRng &rng);
 
 // Symmetric encryption of zero under secret key sk:
 //   c1 = a  (uniform in [0, q))
@@ -66,7 +67,7 @@ RlweSk gen_secret_key(size_t N, uint64_t q, std::mt19937_64 &rng);
 // If ntt_form == true, both c0 and c1 are returned in NTT form; otherwise
 // both are in coefficient form.
 void encrypt_zero(const RlweSk &sk, size_t N, uint64_t q, double sigma,
-                  std::mt19937_64 &rng, RlweCt &ct, bool ntt_form = false);
+                  ChaChaRng &rng, RlweCt &ct, bool ntt_form = false);
 
 // BFV symmetric encryption of a message polynomial `m` (length N, values < t):
 //   c = Enc(0) + (Δ·m, 0)   where Δ = ⌊q/t⌋.
@@ -76,7 +77,7 @@ void encrypt_zero(const RlweSk &sk, size_t N, uint64_t q, double sigma,
 // a non-NTT input plaintext).
 void encrypt_bfv(const std::vector<uint64_t> &m, const RlweSk &sk,
                  size_t N, uint64_t q, uint64_t t, double sigma,
-                 std::mt19937_64 &rng, RlweCt &ct);
+                 ChaChaRng &rng, RlweCt &ct);
 
 // Decrypt a single-modulus ciphertext into a plaintext polynomial modulo t.
 //   phase[i] = (c0 + c1 * s)[i]          in [0, q)
@@ -122,7 +123,7 @@ struct RnsTables;  // defined in pir.h; only K=2 fields are used here
 // One ternary polynomial reduced and NTT'd per limb. data layout: limb k at
 // offset k*N. The same ternary coefficients are used across all limbs.
 RlweSk gen_secret_key_rns(size_t N, const std::vector<uint64_t> &qs,
-                          std::mt19937_64 &rng);
+                          ChaChaRng &rng);
 
 // Encryption of zero under sk:
 //   c1_k = a_k                     (uniform in [0, q_k))
@@ -132,7 +133,7 @@ RlweSk gen_secret_key_rns(size_t N, const std::vector<uint64_t> &qs,
 // error 的符号与常见 BFV 记法可能相反，但分布对称，解密语义等价。
 void encrypt_zero_rns(const RlweSk &sk, size_t N,
                       const std::vector<uint64_t> &qs,
-                      double sigma, std::mt19937_64 &rng,
+                      double sigma, ChaChaRng &rng,
                       RlweCt &ct, bool ntt_form = false);
 
 // BFV encryption: encrypt_zero + add round(Q*m[i]/t) to c0[i]。
@@ -140,7 +141,7 @@ void encrypt_zero_rns(const RlweSk &sk, size_t N,
 // 同一个整数表示投影到每个 RNS limb，不能逐 limb 独立近似 Delta。
 void encrypt_bfv_rns(const std::vector<uint64_t> &m, const RlweSk &sk,
                      size_t N, const std::vector<uint64_t> &qs, uint64_t t,
-                     double sigma, std::mt19937_64 &rng, RlweCt &ct);
+                     double sigma, ChaChaRng &rng, RlweCt &ct);
 
 // Decrypt: per-limb phase, CRT-compose to MP, mod-switch q1 → drop, then
 // rescale q0 → t. tables.q0_inv_mod_q1 must be set when K >= 2.

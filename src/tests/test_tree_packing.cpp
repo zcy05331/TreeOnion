@@ -25,7 +25,7 @@ void PirTest::test_tree_packing() {
   const auto keys = client.create_session_keys(logn);
   const auto &qs = scheme.get_rns_mods();
   const uint64_t t = scheme.get_plain_mod();
-  std::mt19937_64 rng(0x4d4c57454d455247ULL);
+  ChaChaRng rng(0x4d4c57454d455247ULL);
   const std::array<size_t, 8> offsets{0, 4, 2, 6, 1, 5, 3, 7};
   for (size_t i = 0; i < offsets.size(); ++i) {
     require_test(packed_residue_offset(i, 8, ResponsePacking::MlweMerge) == offsets[i],

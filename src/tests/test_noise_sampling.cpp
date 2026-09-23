@@ -4,10 +4,23 @@
 void PirTest::test_noise_sampling() {
   print_func_name(__FUNCTION__);
 
+  // Every sampler draws from ChaChaRng. RFC 8439 A.1 test vectors #1 and #2
+  // (zero key and nonce, block counters 0 and 1) pin the keystream; two
+  // OS-seeded generators must not share one.
+  {
+    ChaChaRng kat(std::array<uint32_t, 8>{});
+    const uint64_t first = kat();
+    for (int i = 1; i < 8; ++i) (void)kat();
+    require_test(first == 0x903df1a0ade0b876ULL && kat() == 0x7a385155bee7079fULL,
+                 "ChaCha20 keystream matches RFC 8439");
+    ChaChaRng a, b;
+    require_test(a() != b(), "OS-seeded ChaCha20 generators differ");
+  }
+
   constexpr size_t N = 10000; // large N for reliable statistics
   PirParams pir_params;
   const uint64_t q = pir_params.get_rns_mods()[0];
-  std::mt19937_64 rng(12345);
+  ChaChaRng rng(12345);
 
   // ---------------------------------------------------------------------------
   // Background: sigma_std vs. width parameter (used in Spiral / Respire / Inspire)

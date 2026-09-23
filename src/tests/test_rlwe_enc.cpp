@@ -13,7 +13,7 @@ void PirTest::test_rlwe_enc() {
   const uint64_t t     = pir_params.get_plain_mod();
   const double   sigma = pir_params.get_noise_std_dev();
 
-  std::mt19937_64 rng(12345);
+  ChaChaRng rng(12345);
 
   BENCH_PRINT("N=" << N << "  q=" << q << " (" << std::ceil(std::log2(q)) << " bits)"
               << "  t=" << t << "  sigma=" << sigma);

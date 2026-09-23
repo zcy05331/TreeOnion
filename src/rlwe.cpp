@@ -6,7 +6,7 @@
 #include <cstring>
 #include <stdexcept>
 
-RlweSk gen_secret_key(size_t N, uint64_t q, std::mt19937_64 &rng) {
+RlweSk gen_secret_key(size_t N, uint64_t q, ChaChaRng &rng) {
   RlweSk sk;
   sk.data.resize(N);
   utils::sample_ternary(sk.data.data(), N, q, rng);
@@ -15,7 +15,7 @@ RlweSk gen_secret_key(size_t N, uint64_t q, std::mt19937_64 &rng) {
 }
 
 void encrypt_zero(const RlweSk &sk, size_t N, uint64_t q, double sigma,
-                  std::mt19937_64 &rng, RlweCt &ct, bool ntt_form) {
+                  ChaChaRng &rng, RlweCt &ct, bool ntt_form) {
   ct.resize(N);
 
   // Sample a ← U([0, q)) and e ← Gaussian(0, sigma²), both in coefficient form.
@@ -114,7 +114,7 @@ int decrypt_and_budget(const RlweCt &ct, const RlweSk &sk, size_t N,
 
 void encrypt_bfv(const std::vector<uint64_t> &m, const RlweSk &sk,
                  size_t N, uint64_t q, uint64_t t, double sigma,
-                 std::mt19937_64 &rng, RlweCt &ct) {
+                 ChaChaRng &rng, RlweCt &ct) {
   encrypt_zero(sk, N, q, sigma, rng, ct, /*ntt_form=*/false);
   // BFV message term 只加到 c0：c0=-(a*s+e)+Delta*m、c1=a，
   // decrypt phase=c0+c1*s。单模数路径使用 Delta=floor(q/t)。
@@ -176,7 +176,7 @@ namespace {
 // Sample one shared ternary pattern; reduce per limb (-1 → q_k - 1).
 void sample_ternary_rns(uint64_t *out, size_t N,
                         const std::vector<uint64_t> &qs,
-                        std::mt19937_64 &rng) {
+                        ChaChaRng &rng) {
   std::uniform_int_distribution<int> dist(0, 2);
   std::vector<int8_t> tern(N);
   for (size_t i = 0; i < N; i++) {
@@ -195,7 +195,7 @@ void sample_ternary_rns(uint64_t *out, size_t N,
 // Sample shared signed Gaussian e; reduce per limb into [0, q_k).
 void sample_gaussian_rns(uint64_t *out, size_t N,
                          const std::vector<uint64_t> &qs,
-                         double sigma, std::mt19937_64 &rng) {
+                         double sigma, ChaChaRng &rng) {
   std::normal_distribution<double> dist(0.0, sigma);
   std::vector<int64_t> e(N);
   for (size_t i = 0; i < N; i++) e[i] = std::llround(dist(rng));
@@ -217,7 +217,7 @@ void sample_gaussian_rns(uint64_t *out, size_t N,
 }  // namespace
 
 RlweSk gen_secret_key_rns(size_t N, const std::vector<uint64_t> &qs,
-                          std::mt19937_64 &rng) {
+                          ChaChaRng &rng) {
   RlweSk sk;
   sk.data.resize(N * qs.size());
   sample_ternary_rns(sk.data.data(), N, qs, rng);
@@ -229,7 +229,7 @@ RlweSk gen_secret_key_rns(size_t N, const std::vector<uint64_t> &qs,
 
 void encrypt_zero_rns(const RlweSk &sk, size_t N,
                       const std::vector<uint64_t> &qs,
-                      double sigma, std::mt19937_64 &rng,
+                      double sigma, ChaChaRng &rng,
                       RlweCt &ct, bool ntt_form) {
   const size_t K = qs.size();
   ct.c0.assign(N * K, 0);
@@ -277,7 +277,7 @@ void encrypt_zero_rns(const RlweSk &sk, size_t N,
 
 void encrypt_bfv_rns(const std::vector<uint64_t> &m, const RlweSk &sk,
                      size_t N, const std::vector<uint64_t> &qs, uint64_t t,
-                     double sigma, std::mt19937_64 &rng, RlweCt &ct) {
+                     double sigma, ChaChaRng &rng, RlweCt &ct) {
   encrypt_zero_rns(sk, N, qs, sigma, rng, ct, /*ntt_form=*/false);
 
   const size_t K = qs.size();

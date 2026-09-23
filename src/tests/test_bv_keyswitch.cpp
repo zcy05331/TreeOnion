@@ -16,7 +16,7 @@ static void test_rounded_bv_digits() {
     for (size_t drop : {size_t{0}, size_t{16}, size_t{24}}) {
       const size_t bits = (scheme.get_ct_mod_width() - drop) / rows + 1;
       const uint64_t half = drop ? uint64_t{1} << (drop - 1) : 0;
-      std::mt19937_64 rng(0x627664726f70ULL);
+      ChaChaRng rng(0x627664726f70ULL);
       for (size_t sample = 0; sample < 2000; ++sample) {
         const std::array<uint64_t, 8> edges = {
             0, 1, q - 1, q / 2, q / 2 + 1, half,
@@ -60,7 +60,7 @@ static void test_signed_decompose() {
   const uint64_t q = pir_params.get_rns_mods()[0];
   const uint64_t half_q = q >> 1;
 
-  std::mt19937_64 rng(42);
+  ChaChaRng rng(42);
   constexpr size_t num_tests = 10000;
   size_t max_digit_mag = 0;
 
@@ -116,7 +116,7 @@ void PirTest::test_bv_keyswitch() {
 
   BENCH_PRINT("K=" << qs.size() << " N=" << N << " t=" << t);
 
-  std::mt19937_64 rng(0x62766b73ULL);
+  ChaChaRng rng(0x62766b73ULL);
   RlweSk sk = gen_secret_key_rns(N, qs, rng);
 
   // Build a plaintext with a few distinctive coefficients.
@@ -191,7 +191,7 @@ void test_bv_keyswitch_reference() {
   const size_t low_bits = bvks::low_bits_for_scheme(params);
   const uint64_t B = uint64_t{1} << base_log2;
 
-  std::mt19937_64 rng(0x62766b73ULL);
+  ChaChaRng rng(0x62766b73ULL);
   const RlweSk sk = gen_secret_key_rns(N, qs, rng);
   std::vector<uint64_t> pt(N);
   for (size_t i = 0; i < N; ++i) pt[i] = (3 * i + 1) % t;

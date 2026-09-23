@@ -7,7 +7,7 @@
 #include <stdexcept>
 
 // Build the K-limb sk lazily because its construction depends on PirParams.
-static RlweSk make_client_sk(const PirParams &pir_params, std::mt19937_64 &rng) {
+static RlweSk make_client_sk(const PirParams &pir_params, ChaChaRng &rng) {
   const auto &qs_arr = pir_params.get_rns_mods();
   const std::vector<uint64_t> qs(qs_arr.begin(), qs_arr.end());
   return gen_secret_key_rns(DBConsts::PolyDegree, qs, rng);
@@ -15,7 +15,7 @@ static RlweSk make_client_sk(const PirParams &pir_params, std::mt19937_64 &rng) 
 
 PirClient::PirClient(const PirParams &pir_params)
     : client_id_(rand()), pir_params_(pir_params),
-      rng_(std::random_device{}()),
+      rng_(),
       rlwe_sk_(make_client_sk(pir_params, rng_)) {}
 
 GSWCt PirClient::generate_gsw_from_key() {

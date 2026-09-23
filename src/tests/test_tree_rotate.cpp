@@ -45,7 +45,7 @@ void PirTest::test_tree_rotate() {
   const std::vector<uint64_t> qs(scheme.get_rns_mods().begin(),
                                  scheme.get_rns_mods().end());
   const double sigma = scheme.get_noise_std_dev();
-  std::mt19937_64 rng(0x726f74617465ULL);
+  ChaChaRng rng(0x726f74617465ULL);
 
   // ---- MulXPow oracle: every exponent, dense sign-sensitive payload ----
   std::vector<uint64_t> msg(N);

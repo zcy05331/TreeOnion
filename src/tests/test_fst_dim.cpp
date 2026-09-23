@@ -13,7 +13,7 @@ void PirTest::test_fst_dim_mult() {
   if (composite.enabled) {
     const size_t diag_n = composite_params.get_fst_dim_sz();
     const uint64_t diag_q = composite.q1;
-    std::mt19937_64 diag_rng(0x51A1A5ULL);
+    ChaChaRng diag_rng(0x51A1A5ULL);
     std::vector<uint32_t> diag_a(diag_n);
     std::vector<uint32_t> diag_b(diag_n * 2);
     std::vector<uint64_t> diag_got(2, 0);
@@ -52,7 +52,7 @@ void PirTest::test_fst_dim_mult() {
   const uint64_t ref_q = ref_qs_arr[0];
   std::vector<uint64_t> ref_level_qs(ref_levels, ref_q);
 
-  std::mt19937_64 ref_rng(0xC0FFEEULL);
+  ChaChaRng ref_rng(0xC0FFEEULL);
   std::vector<db_coeff_t> A_ref(ref_m * ref_n * ref_levels);
   std::vector<db_coeff_t> B_ref(ref_n * ref_p * ref_levels);
   std::vector<inter_coeff_t> C_ref(ref_m * ref_p * ref_levels, 0);

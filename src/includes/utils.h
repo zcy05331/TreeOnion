@@ -4,6 +4,7 @@
 #include <iostream>
 #include <fstream>
 #include <random>
+#include "csprng.h"
 
 
 #ifdef _DEBUG
@@ -248,14 +249,14 @@ size_t roundup_div(const size_t numerator, const size_t denominator);
 
 // Error polynomial: e[i] = round(N(0, sigma)) mod q.
 // Positive values stored as-is; negative values stored as q - |e| (two's complement mod q).
-void sample_gaussian(uint64_t *out, size_t N, uint64_t q, double sigma, std::mt19937_64 &rng);
+void sample_gaussian(uint64_t *out, size_t N, uint64_t q, double sigma, ChaChaRng &rng);
 
 // Uniform polynomial: a[i] uniformly in [0, q).
-void sample_uniform_poly(uint64_t *out, size_t N, uint64_t q, std::mt19937_64 &rng);
+void sample_uniform_poly(uint64_t *out, size_t N, uint64_t q, ChaChaRng &rng);
 
 // Ternary secret key: s[i] in {0, 1, q-1} with equal probability 1/3 each.
 // Stores 0 for 0, 1 for +1, q-1 for -1 (additive inverse).
-void sample_ternary(uint64_t *out, size_t N, uint64_t q, std::mt19937_64 &rng);
+void sample_ternary(uint64_t *out, size_t N, uint64_t q, ChaChaRng &rng);
 
 // Rescale a single coefficient from modulus inp_mod to out_mod using
 // centered (signed) round-to-nearest: lifts a into [-inp_mod/2, inp_mod/2),

@@ -14,7 +14,7 @@ void PirTest::test_mod_switch() {
   const uint64_t small_q = pir_params.get_small_q();
   const uint64_t t = pir_params.get_plain_mod();
   const double sigma = pir_params.get_noise_std_dev();
-  std::mt19937_64 rng(0x6d6f6473ULL);
+  ChaChaRng rng(0x6d6f6473ULL);
 
   // Dense plaintext including the extreme value t - 1, so a rounding error
   // in the rescale shows up somewhere.

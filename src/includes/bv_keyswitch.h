@@ -6,6 +6,7 @@
 #include <vector>
 #include <cstdint>
 #include <random>
+#include "csprng.h"
 
 // ============================================================================
 // BV-Style Galois Key-Switching (No Special Prime)
@@ -83,7 +84,7 @@ size_t low_bits_for_scheme(const PirParams &pir_params);
 // Error σ is read from pir_params.get_noise_std_dev().
 BvKeySwitchKey gen_bv_ks_key(const PirParams &pir_params,
                              const RlweSk &sk, uint32_t galois_k,
-                             std::mt19937_64 &rng);
+                             ChaChaRng &rng);
 
 // Generate a full set of BV key-switching keys for all expansion-level
 // automorphisms. Error σ is read from pir_params.get_noise_std_dev().

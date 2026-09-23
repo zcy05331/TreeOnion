@@ -14,7 +14,7 @@ void PirTest::test_ext_prod_mux() {
   const RnsTables &tables = pir_params.get_rns_tables();
   const uint64_t t = pir_params.get_plain_mod();
   const double sigma = pir_params.get_noise_std_dev();
-  std::mt19937_64 rng(0x1234ULL);
+  ChaChaRng rng(0x1234ULL);
 
   // Dense payloads so a wrong pairing or a dropped coefficient is visible.
   std::vector<uint64_t> a(coeff_count, 0), b(coeff_count, 0);

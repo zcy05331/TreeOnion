@@ -32,7 +32,7 @@ bool throws_range(Fn &&fn) {
   return false;
 }
 
-EntryBits random_entry(size_t bits, std::mt19937_64 &rng) {
+EntryBits random_entry(size_t bits, ChaChaRng &rng) {
   EntryBits entry = zero_entry(bits);
   for (size_t bit = 0; bit < bits; ++bit) {
     if (rng() & 1U) set_bit(entry, bit, 1);
@@ -140,7 +140,7 @@ void PirTest::test_tree_entry_codec() {
     }
   }
 
-  std::mt19937_64 rng(0x636f646563ULL);
+  ChaChaRng rng(0x636f646563ULL);
   const std::vector<size_t> entry_sizes = {1, 7, 13, 160, 256, 512, 8192,
                                            30000};
   const std::vector<size_t> record_widths = {1, 2, 7, 16, 64, 2048};

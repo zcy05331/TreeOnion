@@ -6,6 +6,7 @@
 #include "pir_session.h"
 #include "rlwe.h"
 #include <random>
+#include "csprng.h"
 
 class PirClient {
 public:
@@ -89,7 +90,7 @@ public:
 private:
   const size_t client_id_;
   PirParams pir_params_;
-  std::mt19937_64 rng_;       // per-client PRNG for noise sampling
+  ChaChaRng rng_;       // per-client PRNG for noise sampling
   RlweSk rlwe_sk_;            // ternary sk, NTT form under q
 
   // Algorithm 4 line 1 的 plaintext index 坐标映射：

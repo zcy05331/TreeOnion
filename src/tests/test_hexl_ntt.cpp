@@ -20,7 +20,7 @@ void PirTest::test_hexl_ntt() {
   intel::hexl::NTT ntt(N, q, root);
   BENCH_PRINT("HEXL NTT object created.");
 
-  std::mt19937_64 rng(42);
+  ChaChaRng rng(42);
 
   // ===================== Test 1: NTT(INTT(x)) == x =====================
   BENCH_PRINT("\n--- Test 1: NTT(INTT(x)) == x ---");

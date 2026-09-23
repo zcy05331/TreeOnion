@@ -46,7 +46,7 @@ void PirTest::test_external_product() {
 
   const uint64_t q = pir_params.get_rns_mods()[0];
   const uint64_t t = pir_params.get_plain_mod();
-  std::mt19937_64 rng(std::random_device{}());
+  ChaChaRng rng;
   RlweSk rlwe_sk = gen_secret_key(coeff_count, q, rng);
 
   GSWCt one_gsw  = data_gsw.plain_to_gsw(one,  rlwe_sk, rng);

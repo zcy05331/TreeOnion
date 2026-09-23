@@ -21,7 +21,7 @@ void PirTest::test_decrypt_mod_q() {
   const uint64_t t = pir_params.get_plain_mod();
   const uint64_t small_q = pir_params.get_small_q();
   const double sigma = pir_params.get_noise_std_dev();
-  std::mt19937_64 rng(0x6d6f6471ULL);
+  ChaChaRng rng(0x6d6f6471ULL);
 
   std::vector<uint64_t> a(coeff_count, 0);
   for (size_t i = 0; i < coeff_count; ++i) a[i] = (7 * i + 1) % t;

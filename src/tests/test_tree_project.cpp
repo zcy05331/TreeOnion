@@ -26,7 +26,7 @@ void PirTest::test_tree_project() {
   const std::vector<uint64_t> qs(scheme.get_rns_mods().begin(),
                                  scheme.get_rns_mods().end());
   const double sigma = scheme.get_noise_std_dev();
-  std::mt19937_64 rng(0x70726f6a656374ULL);
+  ChaChaRng rng(0x70726f6a656374ULL);
   SharedPirSessionKeys keys = client.create_session_keys(kLogN);
 
   // ---- Pure projection oracle: pi_d keeps exactly the stride-2^d
