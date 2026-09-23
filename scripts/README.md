@@ -30,7 +30,7 @@ InsPIRe, TreePIR+Spiral and SPIRIT+RC paths are intentionally absent.
 | `run_core_matrix.py` | StandardOnionPIR, Layerwise tuned and its merged/packed ablations, Cuckoo batch tuned and Flat over 256 MiB to 4 GiB, 8 GiB on request |
 | `run_external_matrix.py` | Respire over the same heights, with resource admission |
 | `run_spiral_pbc_matrix.py`, `run_kspir_pbc_matrix.py` | Spiral and KsPIR per bucket of the Cuckoo baseline's PBC instance |
-| `run_via_b_matrix.py` | VIA-B batch PIR |
+| `run_via_matrix.py` | VIA-B batch PIR, and VIA per bucket of the same PBC instance |
 | `run_treepir_matrix.py` | TreePIR VBPIR/SealPIR backend tuner wrapper |
 | `run_treepir_backend_tuning.py` | Generate the shared Floyd leaf schedule, tune TreePIR backends, and run the selected candidate |
 | `run_path_baselines.py` | Finite runner for an already-built Respire adapter |
@@ -44,8 +44,8 @@ InsPIRe, TreePIR+Spiral and SPIRIT+RC paths are intentionally absent.
 `path_baselines/respire/` owns the Respire path workload. The adapter supports
 H8 smoke and formal H22/H23/H24/H26 points.
 
-`path_baselines/spiral_pbc/`, `kspir_pbc/` and `via_b/` own the PBC-backed
-and VIA-B adapters; [path_baselines/README.md](path_baselines/README.md) lists
+`path_baselines/spiral_pbc/`, `kspir_pbc/`, `via_pbc/` and `via_b/` own the
+PBC-backed and VIA-B adapters; [path_baselines/README.md](path_baselines/README.md) lists
 them.
 
 `treepir_sealpir/` owns the TreePIR SealPIRplus adapter used by the retained

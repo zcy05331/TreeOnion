@@ -2,18 +2,12 @@
 
 VIA-B (Liu, Wang and Zhang, *VIA: Communication-Efficient Single-Server Private
 Information Retrieval*, ePrint 2025/2074, S&P 2026, Section 4.7 and Figure 9)
-on the root-excluded Merkle path workload with the seed-7 leaves (`pbc.hpp`,
-shared with `../kspir_pbc/`).
-
-- `--batch native` (default, scheme `via_b`) is the paper's VIA-B: the H
-  sibling queries of a path are independent VIA-C queries over the whole
-  database, and their answers are repacked. This matches the paper's
-  communication figures (Table 2: 32 queries on 1 GB are 18.16 KB, 32 times the
-  0.568 KB single VIA-C query).
-- `--batch pbc` (scheme `via_b_pbc`) runs the same answer path once per bucket
-  of the OnionPIR cuckoo baseline's PBC instance (same records, hashes, bucket
-  positions; dummy buckets ask for position 0) and repacks the bucket answers.
-  It is a separate variant, not the paper's protocol.
+on the root-excluded Merkle path workload with the seed-7 leaves (the Merkle
+helpers and leaf schedule of `../kspir_pbc/pbc.hpp`). The H sibling queries of
+a path are independent VIA-C queries over the whole database, and their answers
+are repacked. This matches the paper's communication figures (Table 2: 32
+queries on 1 GB are 18.16 KB, 32 times the 0.568 KB single VIA-C query).
+[`../via_pbc/`](../via_pbc/README.md) runs VIA itself per PBC bucket.
 
 ## Why the scheme is written from the paper
 
@@ -36,7 +30,7 @@ Per query, the VIA-C answer path of Figure 8:
    switches each) and the RLWE-to-RGSW conversion of Section 4.2;
 2. DMux over I = 2^log_rows rows from `(0, floor(q1/p))`;
 3. modulus switch q1 -> q2 and first dimension over the I x J matrix of the
-   database (native) or bucket (pbc);
+   database;
 4. CMux over the J columns and CRot by the record's slot.
 
 Per path, the answers are packed eight per ciphertext with the
@@ -71,12 +65,11 @@ two neighbours) and the GCC and icpx builds, and keeps the fastest.
 
     cmake -S . -B build -DHEXL_DIR=<hexl-1.2.6 cmake dir>
     cmake --build build
-    build/via_b --self-test --fixture ../kspir_pbc/tests/fixtures/cpp_h22_bucket_member_counts.json
-    build/via_b --height 24 --output via_b.json               # paper's VIA-B
-    build/via_b --height 24 --batch pbc --output via_b_pbc.json
+    build/via_b --self-test
+    build/via_b --height 24 --output via_b.json
 
-`scripts/run_via_b_matrix.py [--batch-mode pbc]` pins one CPU and runs the
-pilots and the formal rows. The IFMA kernels need AVX512-IFMA (`-march=native` on the
+`scripts/run_via_matrix.py --scheme via_b` pins one CPU and runs the pilots and
+the formal rows. The IFMA kernels need AVX512-IFMA (`-march=native` on the
 benchmark nodes); other hosts use the scalar fallbacks.
 
 ## Limitations
@@ -95,5 +88,6 @@ benchmark nodes); other hosts use the scalar fallbacks.
   each group of eight answers is its own ring-switched ciphertext.
 - The NTT-form database is stored as 34-bit words (32-bit plane plus a 2-bit
   plane): the first dimension reads 4.25 bytes per 4-bit coefficient instead of
-  8, and the pbc variant's three-fold replicated 4 GiB instance fits in about
-  105 GiB.
+  8.
+- Keys, masks and noise come from seeded xoshiro256** streams, so a failing
+  sample can be replayed; the timings do not depend on them.

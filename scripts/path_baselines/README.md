@@ -19,7 +19,8 @@ instead of the CLI described in the rest of this file:
 |---|---|---|
 | [spiral_pbc/](spiral_pbc/README.md) | Spiral behind the OnionPIR cuckoo baseline's PBC instance | `scripts/run_spiral_pbc_matrix.py` |
 | [kspir_pbc/](kspir_pbc/README.md) | KsPIR behind the same PBC instance | `scripts/run_kspir_pbc_matrix.py` |
-| [via_b/](via_b/README.md) | VIA-B as in the paper (native), or per PBC bucket (`--batch pbc`) | `scripts/run_via_b_matrix.py` |
+| [via_b/](via_b/README.md) | VIA-B as in the paper | `scripts/run_via_matrix.py --scheme via_b` |
+| [via_pbc/](via_pbc/README.md) | VIA behind the same PBC instance | `scripts/run_via_matrix.py --scheme via_pbc` |
 
 ## Workload and CLI
 

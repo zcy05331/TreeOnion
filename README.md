@@ -50,6 +50,7 @@ The comparison contains these baseline families:
 | Spiral + PBC | Spiral per bucket of the Cuckoo baseline's PBC instance |
 | KsPIR + PBC | KsPIR per bucket of the same PBC instance |
 | VIA-B | VIA-B batch PIR, written from the paper |
+| VIA + PBC | VIA per bucket of the same PBC instance |
 
 Layerwise + response merging and its packed-query variant reuse the primary
 algorithm's shared selectors and merge, so they are ablation steps rather than

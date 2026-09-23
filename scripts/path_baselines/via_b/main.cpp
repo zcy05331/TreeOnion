@@ -1,9 +1,7 @@
-// VIA-B on the root-excluded Merkle path workload with the seed-7 leaves.
-// --batch native is the paper's Figure 9: the H sibling queries are
-// independent VIA-C queries over the whole database, answers repacked eight
-// per ring-switched response ciphertext. --batch pbc runs the same answer path
-// per bucket of the OnionPIR cuckoo baseline's PBC instance (one query per
-// bucket, dummies at position 0) and repacks the bucket answers.
+// VIA-B (the paper's Figure 9) on the root-excluded Merkle path workload with
+// the seed-7 leaves: the H sibling queries are independent VIA-C queries over
+// the whole database, answers repacked eight per ring-switched response
+// ciphertext.
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -28,7 +26,7 @@ struct Args {
   size_t height = 0, warmups = 3, trials = 8;
   uint64_t seed = 7;
   int log_rows = -1;  // log2 I; -1 picks the power of two nearest 0.55 * sqrt(polys)
-  std::string batch = "native", output, fixture, compiler_label;
+  std::string output, compiler_label;
   bool self_test = false;
 };
 
@@ -45,9 +43,7 @@ Args parse(int argc, char **argv) {
     else if (k == "--trials") a.trials = std::stoul(val());
     else if (k == "--trial-seed") a.seed = std::stoull(val());
     else if (k == "--log-rows") a.log_rows = std::stoi(val());
-    else if (k == "--batch") a.batch = val();
     else if (k == "--output") a.output = val();
-    else if (k == "--fixture") a.fixture = val();
     else if (k == "--compiler-label") a.compiler_label = val();
     else if (k == "--self-test") a.self_test = true;
     else throw std::invalid_argument("unknown argument " + k);
@@ -65,21 +61,6 @@ uint64_t packed_bytes(size_t count, size_t bits) { return (static_cast<uint64_t>
 std::array<uint8_t, 32> record_of(uint32_t ordinal) {
   const auto node = pbc::node_of_ordinal(ordinal);
   return pbc::merkle_node(node.first, node.second);
-}
-
-std::vector<size_t> read_int_array(const std::string &path) {
-  std::ifstream in(path);
-  if (!in) throw std::runtime_error("cannot open fixture " + path);
-  std::stringstream ss;
-  ss << in.rdbuf();
-  std::string s = ss.str();
-  for (char &ch : s)
-    if (ch == '[' || ch == ']' || ch == ',') ch = ' ';
-  std::stringstream nums(s);
-  std::vector<size_t> out;
-  size_t v;
-  while (nums >> v) out.push_back(v);
-  return out;
 }
 
 std::string jnum(double v) {
@@ -178,12 +159,7 @@ int scheme_self_test() {
   return 0;
 }
 
-int self_test(const Args &a) {
-  const auto expected = read_int_array(a.fixture);
-  const auto buckets = pbc::build_buckets(pbc::benchmark_params(pbc::item_count(22), 22));
-  std::vector<size_t> counts;
-  for (const auto &b : buckets) counts.push_back(b.size());
-  if (counts != expected) { std::cerr << "self-test: H=22 bucket counts differ\n"; return 1; }
+int self_test() {
   const std::vector<size_t> m22{489912, 3430182, 325581, 307198, 4049938, 1889243, 641477, 3537643};
   const std::vector<size_t> m24{13290720, 9622024, 8226918, 14471806, 8955543, 13755917, 1848245, 11926251};
   if (pbc::trial_plan(size_t{1} << 22, 3, 8, 7).second != m22 || pbc::trial_plan(size_t{1} << 24, 3, 8, 7).second != m24) {
@@ -191,7 +167,7 @@ int self_test(const Args &a) {
     return 1;
   }
   if (scheme_self_test()) return 1;
-  std::cout << "self-test ok: H=22 bucket counts, seed-7 leaves, conversion, DMux, repacking\n";
+  std::cout << "self-test ok: seed-7 leaves, conversion, DMux, repacking\n";
   return 0;
 }
 
@@ -205,28 +181,13 @@ struct Stages {
 int main(int argc, char **argv) {
   try {
     const Args a = parse(argc, argv);
-    if (a.self_test) return self_test(a);
+    if (a.self_test) return self_test();
     if (a.height < 8 || a.height > 27 || a.output.empty()) throw std::invalid_argument("--height 8..27 and --output are required");
-    if (a.batch != "native" && a.batch != "pbc") throw std::invalid_argument("--batch is native or pbc");
-    const bool use_pbc = a.batch == "pbc";
     const size_t h = a.height, leaf_count = size_t{1} << h, items = pbc::item_count(h);
 
-    // Databases: the whole record list (native) or the PBC buckets.
+    // One database of every record; ordinal = position.
     const auto bucket_start = Clock::now();
-    pbc::Params cp;
-    std::vector<std::vector<uint32_t>> buckets;
-    std::vector<size_t> db_records;
-    if (use_pbc) {
-      cp = pbc::benchmark_params(items, h);
-      buckets = pbc::build_buckets(cp);
-      for (const auto &b : buckets) db_records.push_back(b.size());
-    } else {
-      db_records.push_back(items);
-    }
-    auto ordinal_of = [&](size_t db, size_t pos) { return use_pbc ? buckets[db][pos] : static_cast<uint32_t>(pos); };
-    const size_t max_records = *std::max_element(db_records.begin(), db_records.end());
-    const size_t total_records = std::accumulate(db_records.begin(), db_records.end(), size_t{0});
-    const size_t queries_per_path = use_pbc ? cp.num_buckets : h;
+    const size_t max_records = items, total_records = items, queries_per_path = h;
     const size_t polys = (max_records + kRecordsPerPoly - 1) / kRecordsPerPoly;
     size_t log_i = 0;
     if (a.log_rows >= 0) {
@@ -240,8 +201,8 @@ int main(int argc, char **argv) {
     const Shape sh = Shape::make(max_records, log_i);
     if (sh.I > polys && log_i > 0) throw std::invalid_argument("--log-rows exceeds the database's polynomial count");
     const double bucket_ms = ms_since(bucket_start);
-    std::cerr << "via_b: H=" << h << " batch=" << a.batch << " databases=" << db_records.size() << " queries=" << queries_per_path
-              << " max_records=" << max_records << " I=" << sh.I << " J=" << sh.J << " log_j=" << sh.log_j << "\n";
+    std::cerr << "via_b: H=" << h << " queries=" << queries_per_path << " max_records=" << max_records << " I=" << sh.I
+              << " J=" << sh.J << " log_j=" << sh.log_j << "\n";
 
     Ring R1(kN1, kQ11, kQ12), R2(kN1, kQ2), R3(kN2, kQ3);
     auto t0 = Clock::now();
@@ -253,20 +214,17 @@ int main(int argc, char **argv) {
     const double server_key_ms = ms_since(t0);
 
     t0 = Clock::now();
-    std::vector<BucketDb> dbs(db_records.size());
+    BucketDb db;
     Vec poly(kN1);
-    for (size_t d = 0; d < dbs.size(); ++d) {
-      dbs[d].allocate(sh.I, sh.J);
-      for (size_t alpha = 0; alpha < sh.I; ++alpha)
-        for (size_t beta = 0; beta < sh.J; ++beta) {
-          encode_poly(sh, alpha, beta, db_records[d], [&](size_t pos) { return record_of(ordinal_of(d, pos)); }, poly.data());
-          R2.ntt[0]->ComputeForward(poly.data(), poly.data(), 1, 1);
-          dbs[d].store(alpha, beta, poly.data());
-        }
-    }
+    db.allocate(sh.I, sh.J);
+    for (size_t alpha = 0; alpha < sh.I; ++alpha)
+      for (size_t beta = 0; beta < sh.J; ++beta) {
+        encode_poly(sh, alpha, beta, items, [](size_t pos) { return record_of(static_cast<uint32_t>(pos)); }, poly.data());
+        R2.ntt[0]->ComputeForward(poly.data(), poly.data(), 1, 1);
+        db.store(alpha, beta, poly.data());
+      }
     const double db_setup_ms = ms_since(t0);
-    uint64_t db_bytes = 0;
-    for (const auto &d : dbs) db_bytes += d.bytes();
+    const uint64_t db_bytes = db.bytes();
 
     const auto plan = pbc::trial_plan(leaf_count, a.warmups, a.trials, a.seed);
     Scratch S1(32, R1.words()), S2(16, R2.words()), S3(32, R3.words());
@@ -278,11 +236,6 @@ int main(int argc, char **argv) {
     const size_t groups = (queries_per_path + kAnswersPerPacked - 1) / kAnswersPerPacked;
     std::vector<Response> responses(groups);
 
-    struct QuerySpec {
-      size_t db, pos;
-      bool real;
-      uint32_t ordinal;
-    };
     std::ostringstream samples;
     std::vector<double> server_v, client_v, decode_v;
     std::vector<Stages> stage_v;
@@ -292,36 +245,24 @@ int main(int argc, char **argv) {
       const auto &trial_leaves = phase == 0 ? plan.first : plan.second;
       for (size_t trial = 0; trial < trial_leaves.size(); ++trial) {
         const size_t leaf = trial_leaves[trial];
-        const auto ordinals = pbc::sibling_ordinals(leaf, h);
-        std::vector<QuerySpec> specs;
-        if (use_pbc) {
-          const auto assignment = pbc::cuckoo_place(ordinals, cp);
-          for (size_t b = 0; b < cp.num_buckets; ++b) {
-            if (assignment[b].has_value())
-              specs.push_back({b, pbc::position_in_bucket(buckets[b], *assignment[b]), true, *assignment[b]});
-            else
-              specs.push_back({b, 0, false, 0});
-          }
-        } else {
-          for (const uint32_t o : ordinals) specs.push_back({0, o, true, o});
-        }
+        const auto ordinals = pbc::sibling_ordinals(leaf, h);  // record positions in the database
         u64 seed_state = a.seed * 0x10001 + leaf;
         const u64 query_seed = Prg::splitmix(seed_state);
 
-        // Client: one compressed VIA-C query per database query.
+        // Client: one compressed VIA-C query per sibling.
         auto tc = Clock::now();
         Prg noise(query_seed, 0xe44);
-        std::vector<std::vector<u64>> queries(specs.size());
-        for (size_t q = 0; q < specs.size(); ++q) {
+        std::vector<std::vector<u64>> queries(ordinals.size());
+        for (size_t q = 0; q < ordinals.size(); ++q) {
           size_t alpha, beta, gamma;
-          sh.locate(specs[q].pos, alpha, beta, gamma);
+          sh.locate(ordinals[q], alpha, beta, gamma);
           queries[q] = client_query(R1, K, sh, alpha, beta, gamma, query_seed, q * sh.lwes(), noise);
         }
         const double client_ms = ms_since(tc);
 
         // Server.
         Stages st;
-        for (size_t q = 0; q < specs.size(); ++q) {
+        for (size_t q = 0; q < ordinals.size(); ++q) {
           auto s0 = Clock::now();
           server_decompress(R1, R2, S1, C, pp, sh, query_seed, q * sh.lwes(), queries[q].data(), keys);
           auto s1 = Clock::now();
@@ -329,7 +270,7 @@ int main(int argc, char **argv) {
           auto s2 = Clock::now();
           first_dim_input(R1, R2, leaves, q_ab, tmp);
           auto s3 = Clock::now();
-          first_dimension(dbs[specs[q].db], q_ab.data(), cols);
+          first_dimension(db, q_ab.data(), cols);
           for (auto &c : cols) {
             inv(R2, c.a.data());
             inv(R2, c.b.data());
@@ -350,7 +291,8 @@ int main(int argc, char **argv) {
         for (size_t g = 0; g < groups; ++g) {
           auto s0 = Clock::now();
           std::vector<const Ct *> ptrs;
-          for (size_t q = g * kAnswersPerPacked; q < std::min(specs.size(), (g + 1) * kAnswersPerPacked); ++q) ptrs.push_back(&answers[q]);
+          for (size_t q = g * kAnswersPerPacked; q < std::min(ordinals.size(), (g + 1) * kAnswersPerPacked); ++q)
+            ptrs.push_back(&answers[q]);
           Ct packed;
           repack(R2, S2, C, SK, ptrs, packed);
           auto s1 = Clock::now();
@@ -360,26 +302,25 @@ int main(int argc, char **argv) {
           st.respcomp += std::chrono::duration<double, std::milli>(s2 - s1).count();
         }
 
-        // Client: decode and check every real record against the oracle.
+        // Client: decode and check every record against the oracle.
         tc = Clock::now();
         std::vector<std::vector<u64>> nibs(groups);
         std::vector<std::vector<i64>> errs(groups);
         for (size_t g = 0; g < groups; ++g) client_decode(R3, K, responses[g], nibs[g], errs[g]);
         const double decode_ms = ms_since(tc);
         size_t recovered = 0;
-        for (size_t q = 0; q < specs.size(); ++q) {
+        for (size_t q = 0; q < ordinals.size(); ++q) {
           const size_t g = q / kAnswersPerPacked, r = q % kAnswersPerPacked;
           for (size_t v = 0; v < kRecordCoeffs; ++v) worst_error = std::max<i64>(worst_error, std::abs(errs[g][packed_coeff(r, v)]));
-          if (!specs[q].real) continue;
-          const auto expected = record_of(specs[q].ordinal);
+          const auto expected = record_of(ordinals[q]);
           for (size_t byte = 0; byte < kRecordBytes; ++byte) {
             const u64 got = nibs[g][packed_coeff(r, 2 * byte)] | (nibs[g][packed_coeff(r, 2 * byte + 1)] << 4);
             if (got != expected[byte]) {
               size_t alpha, beta, gamma;
-              sh.locate(specs[q].pos, alpha, beta, gamma);
-              std::cerr << "via_b: record mismatch at leaf " << leaf << " query " << q << " database " << specs[q].db << " pos "
-                        << specs[q].pos << " (alpha " << alpha << ", beta " << beta << ", gamma " << gamma << ") byte " << byte
-                        << ": got " << got << " want " << static_cast<int>(expected[byte]) << "\n";
+              sh.locate(ordinals[q], alpha, beta, gamma);
+              std::cerr << "via_b: record mismatch at leaf " << leaf << " query " << q << " pos " << ordinals[q] << " (alpha "
+                        << alpha << ", beta " << beta << ", gamma " << gamma << ") byte " << byte << ": got " << got << " want "
+                        << static_cast<int>(expected[byte]) << "\n";
               return 3;
             }
           }
@@ -429,19 +370,8 @@ int main(int argc, char **argv) {
       return s / stage_v.size();
     };
     const double margin_bits = std::log2(static_cast<double>(kQ4 / kP / 2) / std::max<i64>(worst_error, 1));
-    std::ostringstream batch;
-    if (use_pbc) {
-      batch << "{\"mode\": \"pbc\", \"queries_per_path\": " << queries_per_path
-            << ", \"framework\": \"same buckets, hashes, positions and leaf schedule as the OnionPIR cuckoo baseline\", "
-            << "\"batch_size\": " << cp.batch_size << ", \"num_buckets\": " << cp.num_buckets << ", \"num_hashes\": 3, \"hash_seed\": "
-            << cp.seed << ", \"max_bucket_members\": " << max_records << ", \"total_member_entries\": " << total_records
-            << ", \"dummy_query_position\": 0}";
-    } else {
-      batch << "{\"mode\": \"native\", \"queries_per_path\": " << queries_per_path
-            << ", \"framework\": \"Figure 9: one VIA-C query per sibling over the whole database, answers repacked\"}";
-    }
     std::ofstream out(a.output);
-    out << "{\n  \"schema_version\": \"via_b_profile.v1\",\n  \"scheme\": \"" << (use_pbc ? "via_b_pbc" : "via_b") << "\",\n"
+    out << "{\n  \"schema_version\": \"via_b_profile.v1\",\n  \"scheme\": \"via_b\",\n"
         << "  \"source\": {\"paper\": \"VIA, ePrint 2025/2074 (S&P 2026), Sections 4.1-4.7 and Figure 9\", "
         << "\"implementation\": \"scripts/path_baselines/via_b/via.hpp\"},\n"
         << "  \"compiler_label\": \"" << a.compiler_label << "\",\n"
@@ -449,7 +379,8 @@ int main(int argc, char **argv) {
         << "  \"height\": " << h << ", \"leaf_count\": " << leaf_count << ", \"item_count\": " << items
         << ", \"record_bytes\": " << kRecordBytes << ",\n  \"actual_logical_bytes\": " << items * kRecordBytes << ",\n"
         << "  \"warmups\": " << a.warmups << ", \"measured_trials\": " << a.trials << ", \"trial_seed\": " << a.seed << ",\n"
-        << "  \"batch\": " << batch.str() << ",\n"
+        << "  \"batch\": {\"queries_per_path\": " << queries_per_path
+        << ", \"framework\": \"Figure 9: one VIA-C query per sibling over the whole database, answers repacked\"},\n"
         << "  \"via_parameters\": {\"n1\": " << kN1 << ", \"n2\": " << kN2 << ", \"q1_bits\": " << q1_bits
         << ", \"q2_bits\": " << bits_of(kQ2) << ", \"q3_bits\": " << q3_bits << ", \"q4_bits\": " << kLogQ4
         << ", \"plaintext_modulus\": " << kP << ", \"s1\": \"ternary\", \"sigma_e1\": " << kSigmaE1
@@ -479,7 +410,7 @@ int main(int argc, char **argv) {
         << jnum(stage_mean(&Stages::crot)) << ", \"repack\": " << jnum(stage_mean(&Stages::repack)) << ", \"respcomp\": "
         << jnum(stage_mean(&Stages::respcomp)) << "}, \"max_error_q4\": " << worst_error << ", \"decoding_margin_bits\": "
         << jnum(margin_bits) << ", \"all_correct\": true}\n}\n";
-    std::cerr << "via_b: H=" << h << " batch=" << a.batch << " mean server " << mean(server_v) << " ms, query " << query_bytes
+    std::cerr << "via_b: H=" << h << " mean server " << mean(server_v) << " ms, query " << query_bytes
               << " B, response " << response_bytes << " B, keys " << offline_seeded << " B, max error " << worst_error << "/"
               << kQ4 / kP / 2 << "\n";
     return 0;

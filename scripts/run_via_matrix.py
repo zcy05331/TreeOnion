@@ -1,15 +1,14 @@
 #!/usr/bin/env python3
-"""Run the VIA-B baseline: compiler pilot, per-height row-count pilots, formal rows.
+"""Run a VIA baseline: compiler pilot, per-height row-count pilots, formal rows.
 
---batch-mode native (the default) is the paper's VIA-B (Figure 9): the H
-sibling queries are independent VIA-C queries over the whole database with the
-answers repacked. --batch-mode pbc runs the same answer path per bucket of the
-OnionPIR cuckoo baseline's PBC instance and is reported as the separate
-via_b_pbc variant. The VIA authors build with clang; the system GCC build and
-the LLVM-based icpx build are piloted at one height and the faster one serves
-every height. The DMux row count I = 2^log_rows trades DMux nodes over q1
-against CMux nodes over q2; the binary's default and its two neighbours are
-piloted per height.
+--scheme via_b is the paper's VIA-B (Figure 9): the H sibling queries are
+independent VIA-C queries over the whole database with the answers repacked.
+--scheme via_pbc is VIA (Figure 4) per bucket of the OnionPIR cuckoo baseline's
+PBC instance. The VIA authors build with clang; the system GCC build and the
+LLVM-based icpx build are piloted at one height and the faster one serves every
+height. The DMux row count I = 2^log_rows trades DMux nodes over q1 against the
+per-column work (CMux nodes, and for VIA ring switches); the binary's default
+and its two neighbours are piloted per height.
 """
 import argparse
 import json
@@ -27,18 +26,17 @@ class ViaMatrixError(Exception):
     pass
 
 
-SCHEME_BY_MODE = {"native": "via_b", "pbc": "via_b_pbc"}
+# scheme -> output and progress tag
+SCHEMES = {"via_b": "via-b", "via_pbc": "via-pbc"}
 
 
-def validate(path: Path, *, mode: str, height: int, trials: int, warmups: int, seed: int, log_rows) -> dict:
+def validate(path: Path, *, scheme: str, height: int, trials: int, warmups: int, seed: int, log_rows) -> dict:
     try:
         data = json.loads(path.read_text())
     except (OSError, json.JSONDecodeError) as exc:
         raise ViaMatrixError(f"{path}: cannot load result: {exc}") from exc
-    if data.get("scheme") != SCHEME_BY_MODE[mode] or data.get("height") != height:
+    if data.get("scheme") != scheme or data.get("height") != height:
         raise ViaMatrixError(f"{path}: scheme or height mismatch")
-    if data.get("batch", {}).get("mode") != mode:
-        raise ViaMatrixError(f"{path}: batch mode mismatch")
     if (data.get("measured_trials"), data.get("warmups"), data.get("trial_seed")) != (trials, warmups, seed):
         raise ViaMatrixError(f"{path}: trial counts or seed mismatch")
     rows = data.get("via_parameters", {}).get("log_rows")
@@ -56,9 +54,9 @@ def validate(path: Path, *, mode: str, height: int, trials: int, warmups: int, s
 def parse_args(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, required=True)
+    parser.add_argument("--scheme", choices=sorted(SCHEMES), required=True)
     parser.add_argument("--binary", action="append", required=True, metavar="LABEL=PATH",
                         help="adapter build to pilot, e.g. gcc=/path/via_b (repeatable)")
-    parser.add_argument("--batch-mode", choices=sorted(SCHEME_BY_MODE), default="native")
     parser.add_argument("--heights", nargs="+", type=int, default=[22, 23, 24, 25, 26])
     parser.add_argument("--compiler-pilot-height", type=int, default=24)
     parser.add_argument("--warmups", type=int, default=3)
@@ -85,10 +83,10 @@ def parse_args(argv=None):
 def main(argv=None, *, runner=run_measured, gate=subprocess.run) -> int:
     args = parse_args(argv)
     root = args.root.resolve()
-    tag = "via-b" if args.batch_mode == "native" else "via-b-pbc"
-    scheme = SCHEME_BY_MODE[args.batch_mode]
+    scheme = args.scheme
+    tag = SCHEMES[scheme]
     progress_path = root / f"metadata/{tag}-progress.json"
-    progress = {"state": "running", "batch_mode": args.batch_mode,
+    progress = {"state": "running", "scheme": scheme,
                 "binaries": {k: str(v) for k, v in args.binaries.items()},
                 "path_semantics": "legacy_merkle_paths_omit_root", "compiler_pilot": {}, "heights": {}}
 
@@ -100,7 +98,7 @@ def main(argv=None, *, runner=run_measured, gate=subprocess.run) -> int:
         output.parent.mkdir(parents=True, exist_ok=True)
         command = ["numactl", "--physcpubind=0", "--preferred=0", str(binary), "--height", str(height),
                    "--warmup", str(warmups), "--trials", str(trials), "--trial-seed", str(args.trial_seed),
-                   "--batch", args.batch_mode, "--compiler-label", label, "--output", str(output)]
+                   "--compiler-label", label, "--output", str(output)]
         if log_rows is not None:
             command += ["--log-rows", str(log_rows)]
         gate([sys.executable, str(root / "wait_idle.py"), "--root", str(root)], check=True)
@@ -108,7 +106,7 @@ def main(argv=None, *, runner=run_measured, gate=subprocess.run) -> int:
         output.with_name(output.stem + "-process.json").write_text(json.dumps(process, indent=2) + "\n")
         if process.get("exit_code") != 0:
             raise ViaMatrixError(f"{output.name}: process exit {process.get('exit_code')}")
-        return {**validate(output, mode=args.batch_mode, height=height, trials=trials, warmups=warmups,
+        return {**validate(output, scheme=scheme, height=height, trials=trials, warmups=warmups,
                            seed=args.trial_seed, log_rows=log_rows),
                 "command": command, "process": process}
 
