@@ -37,21 +37,27 @@ diagnostic and do not impose a one-bit admission threshold.
 
 ## Baselines
 
-The supported comparison contains exactly these seven baseline families:
+The comparison contains these baseline families:
 
 | Baseline | Implementation |
 |---|---|
 | StandardOnionPIR | Original single-block OnionPIRv2 |
-| SPIRIT+RC | SPIRIT with packed selectors and response compression |
 | Layerwise tuned | One PIR per tree level, using measured layout tuning |
 | Cuckoo batch tuned | Cuckoo batch placement with measured layout tuning |
 | TreePIR | Colored-path baseline with VBPIR/SealPIR backend tuning |
 | Flat | One whole-tree PIR per requested path level |
 | Respire | Canonical tree-path workload on Respire batch PIR |
+| Spiral + PBC | Spiral per bucket of the Cuckoo baseline's PBC instance |
+| KsPIR + PBC | KsPIR per bucket of the same PBC instance |
+| VIA-B | VIA-B batch PIR, written from the paper |
+
+Layerwise + response merging and its packed-query variant reuse the primary
+algorithm's shared selectors and merge, so they are ablation steps rather than
+baselines.
 
 StandardOnionPIR retrieves one plaintext block; it is a speed reference rather
-than a full-path protocol. The primary, SPIRIT+RC and Respire workloads include
-the root; the legacy Merkle and colored-path baselines omit it. Reports retain
+than a full-path protocol. The primary and Respire workloads include the root;
+the other baselines retrieve the root-excluded Merkle path. Reports retain
 these useful-node counts and distinguish measured bytes from modeled bytes.
 
 ## Build and test
@@ -68,13 +74,12 @@ cmake --build build -j8
 The default build retains exact EP6 arithmetic for the core baselines. The
 primary performance configuration uses `-DPIR_EP_ROWS=3 -DPIR_EP_LOW_BITS=32`
 with exact KS8; validate its encrypted primary tests before measuring it.
-SPIRIT+RC requires its pinned SEAL fork, and Respire requires its pinned Rust
-source. Their separate build/smoke gates are described in their adapter READMEs.
-After preparing these dependencies, `scripts/run_regression.sh` runs the core
-and integrated script gates, including an encrypted Respire smoke. Full Python
-discovery additionally requires `SPIRIT_PATH_ADAPTER` to name the built RC
-adapter, `SPIRIT_SOURCE_DIR` to name its pinned upstream checkout, and
-`RESPIRE_PATH_ADAPTER_BIN` to name the built Respire adapter.
+The external adapters build separately against their pinned sources; their
+build and smoke gates are described in their adapter READMEs. After preparing
+these dependencies, `scripts/run_regression.sh` runs the core and integrated
+script gates, including an encrypted Respire smoke. Full Python discovery
+additionally requires `RESPIRE_PATH_ADAPTER_BIN` to name the built Respire
+adapter.
 
 For a single 1 GiB-tier primary run with 32-byte entries:
 
@@ -94,8 +99,8 @@ python3 scripts/benchmark_tree_multiplane.py --binary build/Onion-PIR \
 
 ## Experiment policy
 
-The current matrix uses 32-byte entries at 256 MiB, 512 MiB, 1 GiB and 4 GiB,
-corresponding to leaf heights 22, 23, 24 and 26. Normally use 50 measured queries;
+The current matrix uses 32-byte entries at 256 MiB, 512 MiB, 1 GiB, 2 GiB and
+4 GiB, corresponding to leaf heights 22 to 26; 8 GiB (height 27) runs on request. Normally use 50 measured queries;
 Cuckoo batch, TreePIR and Flat use 8. Each point has 3 warmups and seed 7.
 Record complete server latency, stage profiling, query/response bytes, setup,
 peak memory, hardware and source revision. A fresh host requires fresh timings.

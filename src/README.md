@@ -90,9 +90,10 @@ retain the shared fixtures and assertion order.
 
 Timed entry points such as `tree_multiplane_bench` and `cuckoo_bench` are
 separate from the in-process correctness suite. The retained benchmark families
-are StandardOnionPIR, SPIRIT+RC, Layerwise tuned, Cuckoo batch tuned, TreePIR,
-Flat and Respire; external families are driven from scripts outside this source
-directory.
+are StandardOnionPIR, Layerwise tuned (with its merged and packed-query
+ablations), Cuckoo batch tuned, TreePIR, Flat, Respire, the PBC-backed Spiral
+and KsPIR baselines, and VIA-B; external families are driven from scripts
+outside this source directory.
 
 The main end-to-end gate is `../scripts/run_regression.sh <binary>`. It runs the
 C++ suite and then feeds real benchmark output to the Python validators,

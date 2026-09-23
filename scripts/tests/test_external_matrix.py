@@ -43,7 +43,7 @@ class ExternalMatrixTests(unittest.TestCase):
             with self.assertRaises(SystemExit):
                 parse_args(["--root", "/tmp/x", "--source-commit", HEX, "--hexl-root", "/tmp/hexl", "--heights", "8"])
 
-    def test_dry_run_records_four_scale_spirit_rc_and_respire_plan(self):
+    def test_dry_run_records_five_scale_respire_plan(self):
         with tempfile.TemporaryDirectory(prefix="external-matrix-test.") as td:
             root = prepared_root(pathlib.Path(td))
             args = parse_args([
@@ -58,17 +58,10 @@ class ExternalMatrixTests(unittest.TestCase):
 
             self.assertEqual(state["state"], "planned")
             self.assertEqual(set(state["formal"]), {
-                "256mib:spirit_rc", "256mib:respire",
-                "512mib:spirit_rc", "512mib:respire",
-                "1gib:spirit_rc", "1gib:respire",
-                "2gib:spirit_rc", "2gib:respire",
-                "4gib:spirit_rc", "4gib:respire",
+                "256mib:respire", "512mib:respire", "1gib:respire", "2gib:respire", "4gib:respire",
             })
             two_gib = state["formal"]["2gib:respire"]["command"]
             self.assertEqual(two_gib[two_gib.index("--height") + 1], "25")
-            command = state["formal"]["512mib:spirit_rc"]["command"]
-            self.assertEqual(command[command.index("--scheme") + 1], "spirit_rc")
-            self.assertEqual(command[command.index("--height") + 1], "23")
             respire = state["formal"]["4gib:respire"]["command"]
             self.assertEqual(respire[respire.index("--height") + 1], "26")
             self.assertEqual(respire[respire.index("--trials") + 1], "50")

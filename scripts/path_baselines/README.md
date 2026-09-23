@@ -5,11 +5,11 @@ final comparison set.
 
 | Mode | Implementation and build instructions |
 |---|---|
-| `spirit_rc` | [spirit/](spirit/README.md): public SPIRIT batch PIR with encrypted response compression |
 | `respire` | [respire/](respire/README.md): native Respire batch path workload |
 
 The removed standalone SPIRIT, VBPIR+PBC, InsPIRe and TreePIR+Spiral prototypes
-are preserved on `codex/archive-full-pir-20260920` at `fcc521f`.
+are preserved on `codex/archive-full-pir-20260920` at `fcc521f`. The SPIRIT+RC
+adapter left the comparison after `7a2f127`, where it remains.
 
 The legacy-path adapters below retrieve the root-excluded Merkle path of the
 OnionPIR benchmarks (seed-7 leaves) and have their own runners and JSON schemas
@@ -55,7 +55,7 @@ not returned from the verification oracle.
 Top-level fields:
 
 - `schema_version`: `path-baseline-v1`
-- `scheme`: `spirit_rc` or `respire`
+- `scheme`: `respire`
 - `path_mode`: `ancestor_root_included`
 - `height`, `leaf_count`, `record_bytes` (32), `logical_records`, `logical_db_bytes`
 - `backend_records`, `batch_size`
@@ -79,7 +79,6 @@ Run selected, already-built adapters sequentially:
 ```bash
 python3 scripts/run_path_baselines.py --height 24 --warmup 3 --trials 50 \
   --seed 7 --output outputs/path-baselines/formal \
-  --binary spirit_rc=/absolute/path/spirit_path_adapter \
   --binary respire=/absolute/path/respire_path_workload.py
 ```
 

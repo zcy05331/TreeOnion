@@ -20,10 +20,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 
-MODES = (
-    "spirit_rc",
-    "respire",
-)
+MODES = ("respire",)
 SCALE_BY_HEIGHT = {22: "256mib", 23: "512mib", 24: "1gib", 25: "2gib", 26: "4gib"}
 RESPIRE_SHAPES = {
     22: {"nu1": 7, "nu2": 7, "d3": 64},
@@ -32,7 +29,6 @@ RESPIRE_SHAPES = {
     25: {"nu1": 9, "nu2": 8, "d3": 64},
     26: {"nu1": 9, "nu2": 9, "d3": 64},
 }
-SPIRIT_COMMIT = "7e4c114807d5a83ae5cbad17c514df1dbc32dfc3"
 RESPIRE_COMMIT = "fd20d38e9e94c0298ab21af2f7699a23729eef67"
 
 
@@ -94,7 +90,6 @@ class MatrixRunner:
             "smoke": {},
             "formal": {},
             "pins": {
-                "spirit": SPIRIT_COMMIT,
                 "respire": RESPIRE_COMMIT,
             },
         }
@@ -243,24 +238,6 @@ class MatrixRunner:
         build = self.run_logged(f"build-{label}", ["cmake", "--build", str(build_dir), "-j", str(self.args.build_jobs)])
         return build.get("exit_code") == 0, build_dir
 
-    def build_spirit(self) -> tuple[bool, Path]:
-        build_dir = self.root / "build-spirit-external"
-        ok, _ = self.build_cmake(
-            "spirit",
-            self.source / "scripts" / "path_baselines" / "spirit",
-            build_dir,
-            [
-                "-DSEAL_USE_INTEL_HEXL=ON",
-                "-DSEAL_USE_MSGSL=OFF",
-                f"-DSPIRIT_DIR={self.deps / 'SPIRIT'}",
-                f"-DSPIRIT_SOURCE_COMMIT={SPIRIT_COMMIT}",
-            ],
-        )
-        if ok:
-            ctest = self.run_logged("ctest-spirit", ["ctest", "--test-dir", str(build_dir), "--output-on-failure"])
-            ok = ctest.get("exit_code") == 0
-        return ok, build_dir / "spirit_path_adapter"
-
     def build_respire(self) -> tuple[bool, Path]:
         env = self.base_env()
         env["RESPIRE_SOURCE_DIR"] = str(self.deps / "respire")
@@ -288,7 +265,6 @@ class MatrixRunner:
     def build_backends(self) -> dict[str, Path]:
         binaries: dict[str, Path] = {}
         builders = {
-            "spirit_rc": self.build_spirit,
             "respire": self.build_respire,
         }
         if not self.args.skip_build:
@@ -308,7 +284,6 @@ class MatrixRunner:
         else:
             binaries.update(
                 {
-                    "spirit_rc": self.root / "build-spirit-external" / "spirit_path_adapter",
                     "respire": self.source / ".benchmarks" / "respire-path" / "cargo-target-external" / "release" / "path_workload",
                 }
             )
@@ -342,8 +317,6 @@ class MatrixRunner:
             "--output",
             str(output),
         ]
-        if mode == "spirit_rc":
-            command += ["--scheme", mode]
         command += extra
         return command
 

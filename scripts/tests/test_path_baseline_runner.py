@@ -11,10 +11,10 @@ from path_baselines.workload import trial_leaves
 
 
 class PathRunnerTests(unittest.TestCase):
-    def test_modes_share_binary_but_select_actual_protocol(self):
-        command = adapter_command('spirit_rc', pathlib.Path('/bin/adapter'), 8, pathlib.Path('/tmp/leaves'), 1, 2, pathlib.Path('/tmp/result'))
-        self.assertEqual(command[-2:], ['--scheme', 'spirit_rc'])
-        self.assertIn('--leaf-file', command)
+    def test_command_carries_the_shared_workload_arguments(self):
+        command = adapter_command('respire', pathlib.Path('/bin/adapter'), 8, pathlib.Path('/tmp/leaves'), 1, 2, pathlib.Path('/tmp/result'))
+        self.assertEqual(command[:3], ['/bin/adapter', '--height', '8'])
+        self.assertEqual(command[-2:], ['--output', '/tmp/result'])
 
     def test_protocol_arguments_are_forwarded_as_separate_tokens(self):
         command = adapter_command('respire', pathlib.Path('/bin/adapter'), 8,
@@ -22,10 +22,10 @@ class PathRunnerTests(unittest.TestCase):
                                   extra_args=['--flag', 'value'])
         self.assertEqual(command[-2:], ['--flag', 'value'])
 
-    def test_summary_preserves_spirit_actual_query_label_and_modeled_response(self):
-        row = {'scheme': 'spirit_rc', 'completed_samples': 1, 'server_ms': 2.0,
+    def test_summary_preserves_actual_query_label_and_modeled_response(self):
+        row = {'scheme': 'respire', 'completed_samples': 1, 'server_ms': 2.0,
                'logical_mib_s': 1.0, 'query_bytes': 128, 'response_bytes': 256,
-               'communication': {'query': 'actual_serialized_including_rc_rgsw_selectors_and_merge_galois_keys_when_present',
+               'communication': {'query': 'actual_serialized_query',
                                  'response': 'coefficient_payload_model'}, 'stages_ms': {}}
         with tempfile.TemporaryDirectory() as tmp:
             root = pathlib.Path(tmp)
@@ -38,11 +38,11 @@ class PathRunnerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = pathlib.Path(tmp)
             with patch('path_baselines.runner.run_measured', return_value={'exit_code': 2, 'process_peak_rss_bytes': 1024}):
-                result = run_campaign({'spirit_rc': pathlib.Path(sys.executable)}, root, height=8, warmups=1, trials=2, seed=7)
+                result = run_campaign({'respire': pathlib.Path(sys.executable)}, root, height=8, warmups=1, trials=2, seed=7)
             self.assertEqual(result['state'], 'complete_with_failures')
             self.assertEqual(result['runs'][0]['state'], 'failed')
             self.assertEqual(result['summaries'], [])
-            self.assertTrue((root/'spirit_rc-process.json').exists())
+            self.assertTrue((root/'respire-process.json').exists())
             manifest = json.loads((root/'manifest.json').read_text())
             self.assertEqual(manifest['leaves'], trial_leaves(256, 1, 2, 7))
 
@@ -53,7 +53,7 @@ class PathRunnerTests(unittest.TestCase):
             return {'exit_code':0,'process_peak_rss_bytes':1024}
         with tempfile.TemporaryDirectory() as tmp:
             with patch('path_baselines.runner.run_measured', side_effect=fake_process):
-                result = run_campaign({'spirit_rc':pathlib.Path(sys.executable)}, pathlib.Path(tmp), height=8, warmups=1, trials=2, seed=7)
+                result = run_campaign({'respire':pathlib.Path(sys.executable)}, pathlib.Path(tmp), height=8, warmups=1, trials=2, seed=7)
             self.assertEqual(result['runs'][0]['state'], 'failed')
             self.assertFalse(result['summaries'])
 

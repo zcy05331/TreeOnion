@@ -10,7 +10,7 @@ def fixture():
     sample = {'leaf': 6, 'server_ms': 2.0, 'query_ms': 0.1, 'decode_ms': 0.2,
               'query_bytes': 128, 'response_bytes': 256, 'correct': True,
               'correct_entries': 4, 'path_entries': 4, 'stages_ms': {'scan': 1.5}}
-    return {'schema_version': 'path-baseline-v1', 'scheme': 'spirit_rc',
+    return {'schema_version': 'path-baseline-v1', 'scheme': 'respire',
             'path_mode': 'ancestor_root_included', 'height': 3, 'leaf_count': 8,
             'record_bytes': 32, 'logical_records': 15, 'logical_db_bytes': 480,
             'backend_records': 16, 'batch_size': 4, 'warmups': 0, 'trials': 1,

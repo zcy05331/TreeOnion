@@ -9,7 +9,7 @@ from read_process_peak_memory import run_measured
 from .report import summarize_result, validate_result
 from .workload import PATH_MODE, trial_leaves
 
-SCHEMES = ('spirit_rc', 'respire')
+SCHEMES = ('respire',)
 
 
 def parse_binary(value):
@@ -23,8 +23,6 @@ def adapter_command(scheme, binary, height, leaf_file, warmups, trials, output, 
     command = ([sys.executable, str(binary)] if binary.suffix == '.py' else [str(binary)])
     command += ['--height', str(height), '--leaf-file', str(leaf_file),
                 '--warmup', str(warmups), '--trials', str(trials), '--output', str(output)]
-    if scheme == 'spirit_rc':
-        command += ['--scheme', scheme]
     command.extend(extra_args)
     return command
 
