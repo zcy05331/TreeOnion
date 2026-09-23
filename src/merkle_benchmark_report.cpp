@@ -413,6 +413,9 @@ std::string benchmark_report_json(const BenchmarkReport &report) {
       << ",\n    \"reference_fst_dim_sz\": " << workload.reference_fst_dim_sz
       << ",\n    \"reference_other_dim_sz\": "
       << workload.reference_other_dim_sz
+      << ",\n    \"selector_gadget_rows\": " << workload.selector_gadget_rows
+      << ",\n    \"selector_gadget_dropped_low_bits\": "
+      << workload.selector_gadget_dropped_low_bits
       << ",\n    \"warmups\": " << workload.warmups
       << ",\n    \"measured_trials\": " << workload.measured_trials
       << ",\n    \"trial_seed\": " << workload.trial_seed

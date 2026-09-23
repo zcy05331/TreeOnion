@@ -43,6 +43,18 @@ inline void require_applicable(bool condition, const std::string &reason) {
 inline bool paper_config_active() {
   return ACTIVE_CONFIG == CONFIG_N2048_K1_COMP;
 }
+// Planner fingerprints (frozen layouts, padded totals, peak estimates) were
+// derived with the paper's exact EP6 selector gadget. A build on the 3-row
+// approximate gadget sizes each level's expansion from N0 + 3d instead of
+// N0 + 6d and so plans other layouts; those fingerprints apply to EP6 only.
+inline bool exact_ep6_gadget_active() {
+  return paper_config_active() && DBConsts::L_EP == 6 && DBConsts::EP_LOW_BITS == 0;
+}
+inline std::string exact_ep6_reason(const char *what) {
+  return std::string(what) +
+         " freezes plans derived with the exact EP6 selector gadget; this "
+         "build uses another gadget";
+}
 inline std::string paper_config_reason(const char *what) {
   return std::string(what) +
          " is defined for CONFIG_N2048_K1_COMP (v2 96-node plaintexts and "

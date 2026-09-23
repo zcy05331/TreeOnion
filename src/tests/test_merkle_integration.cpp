@@ -455,10 +455,16 @@ void test_merkle_profiled_override() {
                        10 * reference.get_pt_size(),
                "padded footprint must grow by the 10 forced padding plaintexts");
 
+  BENCH_PRINT("profiled override: H=8 levels 7,8 served at h=3 ("
+              << padded_plaintexts_of(profiled.result.layers)
+              << " padded plaintexts); paths match the heap oracle");
+
   // H=16, level 13: legacy is h=5 (N0=8, 11 x 8 = 88 plaintexts over four
   // MUX dimensions); force h=6 (N0=32, 3 x 32 = 96 plaintexts over two), a
   // different first-dimension size and remaining-dimension shape that fits
-  // the default 1% budget (8 extra on a legacy total of 1452).
+  // the default 1% budget (8 extra on a legacy total of 1452). The legacy
+  // shape is the exact-EP6 plan; ep3 plans level 13 differently.
+  if (!exact_ep6_gadget_active()) return;
   const MerkleWorkload multi{size_t{1} << 16, 16, 32};
   const PirParams reference16 = make_benchmark_reference(multi);
   const std::vector<LayerLayout> legacy16 =
@@ -493,9 +499,7 @@ void test_merkle_profiled_override() {
   require_test(padded_plaintexts_of(profiled16.result.layers) ==
                    padded_plaintexts_of(legacy16) + 8,
                "H=16 forced layout must cost exactly 8 extra plaintexts");
-  BENCH_PRINT("profiled override: H=8 levels 7,8 served at h=3 ("
-              << padded_plaintexts_of(profiled.result.layers)
-              << " padded plaintexts), H=16 level 13 served at h=6 ("
+  BENCH_PRINT("profiled override: H=16 level 13 served at h=6 ("
               << padded_plaintexts_of(profiled16.result.layers)
               << " padded plaintexts); paths match the heap oracle");
 }

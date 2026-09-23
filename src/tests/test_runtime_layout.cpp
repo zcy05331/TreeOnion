@@ -25,9 +25,9 @@ void PirTest::test_runtime_layout() {
   require_test(singleton.get_expan_height() == 0,
                "singleton expansion height");
 
-  // Cover the explicit non-power-of-two policy even though v2 freezes pow2.
-  auto [tight_fst, tight_dims] =
-      utils::calculate_db_shape(43, DBConsts::L_EP, 5, false);
+  // Cover the explicit non-power-of-two policy even though v2 freezes pow2,
+  // at the paper's L_EP = 6 so the frozen shape holds under any build gadget.
+  auto [tight_fst, tight_dims] = utils::calculate_db_shape(43, 6, 5, false);
   require_test(tight_fst == 26 && tight_dims == 2,
                "explicit non-power-of-two first dimension policy");
 

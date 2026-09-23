@@ -173,6 +173,10 @@ struct BenchmarkWorkload {
   uint64_t reference_expansion_height = 0;
   uint64_t reference_fst_dim_sz = 0;
   uint64_t reference_other_dim_sz = 0;
+  // Selector gadget of the build: 6 rows and 0 dropped bits (exact EP6) or
+  // 3 rows and 32 dropped low bits (ep3-s32).
+  uint64_t selector_gadget_rows = 0;
+  uint64_t selector_gadget_dropped_low_bits = 0;
   uint64_t warmups = 0;
   uint64_t measured_trials = 0;
   uint64_t trial_seed = 0;

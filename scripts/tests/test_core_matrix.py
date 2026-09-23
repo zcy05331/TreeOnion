@@ -281,6 +281,23 @@ class CoreMatrixTests(unittest.TestCase):
         self.assertEqual(len(merged_formal), 1)
         self.assertTrue(merged_formal[0][merged_formal[0].index("--layer-layout-profile") + 1].endswith("tuning/layerwise_merged/profile.json"))
 
+    def test_gadget_choice_routes_every_case_to_one_build(self) -> None:
+        for gadget, build in (("exact", "build-default"), ("ep3", "build-ep3")):
+            runner = FakeRunner()
+            tmp = tempfile.TemporaryDirectory()
+            self.addCleanup(tmp.cleanup)
+            root = pathlib.Path(tmp.name)
+            result = matrix.CoreMatrix(make_paths(root), runner=runner, scales=("1gb",),
+                                       cases=("standard", "layerwise", "flat"), gadget=gadget).run()
+            self.assertEqual(result, 0)
+            binaries = {part for command in runner.commands for part in command if part.endswith("/Onion-PIR")}
+            self.assertEqual(binaries, {str(root / build / "Onion-PIR")})
+            status = json.loads((root / "outputs" / "core-matrix" / "status.json").read_text())
+            self.assertEqual(status["gadget"], gadget)
+        self.assertEqual(matrix.parse_args(["--root", "/tmp/x"]).gadget, "exact")
+        with self.assertRaises(SystemExit):
+            matrix.parse_args(["--root", "/tmp/x", "--gadget", "ep2"])
+
     def test_main_rejects_unknown_scale_and_out_of_range_geometry(self) -> None:
         with self.assertRaises(SystemExit):
             matrix.parse_args(["--root", "/tmp/x", "--scales", "3gb"])

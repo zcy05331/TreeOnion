@@ -56,13 +56,19 @@ MerkleWorkload make_benchmark_workload(size_t leaf_count) {
 
 PirParams make_benchmark_reference(const MerkleWorkload &workload) {
   PirParams scheme;
+  // The selector gadget is either the paper's exact EP6 or the 3-row
+  // approximate gadget dropping 32 low bits (ep3-s32), the one the tree
+  // scheme runs, so the baselines can be measured on the same gadget.
+  const bool exact_ep6 = scheme.get_l() == 6 && scheme.get_ep_low_bits() == 0;
+  const bool approx_ep3 = scheme.get_l() == 3 && scheme.get_ep_low_bits() == 32;
   if (scheme.get_poly_degree() != 2048 || scheme.get_ct_mod_width() != 58 ||
-      scheme.get_num_bits_per_coeff() != 12 || scheme.get_l() != 6 ||
+      scheme.get_num_bits_per_coeff() != 12 || !(exact_ep6 || approx_ep3) ||
       scheme.get_l_key() != 10 || DBConsts::L_KS != 8 ||
       std::bit_width(scheme.get_small_q() - 1) != 22 ||
       scheme.get_noise_std_dev() != 2.55) {
     throw std::invalid_argument(
-        "Merkle benchmarks require CONFIG_N2048_K1_COMP v2 parameters");
+        "Merkle benchmarks require CONFIG_N2048_K1_COMP v2 parameters with "
+        "the exact EP6 or the ep3-s32 selector gadget");
   }
 
   const size_t target_num_pt = flat_target_num_pt(workload);
@@ -358,6 +364,8 @@ BenchmarkReport run_merkle_benchmark_suite(
   report.workload.paper_row = paper_row_for(workload);
   report.workload.reference_expansion_height = reference.get_expan_height();
   report.workload.reference_fst_dim_sz = reference.get_fst_dim_sz();
+  report.workload.selector_gadget_rows = reference.get_l();
+  report.workload.selector_gadget_dropped_low_bits = reference.get_ep_low_bits();
   report.workload.reference_other_dim_sz = reference.get_other_dim_sz();
   report.workload.warmups = options.warmups;
   report.workload.measured_trials = options.measured_trials;

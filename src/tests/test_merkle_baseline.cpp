@@ -109,16 +109,18 @@ void PirTest::test_merkle_baseline() {
   PirParams reference = scheme.with_layout({349526, 10, true});
   auto plan = plan_layer_layouts(24, 96, reference);
   require_test(plan.size() == 24, "one plan entry per non-root level");
-  require_test(plan.at(0).params.get_expan_height() == 0, "level 1 h");
-  require_test(plan.at(6).params.get_target_num_pt() == 2,
-               "level 7 target");
-  require_test(plan.at(6).params.get_expan_height() == 1, "level 7 h");
-  require_test(plan.at(11).params.get_num_pt() == 48,
-               "level 12 rounded");
-  require_test(plan.at(23).params.get_num_pt() == 174848,
-               "level 24 rounded");
-  require_test(sum_padded_bytes(plan) == 1074843648ULL,
-               "layer padded total");
+  if (exact_ep6_gadget_active()) {
+    require_test(plan.at(0).params.get_expan_height() == 0, "level 1 h");
+    require_test(plan.at(6).params.get_target_num_pt() == 2,
+                 "level 7 target");
+    require_test(plan.at(6).params.get_expan_height() == 1, "level 7 h");
+    require_test(plan.at(11).params.get_num_pt() == 48,
+                 "level 12 rounded");
+    require_test(plan.at(23).params.get_num_pt() == 174848,
+                 "level 24 rounded");
+    require_test(sum_padded_bytes(plan) == 1074843648ULL,
+                 "layer padded total");
+  }
   for (const LayerLayout &layout : plan) {
     const TargetPlaintextLayout shared =
         select_target_plaintext_layout(layout.target_num_pt, reference);

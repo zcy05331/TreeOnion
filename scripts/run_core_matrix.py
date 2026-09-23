@@ -103,8 +103,13 @@ class CoreMatrix:
         scales: tuple[str, ...] = DEFAULT_SCALES,
         cases: tuple[str, ...] = DEFAULT_CASES,
         reference_expansion_height: int | None = None,
+        gadget: str = "exact",
     ) -> None:
         self.paths = paths
+        # Every case runs on one build: exact EP6 (build-default) or the
+        # 3-row approximate gadget of the tree scheme (build-ep3).
+        self.gadget = gadget
+        self.binary = paths.ep3_bin if gadget == "ep3" else paths.default_bin
         self.standard_1g_source = standard_1g_source
         self.runner = runner or Runner()
         self.scales = tuple(scales)
@@ -127,6 +132,8 @@ class CoreMatrix:
                 "output": str(self.paths.output),
                 "default_binary": str(self.paths.default_bin),
                 "ep3_binary": str(self.paths.ep3_bin),
+                "gadget": self.gadget,
+                "binary": str(self.binary),
                 "scales": list(self.scales),
                 "cases": list(self.cases),
                 "reference_expansion_height": self.reference_expansion_height,
@@ -319,7 +326,7 @@ class CoreMatrix:
             scale=scale,
             case="standard",
             command=[
-                str(self.paths.default_bin),
+                str(self.binary),
                 "--test",
                 "merkle_benchmarks",
                 "--benchmark-case",
@@ -378,7 +385,7 @@ class CoreMatrix:
             "numactl",
             "--physcpubind=0",
             "--preferred=0",
-            str(self.paths.default_bin),
+            str(self.binary),
             "--test",
             "layer_layout_sweep",
             "--leaf-count",
@@ -440,7 +447,7 @@ class CoreMatrix:
             scale=scale,
             case=case,
             command=[
-                str(self.paths.default_bin),
+                str(self.binary),
                 "--test",
                 "merkle_benchmarks",
                 "--benchmark-case",
@@ -477,7 +484,7 @@ class CoreMatrix:
             scale=scale,
             case="flat",
             command=[
-                str(self.paths.default_bin),
+                str(self.binary),
                 "--test",
                 "merkle_benchmarks",
                 "--benchmark-case",
@@ -514,7 +521,7 @@ class CoreMatrix:
             scale=scale,
             case=f"tuning/cuckoo/h{height}",
             command=[
-                str(self.paths.default_bin),
+                str(self.binary),
                 "--test",
                 "cuckoo_bench",
                 "--leaf-count",
@@ -580,7 +587,7 @@ class CoreMatrix:
             scale=scale,
             case="cuckoo_tuned",
             command=[
-                str(self.paths.default_bin),
+                str(self.binary),
                 "--test",
                 "cuckoo_bench",
                 "--leaf-count",
@@ -665,6 +672,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--standard-1gb-source", type=Path)
     parser.add_argument("--scales", nargs="+", choices=SCALE_ORDER, default=list(DEFAULT_SCALES))
     parser.add_argument("--cases", nargs="+", choices=CASES, default=list(DEFAULT_CASES))
+    parser.add_argument("--gadget", choices=("exact", "ep3"), default="exact",
+                        help="selector gadget build: exact EP6 (build-default) or ep3-s32 (build-ep3)")
     parser.add_argument(
         "--reference-expansion-height",
         type=int,
@@ -683,6 +692,7 @@ def main(argv: list[str] | None = None) -> int:
         scales=tuple(scale for scale in SCALE_ORDER if scale in args.scales),
         cases=tuple(case for case in CASES if case in args.cases),
         reference_expansion_height=args.reference_expansion_height,
+        gadget=args.gadget,
     )
     return matrix.run()
 

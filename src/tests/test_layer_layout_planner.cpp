@@ -370,8 +370,8 @@ void PirTest::test_layer_layout_planner() {
   require_median_sample_contract();
 
 
-  require_applicable(paper_config_active(),
-                     paper_config_reason("the layer layout planner"));
+  require_applicable(exact_ep6_gadget_active(),
+                     exact_ep6_reason("the layer layout planner fixture"));
   print_func_name(__FUNCTION__);
 
   // Pruned expansion geometry, checked by hand against fast_expand_qry's walk.
@@ -596,8 +596,8 @@ void PirTest::test_layer_layout_planner() {
 // new code, and check the 2 GiB gate still admits the CloudLab machines the
 // paper rows are measured on before updating the numbers here.
 void test_layer_layout_large_tiers() {
-  require_applicable(paper_config_active(),
-                     paper_config_reason("the layer layout planner"));
+  require_applicable(exact_ep6_gadget_active(),
+                     exact_ep6_reason("the layer layout planner fixture"));
   print_func_name(__FUNCTION__);
 
   const uint64_t estimate26 = estimate_merkle_benchmark_peak_bytes(size_t{1} << 26);
