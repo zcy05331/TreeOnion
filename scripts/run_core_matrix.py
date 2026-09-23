@@ -21,8 +21,11 @@ SCALES = {
     "1gb": 1 << 24,
     "2gb": 1 << 25,
     "4gb": 1 << 26,
+    "8gb": 1 << 27,
 }
-SCALE_ORDER = ("256mb", "512mb", "1gb", "2gb", "4gb")
+SCALE_ORDER = ("256mb", "512mb", "1gb", "2gb", "4gb", "8gb")
+# 8 GiB runs only when requested; the default matrix keeps the five smaller sizes.
+DEFAULT_SCALES = SCALE_ORDER[:5]
 CASES = ("standard", "layerwise", "layerwise_merged", "cuckoo", "flat")
 # The default matrix keeps the four original baselines; the merged-response
 # layerwise variant is an explicit opt-in.
@@ -97,7 +100,7 @@ class CoreMatrix:
         *,
         standard_1g_source: Path | None = None,
         runner: Runner | None = None,
-        scales: tuple[str, ...] = SCALE_ORDER,
+        scales: tuple[str, ...] = DEFAULT_SCALES,
         cases: tuple[str, ...] = DEFAULT_CASES,
         reference_expansion_height: int | None = None,
     ) -> None:
@@ -660,7 +663,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--root", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path)
     parser.add_argument("--standard-1gb-source", type=Path)
-    parser.add_argument("--scales", nargs="+", choices=SCALE_ORDER, default=list(SCALE_ORDER))
+    parser.add_argument("--scales", nargs="+", choices=SCALE_ORDER, default=list(DEFAULT_SCALES))
     parser.add_argument("--cases", nargs="+", choices=CASES, default=list(DEFAULT_CASES))
     parser.add_argument(
         "--reference-expansion-height",

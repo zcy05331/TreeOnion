@@ -37,6 +37,24 @@ class PrimaryQueueTests(unittest.TestCase):
             self.assertEqual({row[4] for row in formal}, {"interleaved", "split-columns"})
             self.assertEqual(len(calls), 30)
 
+    def test_eight_gib_runs_only_when_requested(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "metadata").mkdir()
+            (root / "metadata/source-commit.txt").write_text("test-source\n")
+            matrix = primary.PrimaryMatrix(root, ["8gib"])
+            calls = []
+
+            def run(scale, height, phase, g, n0, layout, trials):
+                calls.append((scale, height))
+                return {"state": "complete", "g": g, "N0": n0, "mean_server_total_ms": n0,
+                        "sample_leaves": [7] * trials, "raw_json": "result.json"}
+
+            with patch.object(matrix, "run_case", side_effect=run):
+                self.assertEqual(matrix.run(), 0)
+            self.assertEqual(set(calls), {("8gib", 27)})
+            self.assertNotIn("8gib", primary.DEFAULT_SCALES)
+
     def test_no_correct_pilot_does_not_launch_formal(self):
         with tempfile.TemporaryDirectory() as directory:
             matrix = self.create(directory)

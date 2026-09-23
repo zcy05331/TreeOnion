@@ -14,7 +14,7 @@ import sys
 
 from read_process_peak_memory import run_measured
 
-SCALE_BY_HEIGHT = {22: "256mb", 23: "512mb", 24: "1gb", 25: "2gb", 26: "4gb"}
+SCALE_BY_HEIGHT = {22: "256mb", 23: "512mb", 24: "1gb", 25: "2gb", 26: "4gb", 27: "8gb"}
 
 
 class SpiralMatrixError(Exception):

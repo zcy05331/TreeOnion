@@ -288,6 +288,9 @@ class CoreMatrixTests(unittest.TestCase):
             matrix.parse_args(["--root", "/tmp/x", "--reference-expansion-height", "11"])
         args = matrix.parse_args(["--root", "/tmp/x", "--scales", "2gb", "--cases", "flat", "standard"])
         self.assertEqual(args.scales, ["2gb"])
+        self.assertNotIn("8gb", matrix.parse_args(["--root", "/tmp/x"]).scales)
+        self.assertEqual(matrix.parse_args(["--root", "/tmp/x", "--scales", "8gb"]).scales, ["8gb"])
+        self.assertEqual(matrix.SCALES["8gb"], 1 << 27)
         self.assertEqual(sorted(args.cases), ["flat", "standard"])
 
     def test_failed_layer_profile_skips_layerwise_formal_but_continues_independent_cases(self) -> None:

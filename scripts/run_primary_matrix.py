@@ -13,6 +13,11 @@ from benchmark_tree_multiplane import Case, SweepError, select_layout, validate_
 from read_process_peak_memory import run_measured
 
 
+SCALES = (("256mib", 22), ("512mib", 23), ("1gib", 24), ("2gib", 25), ("4gib", 26), ("8gib", 27))
+# 8 GiB runs only when requested; the default matrix keeps the five smaller sizes.
+DEFAULT_SCALES = tuple(scale for scale, _ in SCALES[:5])
+
+
 def save(path, data):
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data, indent=2) + "\n")
@@ -24,8 +29,9 @@ def candidate_shapes():
 
 
 class PrimaryMatrix:
-    def __init__(self, root):
+    def __init__(self, root, scales=DEFAULT_SCALES):
         self.root = root.resolve()
+        self.scales = tuple(scales)
         self.binary = self.root / "build-ep3/Onion-PIR"
         self.output = self.root / "outputs/primary"
         self.progress = self.root / "metadata/primary-progress.json"
@@ -88,7 +94,7 @@ class PrimaryMatrix:
         if self.progress.exists():
             raise RuntimeError("primary queue already has progress; preserve it and inspect before retrying")
         self.update()
-        scales = (("256mib", 22), ("512mib", 23), ("1gib", 24), ("2gib", 25), ("4gib", 26))
+        scales = [(scale, height) for scale, height in SCALES if scale in self.scales]
         for scale, height in scales:
             pilots = [self.run_case(scale, height, "pilots", g, n0, "interleaved", 8)
                       for g, n0 in candidate_shapes()]
@@ -126,8 +132,9 @@ class PrimaryMatrix:
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, required=True)
+    parser.add_argument("--scales", nargs="+", choices=[scale for scale, _ in SCALES], default=list(DEFAULT_SCALES))
     args = parser.parse_args()
-    return PrimaryMatrix(args.root).run()
+    return PrimaryMatrix(args.root, args.scales).run()
 
 
 if __name__ == "__main__":
