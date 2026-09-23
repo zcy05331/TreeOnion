@@ -5,6 +5,7 @@
 #include "merkle_benchmark.h"
 
 #include <array>
+#include <bit>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
@@ -703,4 +704,71 @@ void test_merkle_layerwise_merged() {
                    merged.result.pipeline_profile_ms.at("response_rotate") > 0.0,
                "merged pipeline records rotate and merge stages");
   require_test(merged.result.layers.size() == 8, "merged layer records");
+}
+
+// Packed-query merged layerwise: runs are placed in order and a ciphertext is
+// closed exactly when the next run would cross W; the case retrieves the
+// same paths as the merged case and returns its single response ciphertext.
+// With the planner's strided layouts the gamma rows and every served level
+// fit one W = 2048 expansion up to H = 27 (1863 slots with EP6 at H = 27).
+void test_merkle_layerwise_packed() {
+  require_applicable(paper_config_active(),
+                     paper_config_reason("the Merkle benchmark suite"));
+  const std::vector<QuerySegmentPlacement> placed =
+      pack_query_segments({1000, 1000, 48, 1, 2048, 5}, 2048);
+  const std::vector<std::pair<size_t, size_t>> expected{
+      {0, 0}, {0, 1000}, {0, 2000}, {1, 0}, {2, 0}, {3, 0}};
+  for (size_t i = 0; i < expected.size(); ++i) {
+    require_test(placed[i].ciphertext == expected[i].first &&
+                     placed[i].offset == expected[i].second,
+                 "packing fills W in order and opens a new ciphertext at W");
+  }
+  bool rejected = false;
+  try {
+    (void)pack_query_segments({2049}, 2048);
+  } catch (const std::invalid_argument &) {
+    rejected = true;
+  }
+  require_test(rejected, "a run longer than W is rejected");
+
+  const MerkleWorkload small{size_t{1} << 8, 8, 32};
+  const PirParams reference = make_benchmark_reference(small);
+  const BenchmarkTrialPlan trials =
+      make_benchmark_trial_plan(small.leaf_count, 1, 3, 0x7061636bULL);
+  BenchmarkCaseExecution packed =
+      run_merkle_layerwise_packed_case(small, reference, trials);
+  BenchmarkCaseExecution merged =
+      run_merkle_layerwise_merged_case(small, reference, trials);
+  require_test(packed.result.correctness_passed &&
+                   packed.result.name == "merkle_layerwise_packed",
+               "packed correctness");
+  require_test(packed.measured_paths == merged.measured_paths,
+               "packed/merged path mismatch");
+  // H=8: the gamma rows and levels 7 and 8 share one packed query instead of
+  // three queries; the response is still one ciphertext plus 4032 direct
+  // bytes, and the keys cover the W = 2048 expansion.
+  require_test(packed.result.communication.pir_call_count == 1 &&
+                   merged.result.communication.pir_call_count == 3,
+               "packed query count");
+  require_test(packed.result.communication.online_response_bytes_actual ==
+                   merged.result.communication.online_response_bytes_actual,
+               "packed response equals the merged response");
+  require_test(packed.result.communication.helper_key_bytes_modeled ==
+                   modeled_helper_key_bytes(reference.with_query_shape(
+                       {1, 0, std::bit_width(DBConsts::PolyDegree) - 1})),
+               "packed helper keys cover the W expansion");
+
+
+  const MerkleWorkload tall{size_t{1} << 17, 17, 32};
+  const PirParams reference17 = make_benchmark_reference(tall);
+  const BenchmarkTrialPlan trials17{{}, {0x1234, tall.leaf_count - 1}};
+  const BenchmarkCaseExecution packed17 =
+      run_merkle_layerwise_packed_case(tall, reference17, trials17);
+  require_test(packed17.result.correctness_passed &&
+                   packed17.result.communication.pir_call_count == 1,
+               "H=17 path decodes from one packed query");
+  require_expected_path(packed17.measured_paths.at(0), 0x1234, 17);
+  require_expected_path(packed17.measured_paths.at(1), tall.leaf_count - 1, 17);
+  BENCH_PRINT("packed layerwise: H=8 and H=17 each from one packed query; "
+              "paths match the heap oracle");
 }

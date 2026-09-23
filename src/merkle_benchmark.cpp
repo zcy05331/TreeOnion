@@ -100,12 +100,16 @@ std::vector<BenchmarkCaseResult> execute_case_set(
       selection != BenchmarkCaseSelection::standard_onionpir &&
       selection != BenchmarkCaseSelection::merkle_paths &&
       selection != BenchmarkCaseSelection::merkle_layerwise &&
-      selection != BenchmarkCaseSelection::merkle_layerwise_merged) {
+      selection != BenchmarkCaseSelection::merkle_layerwise_merged &&
+      selection != BenchmarkCaseSelection::merkle_layerwise_packed) {
     throw std::invalid_argument("Unknown benchmark case selection");
   }
-  if (selection == BenchmarkCaseSelection::merkle_layerwise_merged) {
+  if (selection == BenchmarkCaseSelection::merkle_layerwise_merged ||
+      selection == BenchmarkCaseSelection::merkle_layerwise_packed) {
     BenchmarkCaseExecution merged =
-        run_merkle_layerwise_merged_case(workload, reference, trials, planner);
+        selection == BenchmarkCaseSelection::merkle_layerwise_merged
+            ? run_merkle_layerwise_merged_case(workload, reference, trials, planner)
+            : run_merkle_layerwise_packed_case(workload, reference, trials, planner);
     merged.result.name += name_suffix;
     std::vector<BenchmarkCaseResult> results;
     results.push_back(std::move(merged.result));

@@ -10,6 +10,7 @@ void test_logging();
 // clocks, the archived leaf schedule, one-sample statistics, large tiers.
 void test_merkle_profiled_override();
 void test_merkle_layerwise_merged();
+void test_merkle_layerwise_packed();
 void test_merkle_server_phases();
 void test_merkle_trial_schedule();
 void test_merkle_single_sample_stats();
@@ -46,7 +47,8 @@ static const std::vector<std::string> kRegressionTests = {
     "approx_gadget",
     "tree_packing",
     "logging",
-    "merkle_profiled_override", "merkle_layerwise_merged", "merkle_server_phases", "merkle_trial_schedule",
+    "merkle_profiled_override", "merkle_layerwise_merged", "merkle_layerwise_packed",
+    "merkle_server_phases", "merkle_trial_schedule",
     "merkle_single_sample_stats", "layer_layout_sweep_dominated",
     "layer_layout_large_tiers",
     "tree_noise_envelope",
@@ -118,6 +120,7 @@ void PirTest::run_test(const std::string &test_name) {
   else if (test_name == "merkle_integration")  test_merkle_integration();
   else if (test_name == "merkle_profiled_override") test_merkle_profiled_override();
   else if (test_name == "merkle_layerwise_merged") test_merkle_layerwise_merged();
+  else if (test_name == "merkle_layerwise_packed") test_merkle_layerwise_packed();
   else if (test_name == "merkle_server_phases") test_merkle_server_phases();
   else if (test_name == "merkle_trial_schedule") test_merkle_trial_schedule();
   else if (test_name == "merkle_single_sample_stats") test_merkle_single_sample_stats();

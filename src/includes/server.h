@@ -44,6 +44,11 @@ public:
   // 2^expansion_height）。输入密文只读。需要 RGSW selector 的调用方对返回的
   // gadget 行自行跑补全（tree PIR：unpack_tree_query）；make_query 仍直接走内部路径。
   std::vector<RlweCt> expand_query(size_t client_id, RlweCt &query) const;
+  // The same expansion for a packed query whose 2^expan_height slots follow
+  // the caller's layout, not this server's: returns leaves [0, useful_cnt).
+  // Any scheme-compatible server can expand it (the keys are per session).
+  std::vector<RlweCt> expand_query(size_t client_id, RlweCt &query,
+                                   size_t expan_height, size_t useful_cnt) const;
 
   // [Algorithm 3 补全] 作用在 expand_query 输出上：selector i（0 基）的 top 行位于
   // [fst_dim_sz + i·L_EP, fst_dim_sz + (i+1)·L_EP)，用该 client 注册的 RGSW(s) 密钥
@@ -137,6 +142,9 @@ private:
   // u = N0 + L_EP * (d - 1) 个 leaves；right-of-u subtrees 会被跳过，因为
   // 它们只会展开对 first-dim BFV 和后续 RGSW selector rows 都无用的 zero。
   std::vector<RlweCt> fast_expand_qry(size_t client_id, RlweCt &ciphertext) const;
+  std::vector<RlweCt> fast_expand_qry(size_t client_id, RlweCt &ciphertext,
+                                      size_t expan_height,
+                                      size_t useful_cnt) const;
 
   std::vector<RlweCt> full_expand_qry(size_t client_id, RlweCt &ciphertext) const;
 

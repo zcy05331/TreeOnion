@@ -91,6 +91,16 @@ RlwePt make_layer_merkle_plaintext_strided(size_t level, size_t plaintext_index,
                                            const MerkleWorkload &workload,
                                            const PirParams &params);
 
+// Query packing of the packed layerwise variant: segment i takes sizes[i]
+// contiguous slots of a shared expansion; segments are placed in order and a
+// new ciphertext starts whenever the next segment would cross `capacity`.
+struct QuerySegmentPlacement {
+  size_t ciphertext = 0;
+  size_t offset = 0;
+};
+std::vector<QuerySegmentPlacement> pack_query_segments(
+    const std::vector<size_t> &sizes, size_t capacity);
+
 // Minimize padded plaintext count per level while retaining the reference
 // scheme parameters and maximum remaining-dimension count.
 TargetPlaintextLayout select_target_plaintext_layout(

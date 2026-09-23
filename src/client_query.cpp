@@ -74,53 +74,21 @@ RlweCt PirClient::fast_generate_query(const PirParams &query_params,
   }
 
   constexpr size_t N = DBConsts::PolyDegree;
-  const size_t K = query_params.K();
   const auto &qs_arr = query_params.get_rns_mods();
   const std::vector<uint64_t> qs(qs_arr.begin(), qs_arr.end());
-  const uint64_t t = query_params.get_plain_mod();
   const double sigma = query_params.get_noise_std_dev();
 
   std::vector<size_t> query_indices =
       get_query_indices(query_params, pt_idx);
   PRINT_INT_ARRAY("\t\tquery_indices", query_indices.data(), query_indices.size());
-  const size_t expan_height = query_params.get_expan_height();
-  const size_t capacity = size_t{1} << expan_height;  // 2^h slots after expansion
-
-  uint64_t inverse = 0;
-  utils::try_invert_uint_mod(capacity, t, inverse);
-  const size_t reversed_index = utils::bit_reverse(query_indices[0], expan_height);
-  DEBUG_PRINT("reversed_index: " << reversed_index << ", query_indices[0]: " << query_indices[0]);
 
   // QueryPack 等价于先 packing plaintext vector 再执行 BFV encrypt。这里利用
   // BFV message-add 线性：先 encrypt zero 到 coefficient form，再把 scaled
-  // plaintext 直接加到 c0 的 BitRev(col_idx) coefficient。注入量是
-  // Delta*(capacity^-1 mod t)；capacity^-1 抵消 ExpandBFV 每层 add/sub
-  // 引入的 scaling。K=1 分支用 round(q0*inverse/t) 表示 direct scaling；
-  // K=2 分支先按 composite Q=q0*q1 计算 full-q plaintext lift，再降到各
-  // RNS limb。
+  // plaintext 直接加到 c0 的 BitRev 位置（见 add_query_segment）。
   RlweCt query;
   encrypt_zero_rns(rlwe_sk_, N, qs, sigma, rng_, query, /*ntt_form=*/false);
-
-  // Adding 1^{-1} as a message to the query so that after expansion, the query will have 1's in the correct positions.
-  if (K == 1) {
-    const uint64_t Q = qs[0];
-    const uint64_t scaled = utils::round_div_u128((uint128_t)Q * inverse, t) % Q;
-    query.c0[reversed_index] = (query.c0[reversed_index] + scaled) % Q;
-  } else {
-    const uint128_t Q = static_cast<uint128_t>(qs[0]) * qs[1];
-    const uint128_t Delta = Q / t;
-    const uint64_t r = static_cast<uint64_t>(Q - Delta * t);
-    const uint64_t r_inverse_round =
-        static_cast<uint64_t>((static_cast<uint128_t>(r) * inverse + (t >> 1)) / t);
-    const uint128_t scaled_mp = Delta * inverse + r_inverse_round;
-    for (size_t k = 0; k < K; ++k) {
-      const uint64_t scaled_k = static_cast<uint64_t>(scaled_mp % qs[k]);
-      const size_t idx = k * N + reversed_index;
-      query.c0[idx] = (query.c0[idx] + scaled_k) % qs[k];
-    }
-  }
-
-  add_gsw_to_query(query_params, query, query_indices);
+  add_query_segment(query, query_params.get_expan_height(), 0, query_params,
+                    query_indices, /*one_hot=*/true);
   return query;
 }
 
@@ -133,18 +101,59 @@ void PirClient::add_gsw_to_query(
 void PirClient::add_gsw_to_query(
     const PirParams &query_params, RlweCt &query,
     const std::vector<size_t> &query_indices) {
+  add_query_segment(query, query_params.get_expan_height(), 0, query_params,
+                    query_indices, /*one_hot=*/false);
+}
+
+void PirClient::add_query_segment(RlweCt &query, size_t pack_height,
+                                  size_t offset, const PirParams &query_params,
+                                  const std::vector<size_t> &query_indices,
+                                  bool one_hot) {
   if (!pir_params_.scheme_compatible(query_params)) {
     throw std::invalid_argument(
         "PirClient query layout is not scheme-compatible with its session");
   }
-  // no further dimensions
-  if (query_indices.size() == 1) { return; }
-  const size_t expan_height = query_params.get_expan_height();
-  const size_t capacity = size_t{1} << expan_height;  // 2^h slots after expansion
-  const size_t l = query_params.get_l();
-  const auto rns_mods = query_params.get_rns_mods();
-  const size_t K = query_params.K();
+  const size_t capacity = size_t{1} << pack_height;  // 2^h slots after expansion
   const size_t fst_dim_sz = query_params.get_fst_dim_sz();
+  const size_t l = query_params.get_l();
+  if (query_indices.empty() ||
+      offset + fst_dim_sz + l * (query_indices.size() - 1) > capacity) {
+    throw std::invalid_argument("query segment exceeds its expansion capacity");
+  }
+  constexpr size_t N = DBConsts::PolyDegree;
+  const size_t K = query_params.K();
+  const auto rns_mods = query_params.get_rns_mods();
+  const uint64_t t = query_params.get_plain_mod();
+
+  if (one_hot) {
+    // 注入量是 Delta*(capacity^-1 mod t)；capacity^-1 抵消 ExpandBFV 每层 add/sub
+    // 引入的 scaling。K=1 分支用 round(q0*inverse/t) 表示 direct scaling；
+    // K=2 分支先按 composite Q=q0*q1 计算 full-q plaintext lift，再降到各
+    // RNS limb。
+    uint64_t inverse = 0;
+    utils::try_invert_uint_mod(capacity, t, inverse);
+    const size_t reversed_index =
+        utils::bit_reverse(offset + query_indices[0], pack_height);
+    if (K == 1) {
+      const uint64_t Q = rns_mods[0];
+      const uint64_t scaled = utils::round_div_u128((uint128_t)Q * inverse, t) % Q;
+      query.c0[reversed_index] = (query.c0[reversed_index] + scaled) % Q;
+    } else {
+      const uint128_t Q = static_cast<uint128_t>(rns_mods[0]) * rns_mods[1];
+      const uint128_t Delta = Q / t;
+      const uint64_t r = static_cast<uint64_t>(Q - Delta * t);
+      const uint64_t r_inverse_round =
+          static_cast<uint64_t>((static_cast<uint128_t>(r) * inverse + (t >> 1)) / t);
+      const uint128_t scaled_mp = Delta * inverse + r_inverse_round;
+      for (size_t k = 0; k < K; ++k) {
+        const uint64_t scaled_k = static_cast<uint64_t>(scaled_mp % rns_mods[k]);
+        const size_t idx = k * N + reversed_index;
+        query.c0[idx] = (query.c0[idx] + scaled_k) % rns_mods[k];
+      }
+    }
+  }
+  // no further dimensions
+  if (query_indices.size() == 1) return;
 
   // 1/capacity per limb, cancels the scaling factor introduced by expansion.
   std::vector<uint64_t> inv(K);
@@ -160,7 +169,7 @@ void PirClient::add_gsw_to_query(
       utils::gsw_gadget(l, query_params.get_base_log2(), rns_mods,
                         query_params.get_ep_low_bits());
 
-  // QueryPack packed slots layout:
+  // QueryPack packed slots layout, relative to `offset`:
   // [0, N0) 是首维 BFV one-hot。代码索引 i=1..query_indices.size()-1 时，
   // 第 i 个高维 selector 占用 [N0 + (i-1)*L_EP, N0 + i*L_EP)，即对应
   // RGSW sample 的 top half rows。selector=1 注入 gadget powers；
@@ -172,8 +181,8 @@ void PirClient::add_gsw_to_query(
 
     // l slots per dim, gadget value written under every limb.
     for (size_t k = 0; k < l; k++) {
-      const size_t coef_pos = fst_dim_sz + (i - 1) * l + k;
-      const size_t reversed_idx = utils::bit_reverse(coef_pos, expan_height);
+      const size_t coef_pos = offset + fst_dim_sz + (i - 1) * l + k;
+      const size_t reversed_idx = utils::bit_reverse(coef_pos, pack_height);
       for (size_t mod_id = 0; mod_id < K; mod_id++) {
         const size_t pad = mod_id * DBConsts::PolyDegree;
         inter_coeff_t mod = rns_mods[mod_id];

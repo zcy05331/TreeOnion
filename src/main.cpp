@@ -119,10 +119,13 @@ CommandLineOptions parse_command_line(int argc, char *argv[]) {
         cli.benchmark_case = BenchmarkCaseSelection::merkle_layerwise;
       } else if (value == "merkle_layerwise_merged") {
         cli.benchmark_case = BenchmarkCaseSelection::merkle_layerwise_merged;
+      } else if (value == "merkle_layerwise_packed") {
+        cli.benchmark_case = BenchmarkCaseSelection::merkle_layerwise_packed;
       } else {
         throw std::invalid_argument(
             "--benchmark-case must be all, standard_onionpir, merkle_paths, "
-            "merkle_layerwise, or merkle_layerwise_merged");
+            "merkle_layerwise, merkle_layerwise_merged or "
+            "merkle_layerwise_packed");
       }
     } else if (std::strcmp(argv[i], "--run-optional-4gb") == 0) {
       cli.run_optional_4gb = true;

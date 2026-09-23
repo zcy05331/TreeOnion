@@ -145,12 +145,20 @@ void PirServer::ext_prod_mux(RlweCt &x, RlweCt &y, GSWCt &selection_cipher, Rlwe
 // 生成未使用的 zero leaves。
 std::vector<RlweCt>
 PirServer::fast_expand_qry(std::size_t client_id, RlweCt &ciphertext) const {
-  // ============== parameters
-  const size_t useful_cnt = pir_params_.get_fst_dim_sz() +
-                            pir_params_.get_l() *
-                                (pir_params_.get_num_dims() - 1); // u
-  const size_t expan_height = pir_params_.get_expan_height(); // h
+  return fast_expand_qry(client_id, ciphertext, pir_params_.get_expan_height(),
+                         pir_params_.get_fst_dim_sz() +
+                             pir_params_.get_l() *
+                                 (pir_params_.get_num_dims() - 1));
+}
+
+std::vector<RlweCt>
+PirServer::fast_expand_qry(std::size_t client_id, RlweCt &ciphertext,
+                           size_t expan_height, size_t useful_cnt) const {
+  // ============== parameters: h and u = the leaves the caller consumes
   const size_t capacity = size_t{1} << expan_height;          // 2^h
+  if (useful_cnt > capacity) {
+    throw std::invalid_argument("expansion asks for more leaves than 2^h");
+  }
   const auto session_it = client_sessions_.find(client_id);
   const bvks::BvGaloisKeys &bv_galois_key =
       session_it != client_sessions_.end()
@@ -240,6 +248,12 @@ std::vector<RlweCt> PirServer::expand_query(size_t client_id,
                                             RlweCt &query) const {
   // 纯转发：不复制、不改布局，公共 API 只是给外部组合器开一个访问口。
   return fast_expand_qry(client_id, query);
+}
+
+std::vector<RlweCt> PirServer::expand_query(size_t client_id, RlweCt &query,
+                                            size_t expan_height,
+                                            size_t useful_cnt) const {
+  return fast_expand_qry(client_id, query, expan_height, useful_cnt);
 }
 
 std::vector<GSWCt> PirServer::complete_selectors(

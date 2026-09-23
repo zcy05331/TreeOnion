@@ -321,6 +321,26 @@ size_t strided_level_slot(size_t level, size_t local) {
   return local >> strided_level_shift(level);
 }
 
+std::vector<QuerySegmentPlacement> pack_query_segments(
+    const std::vector<size_t> &sizes, size_t capacity) {
+  std::vector<QuerySegmentPlacement> placements;
+  placements.reserve(sizes.size());
+  size_t ciphertext = 0, used = 0;
+  for (size_t size : sizes) {
+    if (size == 0 || size > capacity) {
+      throw std::invalid_argument(
+          "A query segment must fit one packed query ciphertext");
+    }
+    if (used + size > capacity) {
+      ++ciphertext;
+      used = 0;
+    }
+    placements.push_back({ciphertext, used});
+    used += size;
+  }
+  return placements;
+}
+
 RlwePt encode_merkle_nodes_strided(std::span<const MerkleNode> nodes,
                                    const PirParams &params) {
   if (nodes.size() > kStridedNodesPerPlaintext) {

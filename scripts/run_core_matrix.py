@@ -26,7 +26,7 @@ SCALES = {
 SCALE_ORDER = ("256mb", "512mb", "1gb", "2gb", "4gb", "8gb")
 # 8 GiB runs only when requested; the default matrix keeps the five smaller sizes.
 DEFAULT_SCALES = SCALE_ORDER[:5]
-CASES = ("standard", "layerwise", "layerwise_merged", "cuckoo", "flat")
+CASES = ("standard", "layerwise", "layerwise_merged", "layerwise_packed", "cuckoo", "flat")
 # The default matrix keeps the four original baselines; the merged-response
 # layerwise variant is an explicit opt-in.
 DEFAULT_CASES = ("standard", "layerwise", "cuckoo", "flat")
@@ -56,6 +56,8 @@ PATH_SEMANTICS = {
     "layerwise_tuned": "legacy_merkle_paths_omit_root",
     "tuning/layerwise_merged/profile": "legacy_merkle_paths_omit_root",
     "layerwise_merged_tuned": "legacy_merkle_paths_omit_root",
+    "tuning/layerwise_packed/profile": "legacy_merkle_paths_omit_root",
+    "layerwise_packed_tuned": "legacy_merkle_paths_omit_root",
     "flat": "legacy_merkle_paths_omit_root",
     "cuckoo_tuned": "legacy_merkle_paths_omit_root",
 }
@@ -350,8 +352,9 @@ class CoreMatrix:
             row_extra=row_extra or None,
         )
 
-    def layerwise_profile(self, scale: str, *, merged: bool = False) -> bool:
-        variant = "layerwise_merged" if merged else "layerwise"
+    def layerwise_profile(self, scale: str, variant: str = "layerwise") -> bool:
+        # The merged and packed variants serve strided 64-node level plaintexts.
+        strided = variant in ("layerwise_merged", "layerwise_packed")
         folder = self.paths.output / scale / "tuning" / variant
         profile = folder / "profile.json"
         process_path = folder / "profile-process.json"
@@ -398,7 +401,7 @@ class CoreMatrix:
             str(TRIAL_SEED),
             "--layer-padding-budget",
             "1.1",
-            *(["--layer-nodes-per-plaintext", "64"] if merged else []),
+            *(["--layer-nodes-per-plaintext", "64"] if strided else []),
             *self.geometry_args(),
             "--layout-profile-json",
             str(profile),
@@ -437,10 +440,9 @@ class CoreMatrix:
         if not isinstance(measurements, list) or not measurements:
             raise MatrixError(f"{profile_path}: missing measurements")
 
-    def layerwise_tuned(self, scale: str, *, merged: bool = False) -> bool:
+    def layerwise_tuned(self, scale: str, variant: str = "layerwise") -> bool:
         folder = self.paths.output / scale
         leaf_count = SCALES[scale]
-        variant = "layerwise_merged" if merged else "layerwise"
         profile = folder / "tuning" / variant / "profile.json"
         case = f"{variant}_tuned"
         return self.measured_call(
@@ -451,7 +453,7 @@ class CoreMatrix:
                 "--test",
                 "merkle_benchmarks",
                 "--benchmark-case",
-                "merkle_layerwise_merged" if merged else "merkle_layerwise",
+                f"merkle_{variant}",
                 "--leaf-count",
                 str(leaf_count),
                 "--experiments",
@@ -625,11 +627,13 @@ class CoreMatrix:
                     self.layerwise_tuned(scale)
                 else:
                     self.append_row(scale, "layerwise_tuned", "skipped", reason="layerwise profile failed")
-            if "layerwise_merged" in self.cases:
-                if self.layerwise_profile(scale, merged=True):
-                    self.layerwise_tuned(scale, merged=True)
+            for variant in ("layerwise_merged", "layerwise_packed"):
+                if variant not in self.cases:
+                    continue
+                if self.layerwise_profile(scale, variant):
+                    self.layerwise_tuned(scale, variant)
                 else:
-                    self.append_row(scale, "layerwise_merged_tuned", "skipped", reason="layerwise_merged profile failed")
+                    self.append_row(scale, f"{variant}_tuned", "skipped", reason=f"{variant} profile failed")
             if "cuckoo" in self.cases:
                 pilots_ok = True
                 for height in self.heights(scale):

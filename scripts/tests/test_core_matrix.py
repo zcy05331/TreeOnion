@@ -281,6 +281,32 @@ class CoreMatrixTests(unittest.TestCase):
         self.assertEqual(len(merged_formal), 1)
         self.assertTrue(merged_formal[0][merged_formal[0].index("--layer-layout-profile") + 1].endswith("tuning/layerwise_merged/profile.json"))
 
+    def test_packed_layerwise_profiles_strided_levels_and_runs_its_own_case(self) -> None:
+        runner = FakeRunner()
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        root = pathlib.Path(tmp.name)
+        result = matrix.CoreMatrix(make_paths(root), runner=runner, scales=("1gb",),
+                                   cases=("layerwise_merged", "layerwise_packed"),
+                                   reference_expansion_height=10, gadget="ep3").run()
+        self.assertEqual(result, 0)
+        status = json.loads((root / "outputs/core-matrix/status.json").read_text())
+        self.assertEqual([row["case"] for row in status["rows"]], [
+            "tuning/layerwise_merged/profile", "layerwise_merged_tuned",
+            "tuning/layerwise_packed/profile", "layerwise_packed_tuned",
+        ])
+        children = [command[command.index("--") + 1:] for command in runner.commands
+                    if command[1].endswith("read_process_peak_memory.py")]
+        packed_profile = [c for c in children if "--layout-profile-json" in c
+                          and "layerwise_packed" in c[c.index("--layout-profile-json") + 1]]
+        self.assertEqual(packed_profile[0][packed_profile[0].index("--layer-nodes-per-plaintext") + 1], "64")
+        packed_formal = [c for c in children if "--benchmark-case" in c
+                         and c[c.index("--benchmark-case") + 1] == "merkle_layerwise_packed"]
+        self.assertEqual(len(packed_formal), 1)
+        self.assertTrue(packed_formal[0][packed_formal[0].index("--layer-layout-profile") + 1]
+                        .endswith("tuning/layerwise_packed/profile.json"))
+        self.assertNotIn("layerwise_packed", matrix.DEFAULT_CASES)
+
     def test_gadget_choice_routes_every_case_to_one_build(self) -> None:
         for gadget, build in (("exact", "build-default"), ("ep3", "build-ep3")):
             runner = FakeRunner()

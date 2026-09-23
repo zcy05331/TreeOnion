@@ -214,6 +214,9 @@ enum class BenchmarkCaseSelection {
   // Layerwise with the tree scheme's response merging: strided 64-node level
   // plaintexts, one shared gamma selector set, one merged response ciphertext.
   merkle_layerwise_merged,
+  // merkle_layerwise_merged with the level queries and the gamma rows packed
+  // into shared W = 2048 query expansions.
+  merkle_layerwise_packed,
 };
 
 struct MerkleBenchmarkOptions {
@@ -314,6 +317,15 @@ BenchmarkCaseExecution run_merkle_layerwise_merged_case(
     const MerkleWorkload &workload, const PirParams &reference,
     const BenchmarkTrialPlan &trials);
 BenchmarkCaseExecution run_merkle_layerwise_merged_case(
+    const MerkleWorkload &workload, const PirParams &reference,
+    const BenchmarkTrialPlan &trials, const LayerPlannerConfig &planner);
+// The merged case with packed queries: every served level's query (one-hot
+// plus selector rows) and the gamma rows take contiguous slots of shared
+// height-11 expansions, ceil-packed in order, instead of one query each.
+BenchmarkCaseExecution run_merkle_layerwise_packed_case(
+    const MerkleWorkload &workload, const PirParams &reference,
+    const BenchmarkTrialPlan &trials);
+BenchmarkCaseExecution run_merkle_layerwise_packed_case(
     const MerkleWorkload &workload, const PirParams &reference,
     const BenchmarkTrialPlan &trials, const LayerPlannerConfig &planner);
 

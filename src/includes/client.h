@@ -35,6 +35,23 @@ public:
   void add_gsw_to_query(const PirParams &query_params, RlweCt &query,
                         const std::vector<size_t> &query_indices);
 
+  // One query's content written into a shared, packed expansion: the
+  // first-dimension one-hot at query_indices[0] (when one_hot is set) and the
+  // selector gadget rows, at slots [offset, offset + N0 + L_EP * (d - 1)) of
+  // a ciphertext expanded to 2^pack_height slots. BitRev and the capacity^-1
+  // premultiplication use that shared capacity. fast_generate_query and
+  // add_gsw_to_query are the offset-0 cases at the layout's own height.
+  void add_query_segment(RlweCt &query, size_t pack_height, size_t offset,
+                         const PirParams &query_params,
+                         const std::vector<size_t> &query_indices,
+                         bool one_hot);
+
+  // Algorithm 4 line 1 的 plaintext index 坐标映射：
+  // return[0] 是首维 col_idx；其余 entries 是服务端归约顺序消费的
+  // selector bits，第一个 bit 对应 deepest/ragged level。
+  std::vector<size_t> get_query_indices(const PirParams &query_params,
+                                        size_t pt_idx) const;
+
   // Create custom BV-style Galois keys (no special prime).
   inline bvks::BvGaloisKeys create_bv_galois_keys() {
     return bvks::gen_bv_galois_keys(pir_params_, rlwe_sk_);
@@ -92,12 +109,6 @@ private:
   PirParams pir_params_;
   ChaChaRng rng_;       // per-client PRNG for noise sampling
   RlweSk rlwe_sk_;            // ternary sk, NTT form under q
-
-  // Algorithm 4 line 1 的 plaintext index 坐标映射：
-  // return[0] 是首维 col_idx；其余 entries 是服务端归约顺序消费的
-  // selector bits，第一个 bit 对应 deepest/ragged level。
-  std::vector<size_t> get_query_indices(const PirParams &query_params,
-                                        size_t pt_idx) const;
 
   // Populate sk_ntt_small_q_ by rewriting rlwe_sk_ from old_q to small_q
   // (ternary sk has -1 ≡ q-1; we need -1 ≡ small_q-1).

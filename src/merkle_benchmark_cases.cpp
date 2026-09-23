@@ -10,7 +10,9 @@
 
 #include <algorithm>
 #include <array>
+#include <bit>
 #include <chrono>
+#include <iterator>
 #include <memory>
 #include <optional>
 #include <sstream>
@@ -649,7 +651,7 @@ BenchmarkCaseExecution run_merkle_layerwise_case(
 }
 
 // ============================================================================
-// Layerwise with the tree scheme's response merging
+// Layerwise with the tree scheme's response merging, optionally packed queries
 // ============================================================================
 //
 // Same independent per-level OnionPIR calls as merkle_layerwise, but every
@@ -661,21 +663,28 @@ BenchmarkCaseExecution run_merkle_layerwise_case(
 // tree_packing::mlwe_merge_residues, which also projects away the 63 other
 // slots. One modulus switch and one serialized ciphertext follow. Levels that
 // fit one plaintext are still returned in the clear.
+//
+// merkle_layerwise_packed additionally packs the queries: after expansion
+// every slot is an independent ciphertext, so the gamma rows and every served
+// level get a contiguous run of slots in a shared height-11 (W = 2048)
+// expansion, [o, o + N0 + L_EP * d) per level, placed in order with a new
+// ciphertext whenever the next run would cross W. Each run keeps its own
+// content (the level's one-hot plus the gadget rows of its row bits); only
+// BitRev and the W^-1 premultiplication use W. The server expands every
+// packed ciphertext once, pruning right of its last used slot, and hands run
+// l to level l; first dimension, fold, rotation and merge are unchanged.
 
-BenchmarkCaseExecution run_merkle_layerwise_merged_case(
-    const MerkleWorkload &workload, const PirParams &reference,
-    const BenchmarkTrialPlan &trials) {
-  return run_merkle_layerwise_merged_case(workload, reference, trials,
-                                          LayerPlannerConfig{});
-}
+namespace {
 
-BenchmarkCaseExecution run_merkle_layerwise_merged_case(
+BenchmarkCaseExecution run_strided_layerwise_case(
     const MerkleWorkload &workload, const PirParams &reference,
-    const BenchmarkTrialPlan &trials, const LayerPlannerConfig &planner) {
+    const BenchmarkTrialPlan &trials, const LayerPlannerConfig &planner,
+    bool packed_queries) {
   validate_trial_plan(workload, reference, trials);
   constexpr size_t kRho = kStridedNodesPerPlaintext;
   constexpr size_t kGammaBits = kStridedLevelSlotBits;
   constexpr size_t N = DBConsts::PolyDegree;
+  constexpr size_t kPackHeight = std::bit_width(N) - 1;  // W = N slots
   if (workload.tree_height <= kGammaBits) {
     throw std::invalid_argument(
         "Merged layerwise needs a tree taller than the 64-node slot height");
@@ -691,8 +700,10 @@ BenchmarkCaseExecution run_merkle_layerwise_merged_case(
   // The BV Galois keys must cover the gamma expansion and the merge
   // automorphisms (N >> v) + 1, v < kGammaBits, even when a small reference
   // expands lower than that; production references (h = 10) already do.
-  const size_t key_height = std::max(
-      {reference.get_expan_height(), gamma_height, kGammaBits});
+  // Packed queries expand to the full W = 2^11.
+  const size_t key_height =
+      std::max({reference.get_expan_height(), gamma_height, kGammaBits,
+                packed_queries ? kPackHeight : size_t{0}});
 
   const auto setup_start = BenchmarkClock::now();
   bool used_fallback = false;
@@ -737,6 +748,39 @@ BenchmarkCaseExecution run_merkle_layerwise_merged_case(
   if (response_server == nullptr) {
     throw std::runtime_error("Merged layerwise has no PIR-served level");
   }
+
+  // Packed query geometry, fixed by the public database shape: the gamma rows
+  // first (in gamma_params' layout: one unused first-dimension slot), then the
+  // served levels from the leaves upward. Level 0 stands for gamma.
+  struct QuerySegment {
+    size_t level = 0;
+    size_t size = 0;
+    QuerySegmentPlacement at;
+  };
+  std::vector<QuerySegment> segments;
+  std::vector<size_t> packed_used;  // leaves each packed ciphertext expands to
+  if (packed_queries) {
+    segments.push_back({0, 1 + kGammaBits * reference.get_l(), {}});
+    for (size_t level = workload.tree_height; level >= 1; --level) {
+      const LayerLayout &layout = layouts.at(level - 1);
+      if (!layout.direct_return) {
+        const PirParams &p = layout.params;
+        segments.push_back(
+            {level, p.get_fst_dim_sz() + p.get_l() * p.get_num_other_dims(), {}});
+      }
+      if (level == 1) break;
+    }
+    std::vector<size_t> sizes;
+    for (const QuerySegment &segment : segments) sizes.push_back(segment.size);
+    const std::vector<QuerySegmentPlacement> placements =
+        pack_query_segments(sizes, size_t{1} << kPackHeight);
+    packed_used.assign(placements.back().ciphertext + 1, 0);
+    for (size_t i = 0; i < segments.size(); ++i) {
+      segments[i].at = placements[i];
+      packed_used[placements[i].ciphertext] =
+          placements[i].offset + segments[i].size;
+    }
+  }
   const BenchmarkDuration setup_time = elapsed_since(setup_start);
 
   using ProfileClock = std::chrono::steady_clock;
@@ -752,24 +796,101 @@ BenchmarkCaseExecution run_merkle_layerwise_merged_case(
       trial.pipeline.*slot += now - mark;
       mark = now;
     };
-
-    // One gamma selector query per path, expanded and completed like the
-    // selector rows of an ordinary packed query.
-    auto start = BenchmarkClock::now();
-    RlweCt gamma_query = client.fresh_zero_ct();
     std::vector<size_t> gamma_indices{0};
     for (size_t v = 0; v < kGammaBits; ++v) {
       gamma_indices.push_back((gamma >> v) & 1U);
     }
-    client.add_gsw_to_query(gamma_params, gamma_query, gamma_indices);
-    trial.timing.client_query += elapsed_since(start);
-    start = BenchmarkClock::now();
+    const auto level_plaintext = [&](size_t level) {
+      const size_t local =
+          merkle_sibling_local(leaf, workload.tree_height, level);
+      if (strided_level_slot(level, local) != gamma) {
+        throw std::logic_error(
+            "strided slot of a served level differs from the shared gamma");
+      }
+      return strided_level_plaintext(level, local);
+    };
+
+    // Client queries, then their expansion on the server: the gamma rows and
+    // each served level's expanded slots (first dimension, then row groups).
+    std::vector<RlweCt> gamma_rows;
+    std::vector<std::vector<RlweCt>> level_rows(workload.tree_height + 1);
+    if (!packed_queries) {
+      // One gamma selector query per path, expanded and completed like the
+      // selector rows of an ordinary packed query, and one query per level.
+      auto start = BenchmarkClock::now();
+      RlweCt gamma_query = client.fresh_zero_ct();
+      client.add_gsw_to_query(gamma_params, gamma_query, gamma_indices);
+      std::vector<RlweCt> level_queries(workload.tree_height + 1);
+      for (size_t level = workload.tree_height; level >= 1; --level) {
+        const LayerLayout &layout = layouts.at(level - 1);
+        if (!layout.direct_return) {
+          level_queries[level] =
+              client.fast_generate_query(layout.params, level_plaintext(level));
+        }
+        if (level == 1) break;
+      }
+      trial.timing.client_query += elapsed_since(start);
+      start = BenchmarkClock::now();
+      mark = ProfileClock::now();
+      TIME_START(EXPAND_TIME);
+      gamma_rows = gamma_server.expand_query(client_id, gamma_query);
+      for (size_t level = workload.tree_height; level >= 1; --level) {
+        if (!layouts.at(level - 1).direct_return) {
+          level_rows[level] = servers.at(level - 1)->expand_query(
+              client_id, level_queries[level]);
+        }
+        if (level == 1) break;
+      }
+      TIME_END(EXPAND_TIME);
+      lap(&PirPipelineProfile::expand);
+      trial.timing.server_compute += elapsed_since(start);
+    } else {
+      auto start = BenchmarkClock::now();
+      std::vector<RlweCt> packed(packed_used.size());
+      for (RlweCt &ct : packed) ct = client.fresh_zero_ct();
+      for (const QuerySegment &segment : segments) {
+        RlweCt &ct = packed.at(segment.at.ciphertext);
+        if (segment.level == 0) {
+          client.add_query_segment(ct, kPackHeight, segment.at.offset,
+                                   gamma_params, gamma_indices,
+                                   /*one_hot=*/false);
+          continue;
+        }
+        const PirParams &params = layouts.at(segment.level - 1).params;
+        const size_t plaintext_index = level_plaintext(segment.level);
+        if (plaintext_index >= params.get_num_pt()) {
+          throw std::out_of_range("level plaintext exceeds its layout");
+        }
+        client.add_query_segment(
+            ct, kPackHeight, segment.at.offset, params,
+            client.get_query_indices(params, plaintext_index),
+            /*one_hot=*/true);
+      }
+      trial.timing.client_query += elapsed_since(start);
+      start = BenchmarkClock::now();
+      mark = ProfileClock::now();
+      TIME_START(EXPAND_TIME);
+      std::vector<std::vector<RlweCt>> leaves(packed.size());
+      for (size_t c = 0; c < packed.size(); ++c) {
+        leaves[c] = gamma_server.expand_query(client_id, packed[c], kPackHeight,
+                                              packed_used[c]);
+      }
+      for (const QuerySegment &segment : segments) {
+        std::vector<RlweCt> &source = leaves[segment.at.ciphertext];
+        std::vector<RlweCt> &target =
+            segment.level == 0 ? gamma_rows : level_rows[segment.level];
+        target.assign(
+            std::make_move_iterator(source.begin() + segment.at.offset),
+            std::make_move_iterator(source.begin() + segment.at.offset +
+                                    segment.size));
+      }
+      TIME_END(EXPAND_TIME);
+      lap(&PirPipelineProfile::expand);
+      trial.timing.server_compute += elapsed_since(start);
+    }
+
+    auto start = BenchmarkClock::now();
     mark = ProfileClock::now();
-    TIME_START(EXPAND_TIME);
-    std::vector<RlweCt> gamma_rows =
-        gamma_server.expand_query(client_id, gamma_query);
-    TIME_END(EXPAND_TIME);
-    lap(&PirPipelineProfile::expand);
     TIME_START(CONVERT_TIME);
     std::vector<GSWCt> gamma_selectors =
         gamma_server.complete_selectors(client_id, gamma_rows);
@@ -798,23 +919,10 @@ BenchmarkCaseExecution run_merkle_layerwise_merged_case(
         trial.direct_levels += 1;
         trial.plain_response_bytes += wire.size();
       } else {
-        if (strided_level_slot(level, local) != gamma) {
-          throw std::logic_error(
-              "strided slot of a served level differs from the shared gamma");
-        }
-        const size_t plaintext_index = strided_level_plaintext(level, local);
-        start = BenchmarkClock::now();
-        RlweCt query =
-            client.fast_generate_query(layout.params, plaintext_index);
-        trial.timing.client_query += elapsed_since(start);
-
         PirServer &server = *servers.at(level - 1);
+        std::vector<RlweCt> &expanded = level_rows[level];
         start = BenchmarkClock::now();
         mark = ProfileClock::now();
-        TIME_START(EXPAND_TIME);
-        std::vector<RlweCt> expanded = server.expand_query(client_id, query);
-        TIME_END(EXPAND_TIME);
-        lap(&PirPipelineProfile::expand);
         TIME_START(CONVERT_TIME);
         std::vector<GSWCt> selectors =
             server.complete_selectors(client_id, expanded);
@@ -921,7 +1029,7 @@ BenchmarkCaseExecution run_merkle_layerwise_merged_case(
   }
 
   BenchmarkCaseResult &result = execution.result;
-  result.name = "merkle_layerwise_merged";
+  result.name = packed_queries ? "merkle_layerwise_packed" : "merkle_layerwise_merged";
   result.correctness_passed = true;
   result.raw_dataset_bytes = raw_merkle_bytes(workload);
   size_t direct_levels = 0;
@@ -996,11 +1104,47 @@ BenchmarkCaseExecution run_merkle_layerwise_merged_case(
     record.features = compute_layer_layout_features(layout.params);
     result.layers.push_back(std::move(record));
   }
-  // Served levels each cost one packed query, plus the shared gamma query;
-  // the response is one merged ciphertext plus the direct-return bytes.
-  result.communication = communication_stats_merged(
-      reference, workload.tree_height - direct_levels + 1, response_shape.at(0),
-      direct_plain_bytes);
+  // Merged: every served level costs one packed query, plus the shared gamma
+  // query. Packed: the packed ciphertexts, and helper keys for the full W
+  // expansion. The response is one merged ciphertext plus the direct bytes.
+  result.communication =
+      packed_queries
+          ? communication_stats_merged(
+                reference.with_query_shape({1, 0, key_height}),
+                packed_used.size(), response_shape.at(0), direct_plain_bytes)
+          : communication_stats_merged(
+                reference, workload.tree_height - direct_levels + 1,
+                response_shape.at(0), direct_plain_bytes);
   finalize_case_statistics(result);
   return execution;
+}
+
+}  // namespace
+
+BenchmarkCaseExecution run_merkle_layerwise_merged_case(
+    const MerkleWorkload &workload, const PirParams &reference,
+    const BenchmarkTrialPlan &trials) {
+  return run_merkle_layerwise_merged_case(workload, reference, trials,
+                                          LayerPlannerConfig{});
+}
+
+BenchmarkCaseExecution run_merkle_layerwise_merged_case(
+    const MerkleWorkload &workload, const PirParams &reference,
+    const BenchmarkTrialPlan &trials, const LayerPlannerConfig &planner) {
+  return run_strided_layerwise_case(workload, reference, trials, planner,
+                                    /*packed_queries=*/false);
+}
+
+BenchmarkCaseExecution run_merkle_layerwise_packed_case(
+    const MerkleWorkload &workload, const PirParams &reference,
+    const BenchmarkTrialPlan &trials) {
+  return run_merkle_layerwise_packed_case(workload, reference, trials,
+                                          LayerPlannerConfig{});
+}
+
+BenchmarkCaseExecution run_merkle_layerwise_packed_case(
+    const MerkleWorkload &workload, const PirParams &reference,
+    const BenchmarkTrialPlan &trials, const LayerPlannerConfig &planner) {
+  return run_strided_layerwise_case(workload, reference, trials, planner,
+                                    /*packed_queries=*/true);
 }
