@@ -105,6 +105,9 @@ void test_merkle_sha256_e2e() {
   require_test(hex(sha256(abc, 3)) ==
                    "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
                "SHA-256 known-answer test");
+  require_applicable(paper_config_active(),
+                     "the SHA-256 Merkle fixture is pinned to CONFIG_N2048_K1_COMP "
+                     "(n = 2048, g = 8 gives rho = 256 and b = 2 at L = 12)");
 
   PirParams scheme;
   const size_t key_height = std::bit_width(DBConsts::PolyDegree) - 1;
