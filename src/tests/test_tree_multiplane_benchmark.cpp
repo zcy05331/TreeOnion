@@ -158,6 +158,8 @@ void PirTest::test_tree_multiplane_benchmark() {
   NoiseStats payload_noise, other_noise;
   // Per level-plane item moments: count, sum, sum of squares, max |error|.
   std::vector<std::array<double, 4>> item_noise(items, {0.0, 0.0, 0.0, 0.0});
+  // The same moments per (item, digit) coordinate of the response.
+  std::vector<std::array<double, 4>> coord_noise(items * g, {0.0, 0.0, 0.0, 0.0});
   std::vector<tree_profile_json::Sample> samples;
   samples.reserve(trials);
   CLEAN_TIMER();
@@ -198,7 +200,7 @@ void PirTest::test_tree_multiplane_benchmark() {
       const auto decoded = client.decrypt_mod_q_measured(response.chunks[chunk], noise, budget);
       std::vector<uint64_t> expected(n, 0);
       std::vector<char> payload_slot(n, 0);
-      std::vector<int> slot_item(n, -1);
+      std::vector<int> slot_item(n, -1), slot_digit(n, -1);
       const auto [first, count] = bounds[chunk];
       for (size_t local = 0; local < count; ++local) {
         const size_t item = first + local;
@@ -214,6 +216,7 @@ void PirTest::test_tree_multiplane_benchmark() {
           expected[offset + digit * tree.rho] = digits[plane][digit];
           payload_slot[offset + digit * tree.rho] = 1;
           slot_item[offset + digit * tree.rho] = static_cast<int>(item);
+          slot_digit[offset + digit * tree.rho] = static_cast<int>(digit);
         }
       }
       require_test(decoded.data == expected, "multiplane full response plaintext mismatch");
@@ -225,6 +228,9 @@ void PirTest::test_tree_multiplane_benchmark() {
             auto &m = item_noise[static_cast<size_t>(slot_item[i])];
             const double e = static_cast<double>(errors[i]);
             m[0] += 1.0; m[1] += e; m[2] += e * e; m[3] = std::max(m[3], std::abs(e));
+            auto &c = coord_noise[static_cast<size_t>(slot_item[i]) * g +
+                                  static_cast<size_t>(slot_digit[i])];
+            c[0] += 1.0; c[1] += e; c[2] += e * e; c[3] = std::max(c[3], std::abs(e));
           }
         }
       }
@@ -307,6 +313,15 @@ void PirTest::test_tree_multiplane_benchmark() {
       out << (item ? "," : "") << "{\"level\": " << item / planes << ", \"plane\": "
           << item % planes << ", \"count\": " << m[0] << ", \"sum\": " << m[1]
           << ", \"sumsq\": " << m[2] << ", \"max_abs\": " << m[3] << "}";
+    }
+    out << "], \"coords\": [";
+    for (size_t idx = 0; idx < items * g; ++idx) {
+      const auto &c = coord_noise[idx];
+      const size_t item = idx / g;
+      out << (idx ? "," : "") << "{\"level\": " << item / planes << ", \"plane\": "
+          << item % planes << ", \"digit\": " << idx % g << ", \"count\": " << c[0]
+          << ", \"sum\": " << c[1] << ", \"sumsq\": " << c[2]
+          << ", \"max_abs\": " << c[3] << "}";
     }
     out << "]}\n";
   }
