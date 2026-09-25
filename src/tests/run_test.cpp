@@ -18,6 +18,7 @@ void test_layer_layout_sweep_dominated();
 void test_layer_layout_large_tiers();
 // The complete response plaintext at the paper's first-dimension width.
 void test_tree_noise_envelope();
+void test_merkle_sha256_e2e();
 // PIR layouts: every row of a ragged and a perfect remaining-dimension
 // tree, and a query shape that fills the expansion capacity exactly.
 void test_pir_row_sweep();
@@ -51,7 +52,7 @@ static const std::vector<std::string> kRegressionTests = {
     "merkle_server_phases", "merkle_trial_schedule",
     "merkle_single_sample_stats", "layer_layout_sweep_dominated",
     "layer_layout_large_tiers",
-    "tree_noise_envelope",
+    "tree_noise_envelope", "merkle_sha256_e2e",
     "pir_row_sweep", "query_shape_exact_fit",
     "bv_ks_reference", "gsw_decomp_shapes", "ntt_primes", "paper_moduli_pin",
 };
@@ -103,6 +104,7 @@ void PirTest::run_test(const std::string &test_name) {
   else if (test_name == "tree_multiplane")   test_tree_multiplane();
   else if (test_name == "tree_multiplane_bench") test_tree_multiplane_benchmark();
   else if (test_name == "tree_noise_envelope") test_tree_noise_envelope();
+  else if (test_name == "merkle_sha256_e2e") test_merkle_sha256_e2e();
   else if (test_name == "cuckoo_batch")      test_cuckoo_batch();
   else if (test_name == "cuckoo_bench")      test_cuckoo_benchmark();
   else if (test_name == "tree_entry_codec")         test_tree_entry_codec();
