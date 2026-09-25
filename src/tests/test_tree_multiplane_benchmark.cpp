@@ -119,7 +119,14 @@ void PirTest::test_tree_multiplane_benchmark() {
   const uint64_t seed = bench_trial_seed.value_or(7);
   require_test(trials > 0, "multiplane benchmark needs measured trials");
   const auto schedule = make_benchmark_trial_plan(leaf_count, warmups, trials, seed);
+  // Noise diagnostics may replace the synthetic nodes by all-one entries,
+  // which give every digit its largest value 2^c - 1.
+  const std::string entry_fill = string_env("TREE_MULTIPLANE_ENTRY_FILL", "synthetic");
+  require_test(entry_fill == "synthetic" || entry_fill == "ones",
+               "TREE_MULTIPLANE_ENTRY_FILL must be synthetic or ones");
+  const std::vector<uint8_t> ones((entry_bits + 7) / 8, 0xFF);
   const EntrySource source = [&](size_t level, size_t node) {
+    if (entry_fill == "ones") return tree_entry_codec::entry_from_bytes(ones, entry_bits);
     if (entry_bits == 256) {
       return tree_entry_codec::entry_from_bytes(
           synthetic_tree_node_bytes(level, node), entry_bits);
@@ -303,6 +310,7 @@ void PirTest::test_tree_multiplane_benchmark() {
         << ", \"plain_mod\": " << scheme.get_plain_mod()
         << ", \"ep_rows\": " << scheme.get_l()
         << ", \"ep_low_bits\": " << scheme.get_ep_low_bits()
+        << ", \"entry_fill\": \"" << entry_fill << "\""
         << ", \"max_noise\": " << max_noise << ", \"payload\": ";
     payload_noise.write(out);
     out << ", \"other\": ";
