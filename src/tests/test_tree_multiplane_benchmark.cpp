@@ -9,12 +9,39 @@
 #include <bit>
 #include <charconv>
 #include <chrono>
+#include <cmath>
 #include <cstdlib>
+#include <fstream>
 #include <limits>
 #include <numeric>
 #include <string_view>
 
 namespace {
+
+// Per-coefficient decryption-error statistics in small-q units.
+struct NoiseStats {
+  uint64_t count = 0;
+  double sum = 0.0, sumsq = 0.0;
+  int64_t max_abs = 0;
+  std::vector<uint64_t> abs_hist = std::vector<uint64_t>(1024, 0);
+  uint64_t overflow = 0;
+  void add(int64_t e) {
+    ++count;
+    sum += static_cast<double>(e);
+    sumsq += static_cast<double>(e) * static_cast<double>(e);
+    const int64_t a = e < 0 ? -e : e;
+    max_abs = std::max(max_abs, a);
+    if (a < static_cast<int64_t>(abs_hist.size())) ++abs_hist[static_cast<size_t>(a)];
+    else ++overflow;
+  }
+  void write(std::ostream &out) const {
+    out << "{\"count\": " << count << ", \"sum\": " << sum
+        << ", \"sumsq\": " << sumsq << ", \"max_abs\": " << max_abs
+        << ", \"overflow\": " << overflow << ", \"abs_hist\": [";
+    for (size_t i = 0; i < abs_hist.size(); ++i) out << (i ? "," : "") << abs_hist[i];
+    out << "]}";
+  }
+};
 
 size_t positive_env(const char *name, size_t fallback) {
   const char *raw = std::getenv(name);
@@ -125,6 +152,9 @@ void PirTest::test_tree_multiplane_benchmark() {
 
   uint64_t max_noise = 0;
   int min_budget = std::numeric_limits<int>::max();
+  const char *noise_stats_path = std::getenv("TREE_MULTIPLANE_NOISE_STATS");
+  const bool collect_noise = noise_stats_path && *noise_stats_path;
+  NoiseStats payload_noise, other_noise;
   std::vector<tree_profile_json::Sample> samples;
   samples.reserve(trials);
   CLEAN_TIMER();
@@ -164,6 +194,7 @@ void PirTest::test_tree_multiplane_benchmark() {
       int budget = 0;
       const auto decoded = client.decrypt_mod_q_measured(response.chunks[chunk], noise, budget);
       std::vector<uint64_t> expected(n, 0);
+      std::vector<char> payload_slot(n, 0);
       const auto [first, count] = bounds[chunk];
       for (size_t local = 0; local < count; ++local) {
         const size_t item = first + local;
@@ -175,10 +206,17 @@ void PirTest::test_tree_multiplane_benchmark() {
             local, tree.rho, packing);
         require_test(response.item_offsets[item] == offset,
                      "multiplane response placement mismatch");
-        for (size_t digit = 0; digit < g; ++digit)
+        for (size_t digit = 0; digit < g; ++digit) {
           expected[offset + digit * tree.rho] = digits[plane][digit];
+          payload_slot[offset + digit * tree.rho] = 1;
+        }
       }
       require_test(decoded.data == expected, "multiplane full response plaintext mismatch");
+      if (collect_noise) {
+        const std::vector<int64_t> errors = client.decrypt_mod_q_errors(response.chunks[chunk]);
+        for (size_t i = 0; i < n; ++i)
+          (payload_slot[i] ? payload_noise : other_noise).add(errors[i]);
+      }
       max_noise = std::max(max_noise, noise);
       min_budget = std::min(min_budget, budget);
     }
@@ -238,6 +276,22 @@ void PirTest::test_tree_multiplane_benchmark() {
        {"min_noise_budget_bits", std::to_string(min_budget)},
        {"max_noise", std::to_string(max_noise)},
        {"acceptance_policy", "decryption_correctness_only; noise margins are diagnostic"}});
+  if (collect_noise) {
+    std::ofstream out(noise_stats_path);
+    require_test(static_cast<bool>(out), "cannot open TREE_MULTIPLANE_NOISE_STATS output");
+    out << "{\"leaf_count\": " << tree.N << ", \"N0\": " << N0 << ", \"g\": " << g
+        << ", \"planes\": " << planes << ", \"warmups\": " << warmups
+        << ", \"trials\": " << trials << ", \"trial_seed\": " << seed
+        << ", \"small_q\": " << scheme.get_small_q()
+        << ", \"plain_mod\": " << scheme.get_plain_mod()
+        << ", \"ep_rows\": " << scheme.get_l()
+        << ", \"ep_low_bits\": " << scheme.get_ep_low_bits()
+        << ", \"max_noise\": " << max_noise << ", \"payload\": ";
+    payload_noise.write(out);
+    out << ", \"other\": ";
+    other_noise.write(out);
+    out << "}\n";
+  }
   BENCH_PRINT("old gamma/alpha/beta h1: g=" << g << " P=" << planes << " N0=" << N0
               << " b=" << tree.b << " server=" << mean_ms << " ms; "
               << (static_cast<double>(logical_bytes) / (1 << 20)) * 1000 / mean_ms
