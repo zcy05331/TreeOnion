@@ -6,6 +6,7 @@
 #include "tree_entry_test_util.h"
 
 #include <algorithm>
+#include <array>
 #include <bit>
 #include <charconv>
 #include <chrono>
@@ -155,6 +156,8 @@ void PirTest::test_tree_multiplane_benchmark() {
   const char *noise_stats_path = std::getenv("TREE_MULTIPLANE_NOISE_STATS");
   const bool collect_noise = noise_stats_path && *noise_stats_path;
   NoiseStats payload_noise, other_noise;
+  // Per level-plane item moments: count, sum, sum of squares, max |error|.
+  std::vector<std::array<double, 4>> item_noise(items, {0.0, 0.0, 0.0, 0.0});
   std::vector<tree_profile_json::Sample> samples;
   samples.reserve(trials);
   CLEAN_TIMER();
@@ -195,6 +198,7 @@ void PirTest::test_tree_multiplane_benchmark() {
       const auto decoded = client.decrypt_mod_q_measured(response.chunks[chunk], noise, budget);
       std::vector<uint64_t> expected(n, 0);
       std::vector<char> payload_slot(n, 0);
+      std::vector<int> slot_item(n, -1);
       const auto [first, count] = bounds[chunk];
       for (size_t local = 0; local < count; ++local) {
         const size_t item = first + local;
@@ -209,13 +213,20 @@ void PirTest::test_tree_multiplane_benchmark() {
         for (size_t digit = 0; digit < g; ++digit) {
           expected[offset + digit * tree.rho] = digits[plane][digit];
           payload_slot[offset + digit * tree.rho] = 1;
+          slot_item[offset + digit * tree.rho] = static_cast<int>(item);
         }
       }
       require_test(decoded.data == expected, "multiplane full response plaintext mismatch");
       if (collect_noise) {
         const std::vector<int64_t> errors = client.decrypt_mod_q_errors(response.chunks[chunk]);
-        for (size_t i = 0; i < n; ++i)
+        for (size_t i = 0; i < n; ++i) {
           (payload_slot[i] ? payload_noise : other_noise).add(errors[i]);
+          if (slot_item[i] >= 0) {
+            auto &m = item_noise[static_cast<size_t>(slot_item[i])];
+            const double e = static_cast<double>(errors[i]);
+            m[0] += 1.0; m[1] += e; m[2] += e * e; m[3] = std::max(m[3], std::abs(e));
+          }
+        }
       }
       max_noise = std::max(max_noise, noise);
       min_budget = std::min(min_budget, budget);
@@ -290,7 +301,14 @@ void PirTest::test_tree_multiplane_benchmark() {
     payload_noise.write(out);
     out << ", \"other\": ";
     other_noise.write(out);
-    out << "}\n";
+    out << ", \"items\": [";
+    for (size_t item = 0; item < items; ++item) {
+      const auto &m = item_noise[item];
+      out << (item ? "," : "") << "{\"level\": " << item / planes << ", \"plane\": "
+          << item % planes << ", \"count\": " << m[0] << ", \"sum\": " << m[1]
+          << ", \"sumsq\": " << m[2] << ", \"max_abs\": " << m[3] << "}";
+    }
+    out << "]}\n";
   }
   BENCH_PRINT("old gamma/alpha/beta h1: g=" << g << " P=" << planes << " N0=" << N0
               << " b=" << tree.b << " server=" << mean_ms << " ms; "
