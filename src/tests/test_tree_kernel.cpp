@@ -57,6 +57,16 @@ void PirTest::test_tree_kernel() {
       AlphaPyramidM32 pyramid_m32;
       if (scheme.get_composite_rns().enabled) {
         pyramid_m32 = pyramid_to_m32(pyramid_ntt, scheme);
+        // The answer path builds the coarse rows in the u32 domain.
+        for (Matrix32QueryLayout layout : {Matrix32QueryLayout::Interleaved,
+                                           Matrix32QueryLayout::SplitColumns}) {
+          const AlphaPyramidM32 split = pyramid_to_m32(pyramid_ntt, scheme, layout);
+          const AlphaPyramidM32 direct =
+              build_alpha_pyramid_m32(unpacked.alpha, tree, scheme, layout);
+          require_test(direct.lo == split.lo && direct.hi == split.hi &&
+                           direct.query_layout == layout,
+                       "direct m32 pyramid must equal the split NTT pyramid");
+        }
       }
       for (size_t level = 0; level <= tree.L; ++level) {
         const RlweCt scalar = select_level(

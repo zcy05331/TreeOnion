@@ -239,15 +239,16 @@ AlphaPyramid pyramid_to_ntt(const AlphaPyramid &pyramid,
   return ntt;
 }
 
-AlphaPyramid build_alpha_pyramid_ntt(std::span<const RlweCt> alpha_cts,
-                                     const TreePirParams &tree,
-                                     const PirParams &scheme) {
+namespace {
+
+// 金字塔第 0 行：展开得到的 N0 条系数形式 one-hot 密文各做一次前向 NTT。
+std::vector<RlweCt> lift_alpha_to_ntt(std::span<const RlweCt> alpha_cts,
+                                      const TreePirParams &tree,
+                                      const PirParams &scheme) {
   constexpr size_t N = DBConsts::PolyDegree;
   const auto &qs = scheme.get_rns_mods();
   require(alpha_cts.size() == tree.N0,
           "alpha pyramid needs the N0 expanded one-hot ciphertexts");
-  AlphaPyramid pyramid;
-  pyramid.reserve(tree.a + 1);
   std::vector<RlweCt> base;
   base.reserve(alpha_cts.size());
   for (const RlweCt &ct : alpha_cts) {
@@ -262,7 +263,17 @@ AlphaPyramid build_alpha_pyramid_ntt(std::span<const RlweCt> alpha_cts,
     lifted.ntt_form = true;
     base.push_back(std::move(lifted));
   }
-  pyramid.push_back(std::move(base));
+  return base;
+}
+
+}  // namespace
+
+AlphaPyramid build_alpha_pyramid_ntt(std::span<const RlweCt> alpha_cts,
+                                     const TreePirParams &tree,
+                                     const PirParams &scheme) {
+  AlphaPyramid pyramid;
+  pyramid.reserve(tree.a + 1);
+  pyramid.push_back(lift_alpha_to_ntt(alpha_cts, tree, scheme));
   for (size_t c = 0; c < tree.a; ++c) {
     const std::vector<RlweCt> &prev = pyramid.back();
     std::vector<RlweCt> next;
@@ -389,6 +400,42 @@ AlphaPyramidM32 pyramid_to_m32(const AlphaPyramid &pyramid_ntt,
             hi[at] = static_cast<uint32_t>(value % crt.q2);
           }
         }
+      }
+    }
+    out.lo.push_back(std::move(lo));
+    out.hi.push_back(std::move(hi));
+  }
+  return out;
+}
+
+AlphaPyramidM32 build_alpha_pyramid_m32(std::span<const RlweCt> alpha_cts,
+                                        const TreePirParams &tree,
+                                        const PirParams &scheme,
+                                        Matrix32QueryLayout query_layout) {
+  AlphaPyramid row0;
+  row0.push_back(lift_alpha_to_ntt(alpha_cts, tree, scheme));
+  AlphaPyramidM32 out = pyramid_to_m32(row0, scheme, query_layout);
+  out.lo.reserve(tree.a + 1);
+  out.hi.reserve(tree.a + 1);
+  // 两种布局里列 2j 与 2j+1 都相邻：SplitColumns 以单个 u32 为单位，
+  // Interleaved 以 (c0, c1) 两个 u32 为单位。行 c+1 的第 u 个单位是行 c
+  // 第 2u 与 2u+1 个单位之和（§10 递推 A^(c+1)_j = A^(c)_{2j} + A^(c)_{2j+1}）。
+  const size_t w = query_layout == Matrix32QueryLayout::SplitColumns ? 1 : 2;
+  const CompositeRnsTables &crt = scheme.get_composite_rns();
+  const auto q1 = static_cast<uint32_t>(crt.q1);
+  const auto q2 = static_cast<uint32_t>(crt.q2);
+  for (size_t c = 0; c < tree.a; ++c) {
+    const std::vector<uint32_t> &prev_lo = out.lo.back();
+    const std::vector<uint32_t> &prev_hi = out.hi.back();
+    std::vector<uint32_t> lo(prev_lo.size() / 2), hi(prev_hi.size() / 2);
+    for (size_t u = 0; u < lo.size() / w; ++u) {
+      for (size_t e = 0; e < w; ++e) {
+        const size_t x = 2 * w * u + e;
+        // 两个加数都小于 q_i < 2^30，和不会溢出 u32，一次条件减即归约。
+        const uint32_t s1 = prev_lo[x] + prev_lo[x + w];
+        const uint32_t s2 = prev_hi[x] + prev_hi[x + w];
+        lo[w * u + e] = s1 >= q1 ? s1 - q1 : s1;
+        hi[w * u + e] = s2 >= q2 ? s2 - q2 : s2;
       }
     }
     out.lo.push_back(std::move(lo));
