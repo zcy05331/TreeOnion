@@ -134,7 +134,7 @@ run_python_tests() {
     scripts.tests.test_tree_multiplane_benchmark
     scripts.tests.test_treepir_backend_tuning
     scripts.tests.test_treepir_matrix
-    scripts.tests.test_spiral_pbc_matrix
+    scripts.tests.test_spiral_matrix
     scripts.tests.test_kspir_pbc_matrix
     scripts.tests.test_via_matrix
     scripts.tests.test_wait_for_idle
