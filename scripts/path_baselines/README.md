@@ -17,7 +17,8 @@ instead of the CLI described in the rest of this file:
 
 | Adapter | Scheme | Runner |
 |---|---|---|
-| [spiral_pbc/](spiral_pbc/README.md) | Spiral behind the OnionPIR cuckoo baseline's PBC instance | `scripts/run_spiral_pbc_matrix.py` |
+| [spiral_pbc/](spiral_pbc/README.md) | Spiral behind the OnionPIR cuckoo baseline's PBC instance | `scripts/run_spiral_matrix.py --scheme spiral_pbc` |
+| [spiral_pbc/](spiral_pbc/README.md#treepir--spiral) (`treepir_spiral`) | Spiral behind TreePIR's color buckets, same colors and indices as the TreePIR row | `scripts/run_spiral_matrix.py --scheme treepir_spiral` |
 | [kspir_pbc/](kspir_pbc/README.md) | KsPIR behind the same PBC instance | `scripts/run_kspir_pbc_matrix.py` |
 | [via_b/](via_b/README.md) | VIA-B as in the paper | `scripts/run_via_matrix.py --scheme via_b` |
 | [via_pbc/](via_pbc/README.md) | VIA behind the same PBC instance | `scripts/run_via_matrix.py --scheme via_pbc` |

@@ -45,6 +45,7 @@ The comparison contains these baseline families:
 | Layerwise tuned | One PIR per tree level, using measured layout tuning |
 | Cuckoo batch tuned | Cuckoo batch placement with measured layout tuning |
 | TreePIR | Colored-path baseline with VBPIR/SealPIR backend tuning |
+| TreePIR + Spiral | TreePIR's color buckets with Spiral as the per-color PIR |
 | Flat | One whole-tree PIR per requested path level |
 | Respire | Canonical tree-path workload on Respire batch PIR |
 | Spiral + PBC | Spiral per bucket of the Cuckoo baseline's PBC instance |

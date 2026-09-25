@@ -2,12 +2,19 @@
 name = "spiral_pbc"
 version = "0.1.0"
 edition = "2021"
-description = "Spiral PIR behind the same PBC cuckoo framework as the OnionPIR cuckoo baseline"
+description = "Spiral PIR behind the OnionPIR cuckoo baseline's PBC instance and behind TreePIR's color buckets"
 publish = false
+
+[lib]
+path = "src/lib.rs"
 
 [[bin]]
 name = "spiral_pbc"
 path = "src/main.rs"
+
+[[bin]]
+name = "treepir_spiral"
+path = "src/bin/treepir_spiral.rs"
 
 [dependencies]
 # Complete spiral-rs (server + client); menonsamir/spiral-rs is a trimmed core

@@ -29,7 +29,8 @@ InsPIRe, TreePIR+Spiral and SPIRIT+RC paths are intentionally absent.
 | `run_primary_matrix.py` | Primary h=1 N0 tuning and matched query-buffer measurements at all four sizes |
 | `run_core_matrix.py` | StandardOnionPIR, Layerwise tuned and its merged/packed ablations, Cuckoo batch tuned and Flat over 256 MiB to 4 GiB, 8 GiB on request |
 | `run_external_matrix.py` | Respire over the same heights, with resource admission |
-| `run_spiral_pbc_matrix.py`, `run_kspir_pbc_matrix.py` | Spiral and KsPIR per bucket of the Cuckoo baseline's PBC instance |
+| `run_spiral_matrix.py` | Spiral per bucket of the Cuckoo baseline's PBC instance, or per TreePIR color |
+| `run_kspir_pbc_matrix.py` | KsPIR per bucket of the Cuckoo baseline's PBC instance |
 | `run_via_matrix.py` | VIA-B batch PIR, and VIA per bucket of the same PBC instance |
 | `run_treepir_matrix.py` | TreePIR VBPIR/SealPIR backend tuner wrapper |
 | `run_treepir_backend_tuning.py` | Generate the shared Floyd leaf schedule, tune TreePIR backends, and run the selected candidate |

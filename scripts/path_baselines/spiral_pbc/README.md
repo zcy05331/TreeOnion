@@ -25,9 +25,33 @@ The server path is upstream `process_query` with stage timers (expand,
 first_dim, fold, pack, encode); the first bucket of the first trial asserts it
 is byte-identical to upstream `process_query`. Every real record is decoded and
 compared with the oracle outside the timers. Run single-threaded with
-`RAYON_NUM_THREADS=1` on one pinned CPU (`scripts/run_spiral_pbc_matrix.py`
-does both).
+`RAYON_NUM_THREADS=1` on one pinned CPU (`scripts/run_spiral_matrix.py
+--scheme spiral_pbc` does both).
 
 Build with `RUSTFLAGS='-C target-cpu=native' cargo build --release`; the
 AVX2 kernels are selected by the target feature, and a non-AVX2 fallback exists
 for local correctness runs.
+
+## TreePIR + Spiral
+
+`treepir_spiral` (same crate) puts Spiral behind TreePIR's color buckets
+instead: the TreePIR row's H colors of balanced size over the 2^(H+1) - 2
+non-root nodes, filled with the SealPIR adapter's deterministic records, and
+the same color-local indices and leaves, read from that row's `formal.json`
+(whose rows carry the upstream SubCSA indices of each leaf's proof nodes). Its
+rows therefore differ from the TreePIR row only in the per-color PIR backend.
+Parameters and the timed `process_query` are the ones above, with nu_2 sized
+to the largest color; every color shares one public-parameter set. Colors are
+served one at a time (built, asked every path's query for that color, then
+released), so one color database is resident (2 GiB at 4 GiB, 4 GiB at 8 GiB)
+and a path's server time is the sum of its colors' process_query times.
+
+The TreePIR repository also bundles the Spiral authors' C++ reference code
+(`Spiral/Seperated`), which they mark as reference-only in favour of
+spiral-rs; its `Answer.server` timer also leaves query expansion out. This
+adapter therefore uses spiral-rs, as Spiral + PBC does.
+
+    target/release/treepir_spiral --input <treepir-backend-tuning>/<scale>/formal.json --output treepir_spiral.json
+
+`scripts/run_spiral_matrix.py --scheme treepir_spiral --treepir-root
+<treepir-backend-tuning>` runs the heights.
