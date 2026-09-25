@@ -100,6 +100,9 @@ public:
   // The decoder is correct while max_noise < small_q / (2t).
   RlwePt decrypt_mod_q_measured(const RlweCt &ciphertext, uint64_t &max_noise,
                                 int &budget_bits) const;
+  // Same phase computation; returns the signed centered residue
+  // phase - Delta'm of every coefficient (small-q units), for noise statistics.
+  std::vector<int64_t> decrypt_mod_q_errors(const RlweCt &ciphertext) const;
 
 
   friend class PirTest;
