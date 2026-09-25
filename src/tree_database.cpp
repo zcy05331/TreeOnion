@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <bit>
 #include <cstdint>
+#include <tuple>
 #include <utility>
 
 using tree_select_internal::plan_row_and_cols;
@@ -230,57 +231,71 @@ PreprocessedTree preprocess_tree_mvp(const TreePirParams &tree,
       scheme);
 }
 
-// 构建 m32 矩阵核视图（Milestone-6 完整核，预处理期）：对每个明文做一次
-// mod q 的前向 NTT，把 NTT 值按复合模数 q = q1·q2 取余拆成两组 u32，并重排
-// 成 level_mat_mat_32 所需的 coefficient-major A 操作数布局
-// data[(coeff·rows + row)·cols + col]——同一 NTT 系数下所有 (row, col) 连续，
-// 矩阵核可对每个系数独立跑一个小矩阵乘。
-TreeLevelDatabaseM32 build_level_m32_view(const TreeLevelDatabase &db,
-                                          const LevelPlan &plan,
-                                          const TreePirParams &tree,
-                                          const PirParams &scheme) {
+// m32 矩阵的形状：AlphaBeta 有 2^d 个候选行、其余情形单行；列宽由
+// plan_row_and_cols 给出（1 / R / N0），恒有 rows·cols = R。
+std::pair<size_t, size_t> level_m32_shape(const LevelPlan &plan,
+                                          const TreePirParams &tree) {
+  const size_t rows = plan.select_case == SelectCase::AlphaBeta
+                          ? size_t{1} << plan.beta_count
+                          : size_t{1};
+  return {rows, plan_row_and_cols(plan, tree).second};
+}
+
+// 把一层的明文写进 coefficient-major 的 m32 矩阵：每个 NTT 系数下有
+// total_rows 行，本层占 [first_row, first_row + rows)。单层视图是
+// total_rows = rows、first_row = 0；堆叠的 AlphaBeta 矩阵让每个 (plane, 层)
+// 各占一段行。每个明文做一次 mod q 前向 NTT，按 q = q1·q2 取余拆成两组 u32。
+void write_level_m32(const TreeLevelDatabase &db, const LevelPlan &plan,
+                     const TreePirParams &tree, const PirParams &scheme,
+                     size_t total_rows, size_t first_row, uint32_t *lo,
+                     uint32_t *hi) {
   constexpr size_t N = DBConsts::PolyDegree;
   const CompositeRnsTables &crt = scheme.get_composite_rns();
   // 守卫：q1/q2 拆分表只在复合模数配置下存在；db 与 plan 必须描述同一层。
   require(crt.enabled, "the m32 view needs a composite configuration");
   require(db.level == plan.level && db.R == plan.R,
           "level database does not match the plan");
-
-  TreeLevelDatabaseM32 view;
-  view.level = db.level;
-  view.R = db.R;
-  // 矩阵形状：AlphaBeta 有 2^d 个候选行、其余情形单行；列宽由
-  // plan_row_and_cols 给出（1 / R / N0），且必须 rows·cols = R 覆盖全部记录。
-  const size_t stride =
-      plan.select_case == SelectCase::AlphaBeta ? size_t{1} << plan.beta_count
-                                                : size_t{1};
-  view.rows = plan.select_case == SelectCase::AlphaBeta ? stride : size_t{1};
-  view.cols = plan_row_and_cols(plan, tree).second;
-  require(view.rows * view.cols == db.R, "m32 view must cover every record");
+  const auto [rows, cols] = level_m32_shape(plan, tree);
+  require(rows * cols == db.R, "m32 view must cover every record");
+  require(first_row + rows <= total_rows, "m32 rows exceed the matrix");
 
   // 复合配置只有一个 RNS limb（q = q1·q2 装在 rns_mods[0]），NTT 就按它做。
   const uint64_t q = scheme.get_rns_mods()[0];
-  view.lo.assign(N * view.rows * view.cols, 0);
-  view.hi.assign(N * view.rows * view.cols, 0);
   std::vector<uint64_t> ntt(N);
-  for (size_t row = 0; row < view.rows; ++row) {
-    for (size_t col = 0; col < view.cols; ++col) {
+  for (size_t row = 0; row < rows; ++row) {
+    for (size_t col = 0; col < cols; ++col) {
       // 明文下标映射：AlphaBeta 消费 §6.2 矩阵视图 D[col·2^d + row]
       // （col=k 扫首维、row=δ 是候选）；单行情形按记录顺序 p = col 扫描。
       const size_t p = plan.select_case == SelectCase::AlphaBeta
-                           ? col * stride + row
+                           ? col * rows + row
                            : col;
-      // 该明文做一次 mod q 前向 NTT（预处理期一次性成本）。
       std::copy(db.plaintexts[p].begin(), db.plaintexts[p].end(), ntt.begin());
       utils::ntt_fwd(ntt.data(), N, q);
-      // 逐 NTT 系数按 q1/q2 取余得到两个 32 位 CRT limb，写入
-      // coefficient-major 位置：这一步既是 CRT 拆分也是布局转置。
+      // 逐 NTT 系数写入 coefficient-major 位置：这一步既是 CRT 拆分也是布局转置。
       for (size_t coeff = 0; coeff < N; ++coeff) {
-        const size_t at = (coeff * view.rows + row) * view.cols + col;
-        view.lo[at] = static_cast<uint32_t>(ntt[coeff] % crt.q1);
-        view.hi[at] = static_cast<uint32_t>(ntt[coeff] % crt.q2);
+        const size_t at = (coeff * total_rows + first_row + row) * cols + col;
+        lo[at] = static_cast<uint32_t>(ntt[coeff] % crt.q1);
+        hi[at] = static_cast<uint32_t>(ntt[coeff] % crt.q2);
       }
     }
   }
+}
+
+// 构建 m32 矩阵核视图（Milestone-6 完整核，预处理期）：level_mat_mat_32 所需的
+// coefficient-major A 操作数布局 data[(coeff·rows + row)·cols + col]——同一
+// NTT 系数下所有 (row, col) 连续，矩阵核可对每个系数独立跑一个小矩阵乘。
+TreeLevelDatabaseM32 build_level_m32_view(const TreeLevelDatabase &db,
+                                          const LevelPlan &plan,
+                                          const TreePirParams &tree,
+                                          const PirParams &scheme) {
+  constexpr size_t N = DBConsts::PolyDegree;
+  TreeLevelDatabaseM32 view;
+  view.level = db.level;
+  view.R = db.R;
+  std::tie(view.rows, view.cols) = level_m32_shape(plan, tree);
+  view.lo.assign(N * view.rows * view.cols, 0);
+  view.hi.assign(N * view.rows * view.cols, 0);
+  write_level_m32(db, plan, tree, scheme, view.rows, 0, view.lo.data(),
+                  view.hi.data());
   return view;
 }

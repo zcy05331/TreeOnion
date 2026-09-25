@@ -86,6 +86,41 @@ std::vector<EntryBits> answer_path(const tree_multiplane::Database &db,
   return tree_multiplane::extract(response, client, params);
 }
 
+// Every AlphaBeta level of every plane: finishing its rows of the stacked scan
+// gives the same ciphertext, bit for bit, as scanning its own m32 view.
+void require_stacked_scan_matches_levels(
+    const tree_multiplane::Database &db, PirClient &client, PirServer &server,
+    const PirParams &scheme, const tree_multiplane::Params &params,
+    const tree_multiplane::EntrySource &source, size_t leaf) {
+  RlweCt query = make_tree_query(client, scheme, params.tree, leaf);
+  ExpandedTreeQuery expanded = unpack_tree_query(
+      server, scheme, params.tree, client.get_client_id(), query);
+  const AlphaPyramidM32 pyramid = pyramid_to_m32(
+      build_alpha_pyramid_ntt(expanded.alpha, params.tree, scheme), scheme);
+  ScanScratch stacked_scan, level_scan;
+  scan_stacked_alpha_beta(db.stacked, pyramid, scheme, stacked_scan);
+  const std::span<GSWCt> beta(expanded.beta_selectors);
+  size_t checked = 0;
+  for (size_t plane = 0; plane < params.codec.plane_count; ++plane) {
+    for (size_t level = 0; level <= params.tree.L; ++level) {
+      const LevelPlan &plan = db.planes[plane].plans[level];
+      if (plan.select_case != SelectCase::AlphaBeta) continue;
+      const TreeLevelDatabaseM32 view = build_level_m32_view(
+          tree_multiplane::pack_level(level, plane, params, source), plan,
+          params.tree, scheme);
+      const RlweCt stacked = finish_level_m32(
+          stacked_scan, db.stacked.rows, db.stacked.first_row[plane][level],
+          plan, beta, server, params.tree, scheme);
+      const RlweCt own = select_level_m32(view, plan, pyramid, beta, server,
+                                          params.tree, scheme, level_scan);
+      require_test(stacked.c0 == own.c0 && stacked.c1 == own.c1,
+                   "stacked AlphaBeta scan matches the per-level scan");
+      ++checked;
+    }
+  }
+  require_test(checked > 0, "test shape has AlphaBeta levels");
+}
+
 void exercise_e2e(tree_packing::ResponsePacking packing) {
   PirParams scheme;
   PirClient client(scheme);
@@ -131,6 +166,11 @@ void exercise_e2e(tree_packing::ResponsePacking packing) {
       require_test(path[level] == source(level, node),
                    "multiplane decoded entry");
     }
+  }
+
+  if (scheme.get_composite_rns().enabled) {
+    require_stacked_scan_matches_levels(db, client, server, scheme, params,
+                                        source, tree.N - 1);
   }
 
   const size_t repeated_leaf = static_cast<size_t>(0x51A7E5EEDULL % tree.N);

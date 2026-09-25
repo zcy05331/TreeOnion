@@ -484,24 +484,60 @@ RlweCt select_level_m32(const TreeLevelDatabaseM32 &db, const LevelPlan &plan,
   // 清零也不缩小。首次到达某个尺寸时扩容一次，之后的层与查询直接复用。
   if (scratch.lo.size() < out_elems) scratch.lo.resize(out_elems);
   if (scratch.hi.size() < out_elems) scratch.hi.resize(out_elems);
-  uint64_t *const out_lo = scratch.lo.data();
-  uint64_t *const out_hi = scratch.hi.data();
   TIME_START(TREE_SCAN_CORE_TIME);
   level_mat_mat_32(db.lo.data(), pyramid_m32.lo[pyramid_row].data(),
-                   out_lo, db.rows, db.cols, N, crt.q1,
+                   scratch.lo.data(), db.rows, db.cols, N, crt.q1,
                    pyramid_m32.query_layout);
   level_mat_mat_32(db.hi.data(), pyramid_m32.hi[pyramid_row].data(),
-                   out_hi, db.rows, db.cols, N, crt.q2,
+                   scratch.hi.data(), db.rows, db.cols, N, crt.q2,
                    pyramid_m32.query_layout);
   TIME_END(TREE_SCAN_CORE_TIME);
+  TIME_END(TREE_SCAN_TIME);
+  return finish_level_m32(scratch, db.rows, 0, plan, beta_selectors, mux, tree,
+                          scheme);
+}
+
+void scan_stacked_alpha_beta(const StackedAlphaBetaM32 &db,
+                             const AlphaPyramidM32 &pyramid_m32,
+                             const PirParams &scheme, ScanScratch &scratch) {
+  constexpr size_t N = DBConsts::PolyDegree;
+  const CompositeRnsTables &crt = scheme.get_composite_rns();
+  require(crt.enabled, "the stacked scan needs a composite configuration");
+  require(!pyramid_m32.lo.empty() && pyramid_m32.lo[0].size() == N * db.cols * 2,
+          "pyramid row 0 does not match the stacked matrix");
+  TIME_START(TREE_SCAN_TIME);
+  const size_t out_elems = N * db.rows * 2;
+  if (scratch.lo.size() < out_elems) scratch.lo.resize(out_elems);
+  if (scratch.hi.size() < out_elems) scratch.hi.resize(out_elems);
+  TIME_START(TREE_SCAN_CORE_TIME);
+  level_mat_mat_32(db.lo.data(), pyramid_m32.lo[0].data(), scratch.lo.data(),
+                   db.rows, db.cols, N, crt.q1, pyramid_m32.query_layout);
+  level_mat_mat_32(db.hi.data(), pyramid_m32.hi[0].data(), scratch.hi.data(),
+                   db.rows, db.cols, N, crt.q2, pyramid_m32.query_layout);
+  TIME_END(TREE_SCAN_CORE_TIME);
+  TIME_END(TREE_SCAN_TIME);
+}
+
+RlweCt finish_level_m32(const ScanScratch &scan, size_t total_rows,
+                        size_t first_row, const LevelPlan &plan,
+                        std::span<GSWCt> beta_selectors, PirServer &mux,
+                        const TreePirParams &tree, const PirParams &scheme) {
+  constexpr size_t N = DBConsts::PolyDegree;
+  const CompositeRnsTables &crt = scheme.get_composite_rns();
+  const size_t rows = level_m32_shape(plan, tree).first;
+  require(first_row + rows <= total_rows &&
+              scan.lo.size() >= N * total_rows * 2 &&
+              scan.hi.size() >= N * total_rows * 2,
+          "scan output does not cover the level's rows");
 
   // 复合配置下唯一的 RNS limb 就是 q = q1·q2，INTT 按它做。
   const uint64_t q = scheme.get_rns_mods()[0];
   std::vector<RlweCt> candidates;
-  candidates.reserve(db.rows);
+  candidates.reserve(rows);
   // 逐候选行做 CRT 合成 + INTT，还原成系数形式的 RLWE 密文。
+  TIME_START(TREE_SCAN_TIME);
   TIME_START(TREE_SCAN_FINALIZE_TIME);
-  for (size_t row = 0; row < db.rows; ++row) {
+  for (size_t row = first_row; row < first_row + rows; ++row) {
     RlweCt ct;
     ct.c0.assign(N, 0);
     ct.c1.assign(N, 0);
@@ -510,9 +546,9 @@ RlweCt select_level_m32(const TreeLevelDatabaseM32 &db, const LevelPlan &plan,
       for (size_t comp = 0; comp < 2; ++comp) {
         // 取出该 (系数, 候选, 分量) 在两个 limb 下的残差 x1 = x mod q1、
         // x2 = x mod q2。
-        const size_t at = (coeff * db.rows + row) * 2 + comp;
-        const uint64_t x1 = out_lo[at];
-        const uint64_t x2 = out_hi[at];
+        const size_t at = (coeff * total_rows + row) * 2 + comp;
+        const uint64_t x1 = scan.lo[at];
+        const uint64_t x2 = scan.hi[at];
         // Garner 式 CRT 合成：x = x1 + q1·((x2 − x1)·q1^{-1} mod q2)。
         // diff 先把 x1 约减到 mod q2 再做非负减法；乘 q1^{-1} (mod q2) 用
         // u128 防溢出。结果是 [0, q1·q2) 内的唯一规范代表元——正因为返回
