@@ -1,4 +1,5 @@
 #include "tree_multiplane.h"
+#include "utils.h"
 
 #include <bit>
 #include <span>
@@ -85,8 +86,12 @@ Database preprocess(const Params &params, const EntrySource &source,
         stacked.rows += level_m32_shape(plans[level], params.tree).first;
       }
     }
-    stacked.lo.assign(N * stacked.rows * stacked.cols, 0);
-    stacked.hi.assign(N * stacked.rows * stacked.cols, 0);
+    const size_t cells = N * stacked.rows * stacked.cols;
+    for (std::vector<uint32_t> *limb : {&stacked.lo, &stacked.hi}) {
+      limb->reserve(cells);
+      utils::advise_huge_pages(limb->data(), cells * sizeof(uint32_t));
+      limb->assign(cells, 0);
+    }
   }
   db.planes.reserve(params.codec.plane_count);
   for (size_t plane = 0; plane < params.codec.plane_count; ++plane) {

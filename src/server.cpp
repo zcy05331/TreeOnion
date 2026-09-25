@@ -20,10 +20,13 @@ PirServer::PirServer(const PirParams &pir_params)
     // coeff-major layout. Bytes match the u64 DB on the standard path.
     db_lo_ = make_unique_aligned<uint32_t, 64>(db_elem_cnt);
     db_hi_ = make_unique_aligned<uint32_t, 64>(db_elem_cnt);
+    utils::advise_huge_pages(db_lo_.get(), db_elem_cnt * sizeof(uint32_t));
+    utils::advise_huge_pages(db_hi_.get(), db_elem_cnt * sizeof(uint32_t));
   } else {
     // after NTT, each database polynomial coefficient will be in mod q. Hence,
     // each pt coefficient is represented by K many uint64_t, same as the ciphertext.
     db_aligned_ = make_unique_aligned<db_coeff_t, 64>(db_elem_cnt);
+    utils::advise_huge_pages(db_aligned_.get(), db_elem_cnt * sizeof(db_coeff_t));
   }
   fill_inter_res();
 }

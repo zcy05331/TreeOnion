@@ -52,6 +52,13 @@ template <typename T> std::string to_string(T x) {
 
 namespace utils {
 
+// Ask for transparent huge pages on a large buffer before anything touches it.
+// The cluster nodes run THP "always" with madvise-only defrag, so an unadvised
+// buffer gets 2 MiB pages only where free blocks happen to exist and 4 KiB
+// pages elsewhere; advised ranges may compact memory to get them. No-op
+// outside Linux.
+void advise_huge_pages(void *data, size_t bytes);
+
 // Modular inverse using the extended Euclidean algorithm.
 // Returns true and sets result = value^{-1} mod modulus if gcd(value, modulus) == 1.
 // Returns false if value == 0 or gcd != 1 (not invertible).

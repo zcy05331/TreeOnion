@@ -293,8 +293,12 @@ TreeLevelDatabaseM32 build_level_m32_view(const TreeLevelDatabase &db,
   view.level = db.level;
   view.R = db.R;
   std::tie(view.rows, view.cols) = level_m32_shape(plan, tree);
-  view.lo.assign(N * view.rows * view.cols, 0);
-  view.hi.assign(N * view.rows * view.cols, 0);
+  const size_t cells = N * view.rows * view.cols;
+  for (std::vector<uint32_t> *limb : {&view.lo, &view.hi}) {
+    limb->reserve(cells);
+    utils::advise_huge_pages(limb->data(), cells * sizeof(uint32_t));
+    limb->assign(cells, 0);
+  }
   write_level_m32(db, plan, tree, scheme, view.rows, 0, view.lo.data(),
                   view.hi.data());
   return view;

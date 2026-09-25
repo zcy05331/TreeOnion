@@ -1,5 +1,9 @@
 #include "utils.h"
 
+#if defined(__linux__)
+#include <sys/mman.h>
+#endif
+
 #include <bit>
 #include <limits>
 #include <stdexcept>
@@ -47,6 +51,21 @@ static bool mr_composite_witness(uint64_t n, uint64_t d, int r, uint64_t a) {
     if (x == n - 1) return false;
   }
   return true;
+}
+
+void utils::advise_huge_pages(void *data, size_t bytes) {
+#if defined(__linux__)
+  // madvise takes whole pages inside the range.
+  constexpr uintptr_t page = 4096;
+  const uintptr_t begin = (reinterpret_cast<uintptr_t>(data) + page - 1) & ~(page - 1);
+  const uintptr_t end = (reinterpret_cast<uintptr_t>(data) + bytes) & ~(page - 1);
+  if (end > begin) {
+    madvise(reinterpret_cast<void *>(begin), end - begin, MADV_HUGEPAGE);
+  }
+#else
+  (void)data;
+  (void)bytes;
+#endif
 }
 
 bool utils::is_prime(uint64_t n) {
