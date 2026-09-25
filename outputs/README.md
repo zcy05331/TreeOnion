@@ -1,7 +1,9 @@
 # Experiment artifacts
 
-Current runs use the primary h1 algorithm and the seven baselines listed in the
-repository README. Utah 2026-09-20 runs are recorded under `utah-20260920/`.
+Current runs use the primary h1 algorithm and the baselines listed in the
+repository README. Utah 2026-09-20 runs are recorded under `utah-20260920/`,
+its addendum under `utah-addendum-20260921T2057Z/`, and the Campus Cluster
+matrix (256 MiB to 8 GiB) under `icc-20260922T1837Z/`.
 Raw results include the source revision, machine, layout, trial counts,
 correctness, phase timings and communication labels. Incomplete runs are not
 formal results.
