@@ -105,12 +105,14 @@ Response answer(const Database &db, ExpandedTreeQuery &query, PirServer &server,
   response.item_offsets.assign(items, 0);
 
   TIME_START(TREE_PYRAMID_TIME);
-  const AlphaPyramid pyramid_ntt =
-      build_alpha_pyramid_ntt(query.alpha, params.tree, scheme);
   const bool use_m32 = !db.planes.empty() && !db.planes.front().m32.empty();
+  AlphaPyramid pyramid_ntt;
   AlphaPyramidM32 pyramid_m32;
   if (use_m32) {
-    pyramid_m32 = pyramid_to_m32(pyramid_ntt, scheme, query_layout);
+    pyramid_m32 = build_alpha_pyramid_m32(query.alpha, params.tree, scheme,
+                                          query_layout);
+  } else {
+    pyramid_ntt = build_alpha_pyramid_ntt(query.alpha, params.tree, scheme);
   }
   TIME_END(TREE_PYRAMID_TIME);
 

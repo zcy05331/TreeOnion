@@ -238,6 +238,16 @@ AlphaPyramidM32 pyramid_to_m32(const AlphaPyramid &pyramid_ntt,
                                Matrix32QueryLayout query_layout =
                                    Matrix32QueryLayout::Interleaved);
 
+// 应答路径直接构建 m32 金字塔：只把第 0 行（N0 条 NTT 密文）拆成 lo/hi，
+// 更粗的行在 u32 域逐 limb 模加相邻两列。q1、q2 都整除 q，"模 q 相加再取余"
+// 等于"取余后再模加"，所以结果与 pyramid_to_m32(build_alpha_pyramid_ntt(...))
+// 按位一致，但 64 位取余只做一半，也不再构建 NTT 形式的粗行。
+AlphaPyramidM32 build_alpha_pyramid_m32(std::span<const RlweCt> alpha_cts,
+                                        const TreePirParams &tree,
+                                        const PirParams &scheme,
+                                        Matrix32QueryLayout query_layout =
+                                            Matrix32QueryLayout::Interleaved);
+
 // Milestone-6 完整矩阵核：同一选择运算改在 m32 视图上执行——每个 CRT limb
 // 一次 level_mat_mat_32（32×32→64，延迟规约），随后 CRT 合成、每候选一次
 // INTT。输出与另外两条路径按位一致。仅复合模数配置可用。
