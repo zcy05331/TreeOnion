@@ -190,6 +190,32 @@ RlwePt PirClient::decrypt_mod_q_measured(const RlweCt &ct,
 }
 
 
+std::vector<int64_t> PirClient::decrypt_mod_q_errors(const RlweCt &ct) const {
+  // Mirrors decrypt_mod_q_measured, but keeps the sign and every coefficient.
+  constexpr size_t N = DBConsts::PolyDegree;
+  const uint64_t q = pir_params_.get_small_q();
+  const uint64_t t = pir_params_.get_plain_mod();
+  std::vector<uint64_t> phase(N), c0(N), c1_ntt(N);
+  for (size_t i = 0; i < N; i++) {
+    c0[i] = ct.c0[i] % q;
+    c1_ntt[i] = ct.c1[i] % q;
+  }
+  std::vector<uint64_t> sk_ntt_small_q = get_sk_ntt_small_q(pir_params_.get_rns_mods()[0], q);
+  utils::ntt_fwd(c1_ntt.data(), N, q);
+  intel::hexl::EltwiseMultMod(phase.data(), c1_ntt.data(), sk_ntt_small_q.data(), N, q, 1);
+  utils::ntt_inv(phase.data(), N, q);
+  intel::hexl::EltwiseAddMod(phase.data(), phase.data(), c0.data(), N, q);
+  const uint64_t half_q = q / 2;
+  std::vector<int64_t> errors(N);
+  for (size_t i = 0; i < N; i++) {
+    const uint64_t m = utils::round_div_u128((uint128_t)phase[i] * t, q) % t;
+    const uint64_t approx = utils::round_div_u128((uint128_t)q * m, t) % q;
+    const uint64_t diff = (phase[i] >= approx) ? (phase[i] - approx) : (q - approx + phase[i]);
+    errors[i] = (diff > half_q) ? -static_cast<int64_t>(q - diff) : static_cast<int64_t>(diff);
+  }
+  return errors;
+}
+
 std::vector<uint64_t> PirClient::get_sk_ntt_small_q(uint64_t old_q, uint64_t small_q) const {
   constexpr size_t N = DBConsts::PolyDegree;
 
