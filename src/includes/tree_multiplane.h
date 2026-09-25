@@ -28,6 +28,9 @@ Params make_params(const TreePirParams &tree, size_t entry_bits);
 
 struct Database {
   std::vector<PreprocessedTree> planes;
+  // m32 path: every plane's AlphaBeta levels, scanned together; their per-level
+  // m32 views keep only the shape.
+  StackedAlphaBetaM32 stacked;
 };
 
 TreeLevelDatabase pack_level(size_t level, size_t plane, const Params &params,

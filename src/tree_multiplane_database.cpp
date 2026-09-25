@@ -4,6 +4,7 @@
 #include <span>
 #include <stdexcept>
 #include <string>
+#include <tuple>
 
 namespace tree_multiplane {
 namespace {
@@ -64,23 +65,53 @@ TreeLevelDatabase pack_level(size_t level, size_t plane, const Params &params,
 
 Database preprocess(const Params &params, const EntrySource &source,
                     const PirParams &scheme) {
+  constexpr size_t N = DBConsts::PolyDegree;
   validate_tree_params(params.tree);
   tree_entry_codec::validate_codec_spec(params.codec);
+  const bool m32 = scheme.get_composite_rns().enabled;
+  const std::vector<LevelPlan> plans = build_level_plans(params.tree);
   Database db;
+  StackedAlphaBetaM32 &stacked = db.stacked;
+  if (m32) {
+    // AlphaBeta rows stack level by level, plane by plane within a level, in
+    // the order answer consumes them.
+    stacked.cols = params.tree.N0;
+    stacked.first_row.assign(params.codec.plane_count,
+                             std::vector<size_t>(params.tree.L + 1, 0));
+    for (size_t level = 0; level <= params.tree.L; ++level) {
+      if (plans[level].select_case != SelectCase::AlphaBeta) continue;
+      for (size_t plane = 0; plane < params.codec.plane_count; ++plane) {
+        stacked.first_row[plane][level] = stacked.rows;
+        stacked.rows += level_m32_shape(plans[level], params.tree).first;
+      }
+    }
+    stacked.lo.assign(N * stacked.rows * stacked.cols, 0);
+    stacked.hi.assign(N * stacked.rows * stacked.cols, 0);
+  }
   db.planes.reserve(params.codec.plane_count);
   for (size_t plane = 0; plane < params.codec.plane_count; ++plane) {
     PreprocessedTree out;
-    out.plans = build_level_plans(params.tree);
-    if (scheme.get_composite_rns().enabled) {
+    out.plans = plans;
+    if (m32) {
       out.m32.reserve(params.tree.L + 1);
     } else {
       out.ntt.reserve(params.tree.L + 1);
     }
     for (size_t level = 0; level <= params.tree.L; ++level) {
       TreeLevelDatabase level_db = pack_level(level, plane, params, source);
-      if (scheme.get_composite_rns().enabled) {
-        out.m32.push_back(build_level_m32_view(
-            level_db, out.plans[level], params.tree, scheme));
+      const LevelPlan &plan = out.plans[level];
+      if (m32 && plan.select_case == SelectCase::AlphaBeta) {
+        write_level_m32(level_db, plan, params.tree, scheme, stacked.rows,
+                        stacked.first_row[plane][level], stacked.lo.data(),
+                        stacked.hi.data());
+        TreeLevelDatabaseM32 shape;
+        shape.level = level;
+        shape.R = plan.R;
+        std::tie(shape.rows, shape.cols) = level_m32_shape(plan, params.tree);
+        out.m32.push_back(std::move(shape));
+      } else if (m32) {
+        out.m32.push_back(
+            build_level_m32_view(level_db, plan, params.tree, scheme));
       } else {
         out.ntt.push_back(build_level_ntt_view(level_db, scheme));
       }

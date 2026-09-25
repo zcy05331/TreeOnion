@@ -114,8 +114,13 @@ Response answer(const Database &db, ExpandedTreeQuery &query, PirServer &server,
   }
   TIME_END(TREE_PYRAMID_TIME);
 
-  // 一次应答共用一份矩阵核输出缓冲，跨层、跨 plane 复用。
-  ScanScratch scan_scratch;
+  // Every AlphaBeta level of every plane is scanned here in one pass; the
+  // loop below finishes its rows. The small levels share one more scratch.
+  ScanScratch stacked_scan, scan_scratch;
+  const bool stacked = use_m32 && db.stacked.rows != 0;
+  if (stacked) {
+    scan_stacked_alpha_beta(db.stacked, pyramid_m32, scheme, stacked_scan);
+  }
   std::vector<RlweCt> merge_inputs;
   size_t merge_chunk = 0;
   const auto flush_merge = [&] {
@@ -132,15 +137,17 @@ Response answer(const Database &db, ExpandedTreeQuery &query, PirServer &server,
     for (size_t plane = 0; plane < params.codec.plane_count; ++plane) {
       const PreprocessedTree &plane_db = db.planes[plane];
       const LevelPlan &plan = plane_db.plans[level];
+      const std::span<GSWCt> beta(query.beta_selectors);
       RlweCt selected =
-          use_m32 ? select_level_m32(
-                        plane_db.m32[level], plan, pyramid_m32,
-                        std::span<GSWCt>(query.beta_selectors), server,
-                        params.tree, scheme, scan_scratch)
-                  : select_level_ntt(
-                        plane_db.ntt[level], plan, pyramid_ntt,
-                        std::span<GSWCt>(query.beta_selectors), server,
-                        params.tree, scheme);
+          stacked && plan.select_case == SelectCase::AlphaBeta
+              ? finish_level_m32(stacked_scan, db.stacked.rows,
+                                 db.stacked.first_row[plane][level], plan,
+                                 beta, server, params.tree, scheme)
+          : use_m32 ? select_level_m32(plane_db.m32[level], plan, pyramid_m32,
+                                       beta, server, params.tree, scheme,
+                                       scan_scratch)
+                    : select_level_ntt(plane_db.ntt[level], plan, pyramid_ntt,
+                                       beta, server, params.tree, scheme);
       TIME_START(TREE_ROTATE_TIME);
       RlweCt rotated = private_rotate_level(
           std::move(selected), plan, std::span<GSWCt>(query.gamma_selectors),

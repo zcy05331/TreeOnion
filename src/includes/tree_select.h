@@ -11,6 +11,7 @@
 #include <cstdint>
 #include <functional>
 #include <span>
+#include <utility>
 #include <vector>
 
 // 服务端路径的阶段计时键（TimerLogger 区段名）。select 内核与 tree_multiplane::answer
@@ -162,6 +163,24 @@ TreeLevelDatabaseM32 build_level_m32_view(const TreeLevelDatabase &db,
                                           const LevelPlan &plan,
                                           const TreePirParams &tree,
                                           const PirParams &scheme);
+// 一层 m32 矩阵的 (rows, cols)。
+std::pair<size_t, size_t> level_m32_shape(const LevelPlan &plan,
+                                          const TreePirParams &tree);
+// 把一层写进每个系数 total_rows 行的 m32 矩阵，占 [first_row, first_row+rows)。
+void write_level_m32(const TreeLevelDatabase &db, const LevelPlan &plan,
+                     const TreePirParams &tree, const PirParams &scheme,
+                     size_t total_rows, size_t first_row, uint32_t *lo,
+                     uint32_t *hi);
+
+// 全部 plane 的全部 AlphaBeta 层堆成一个 m32 矩阵。这些层都用金字塔底行
+// A^(0)（宽 N0）做首维选择，堆叠后每个 CRT limb 只跑一次 level_mat_mat_32，
+// 查询操作数只读一遍——与单块 OnionPIR 的首维相同；逐层扫描则每层、每个
+// plane 各读一遍。first_row[plane][level] 是该层候选行在矩阵中的起点。
+struct StackedAlphaBetaM32 {
+  size_t rows = 0, cols = 0;
+  std::vector<uint32_t> lo, hi;
+  std::vector<std::vector<size_t>> first_row;
+};
 
 // 规范视图 + 优化视图 + 公开 plan 的打包集合，供应答路径使用（蓝图 §19
 // PreprocessedTree）。当方案启用复合模数首维拆分时，preprocess_tree_mvp 构建
@@ -239,3 +258,16 @@ RlweCt select_level_m32(const TreeLevelDatabaseM32 &db, const LevelPlan &plan,
                         std::span<GSWCt> beta_selectors, PirServer &mux,
                         const TreePirParams &tree, const PirParams &scheme,
                         ScanScratch &scratch);
+
+// 堆叠矩阵的首维扫描：每个 CRT limb 一次 level_mat_mat_32，输出留在 scratch
+// 里，由 finish_level_m32 按层取用。
+void scan_stacked_alpha_beta(const StackedAlphaBetaM32 &db,
+                             const AlphaPyramidM32 &pyramid_m32,
+                             const PirParams &scheme, ScanScratch &scratch);
+
+// 矩阵核输出（每系数 total_rows 行）中某层的 [first_row, first_row+rows) 行：
+// CRT 合成 + 每候选一次 INTT，AlphaBeta 情形再做 β 折叠，得到 C_ℓ。
+RlweCt finish_level_m32(const ScanScratch &scan, size_t total_rows,
+                        size_t first_row, const LevelPlan &plan,
+                        std::span<GSWCt> beta_selectors, PirServer &mux,
+                        const TreePirParams &tree, const PirParams &scheme);
