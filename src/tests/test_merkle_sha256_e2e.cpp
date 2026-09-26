@@ -6,6 +6,7 @@
 #include <bit>
 #include <cstdint>
 #include <cstring>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -96,9 +97,12 @@ Hash root_from_proof(const Hash &leaf_hash, size_t leaf, size_t L,
 // Encrypted retrieval of real SHA-256 Merkle proofs through the evaluated
 // pipeline: an ordinary tree, its sibling-swapped view as the entry source, the
 // g = 8, P = 3 layout, one packed query, the MLWE merge, the small-q response,
-// and the client's recomputation of the trusted root. L = 12 and N0 = 4 give
-// shallow (R = 1), coarsened-alpha (1 < R < N0), and beta-fold (R >= N0)
-// levels. Several registrations use fresh keys.
+// and the client's recomputation of the trusted root. The query and the
+// response cross the wire as bytes: the server answers the query it loads
+// from (seed, c0), and the client decodes the response it loads from the
+// response codec. L = 12 and N0 = 4 give shallow (R = 1), coarsened-alpha
+// (1 < R < N0), and beta-fold (R >= N0) levels. Several registrations use
+// fresh keys.
 void test_merkle_sha256_e2e() {
   print_func_name(__FUNCTION__);
   const uint8_t abc[3] = {'a', 'b', 'c'};
@@ -143,20 +147,28 @@ void test_merkle_sha256_e2e() {
   const std::vector<size_t> leaves = {0, tree.N - 1, 0x555, 0xAAA, 0x0F0F % tree.N,
                                       0x2BADBEEFULL % tree.N, 0x51A7E5EEDULL % tree.N,
                                       tree.N / 2};
-  size_t verified = 0;
+  size_t verified = 0, query_bytes = 0, response_bytes = 0;
   for (size_t registration = 0; registration < 3; ++registration) {
     PirClient client(scheme);
     auto keys = client.create_session_keys(key_height);
     PirServer server(tree_query_expansion_params(tree, scheme));
     server.set_client_session_keys(client.get_client_id(), keys);
     for (size_t leaf : leaves) {
-      RlweCt query = make_tree_query(client, scheme, tree, leaf);
+      QuerySeed seed{};
+      const RlweCt query = make_tree_query(client, scheme, tree, leaf, &seed);
+      std::stringstream query_wire;
+      query_bytes = save_seeded_query(query, seed, scheme, query_wire);
+      RlweCt received = load_seeded_query(query_wire, scheme);
       ExpandedTreeQuery expanded =
-          unpack_tree_query(server, scheme, tree, client.get_client_id(), query);
-      const tree_multiplane::Response response = tree_multiplane::answer(
+          unpack_tree_query(server, scheme, tree, client.get_client_id(), received);
+      tree_multiplane::Response response = tree_multiplane::answer(
           db, expanded, server, client.get_client_id(), params, scheme,
           tree_packing::ResponsePacking::MlweMerge);
       require_test(response.small_q, "response must be switched to the small modulus");
+      require_test(response.chunks.size() == 1, "the whole path fits one response ciphertext");
+      std::stringstream response_wire;
+      response_bytes = server.save_resp_to_stream(response.chunks[0], response_wire);
+      response.chunks[0] = client.load_resp_from_stream(response_wire);
       const auto path = tree_multiplane::extract(response, client, params);
       require_test(path.size() == L + 1, "decoded path length");
       std::vector<Hash> decoded(L + 1);
@@ -177,5 +189,6 @@ void test_merkle_sha256_e2e() {
   BENCH_PRINT("SHA-256 Merkle e2e: L=" << L << " N0=" << tree.N0 << " g=" << g
               << " P=" << params.codec.plane_count << ": " << verified
               << " proofs over 3 registrations verified against root "
-              << hex(trusted_root).substr(0, 16) << "...");
+              << hex(trusted_root).substr(0, 16) << "..., query " << query_bytes
+              << " B and response " << response_bytes << " B on the wire");
 }
