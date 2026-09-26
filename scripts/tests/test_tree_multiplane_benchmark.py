@@ -184,6 +184,19 @@ class TreeMultiplaneBenchmarkTests(unittest.TestCase):
             ranking = json.loads((root / "ranking.json").read_text())
             self.assertEqual(ranking["completed"], [])
 
+    def test_a_geometry_outside_the_policy_passes_only_when_admitted(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            raw = pathlib.Path(tmp) / "g32-n0512.json"
+            raw.write_text(json.dumps(profile(g=32, n0=512, experiments=3)) + "\n")
+            case = bench.Case("g32-n0512", 32, 512, raw, raw.with_suffix(".process"),
+                              raw.with_suffix(".log"))
+            kwargs = dict(case=case, leaf_count=LEAVES, entry_bits=256, experiments=3,
+                          warmup=3, packing="mlwe", query_layout="interleaved", trial_seed=7)
+            with self.assertRaisesRegex(bench.SweepError, "P<=6 policy"):
+                bench.validate_result(raw, **kwargs)
+            row = bench.validate_result(raw, policy_layout=False, **kwargs)
+            self.assertEqual(row["metadata"]["plane_count"], "1")
+
     def test_rejects_existing_case_output_before_launch(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = pathlib.Path(tmp)

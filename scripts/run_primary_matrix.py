@@ -47,7 +47,7 @@ class PrimaryMatrix:
         self.state["updated_utc"] = dt.datetime.now(dt.timezone.utc).isoformat()
         save(self.progress, self.state)
 
-    def run_case(self, scale, height, phase, g, n0, layout, trials):
+    def run_case(self, scale, height, phase, g, n0, layout, trials, policy_layout=True):
         folder = self.output / scale / phase
         folder.mkdir(parents=True, exist_ok=True)
         label = f"g{g}-n0{n0}-{layout}"
@@ -83,7 +83,7 @@ class PrimaryMatrix:
                 raise SweepError(f"benchmark exited {process['exit_code']}; see log")
             row.update(validate_result(case.raw_json, case=case, leaf_count=1 << height,
                        entry_bits=256, experiments=trials, warmup=3, packing="mlwe",
-                       query_layout=layout, trial_seed=7))
+                       query_layout=layout, trial_seed=7, policy_layout=policy_layout))
             row["state"] = "complete"
         except SweepError as error:
             row.update(state="failed", error=str(error))
