@@ -11,6 +11,7 @@
 #include <vector>
 
 void test_merkle_sha256_e2e();
+void test_merkle_rfc6962_view();
 
 namespace {
 
@@ -90,6 +91,49 @@ Hash root_from_proof(const Hash &leaf_hash, size_t leaf, size_t L,
     h = (node & 1) ? hash_pair(decoded_path[level], h) : hash_pair(h, decoded_path[level]);
   }
   return h;
+}
+
+// RFC 6962 hashing: leaves hash 0x00 || data, inner nodes 0x01 || left || right.
+Hash rfc6962_leaf(size_t index) {
+  uint8_t buf[13] = {0x00, 'l', 'e', 'a', 'f'};
+  for (int b = 0; b < 8; ++b) buf[5 + b] = static_cast<uint8_t>(index >> (8 * b));
+  return sha256(buf, sizeof(buf));
+}
+
+Hash rfc6962_node(const Hash &left, const Hash &right) {
+  uint8_t buf[65] = {0x01};
+  std::memcpy(buf + 1, left.data(), 32);
+  std::memcpy(buf + 33, right.data(), 32);
+  return sha256(buf, sizeof(buf));
+}
+
+// RFC 6962 tree hash of leaves [lo, hi), split at the largest power of two
+// below the size, computed directly from the definition.
+Hash rfc6962_root(size_t lo, size_t hi) {
+  if (hi - lo == 1) return rfc6962_leaf(lo);
+  size_t k = 1;
+  while (2 * k < hi - lo) k *= 2;
+  return rfc6962_node(rfc6962_root(lo, lo + k), rfc6962_root(lo + k, hi));
+}
+
+// Inclusion-proof verification of RFC 9162, Section 2.1.3.2 (the same tree
+// hash as RFC 6962), independent of how the view builds the proof.
+bool verify_inclusion(size_t leaf, size_t tree_size, Hash r, const std::vector<Hash> &proof,
+                      const Hash &root) {
+  if (leaf >= tree_size) return false;
+  size_t fn = leaf, sn = tree_size - 1;
+  for (const Hash &p : proof) {
+    if (sn == 0) return false;
+    if ((fn & 1) || fn == sn) {
+      r = rfc6962_node(p, r);
+      while (!(fn & 1) && fn != 0) { fn >>= 1; sn >>= 1; }
+    } else {
+      r = rfc6962_node(r, p);
+    }
+    fn >>= 1;
+    sn >>= 1;
+  }
+  return sn == 0 && r == root;
 }
 
 }  // namespace
@@ -191,4 +235,91 @@ void test_merkle_sha256_e2e() {
               << " proofs over 3 registrations verified against root "
               << hex(trusted_root).substr(0, 16) << "..., query " << query_bytes
               << " B and response " << response_bytes << " B on the wire");
+}
+
+// A log whose size is not a power of two, served through the evaluated
+// pipeline as a virtual view of the perfect tree over 2^L leaves: the node of
+// an aligned range holds the RFC 6962 hash of the range's leaves below the log
+// size (its left child's value when the right half is empty) and zero when the
+// range is empty. The client drops the siblings with empty ranges, and RFC
+// 9162's verification algorithm must accept the rest against the log's root.
+void test_merkle_rfc6962_view() {
+  print_func_name(__FUNCTION__);
+  require_applicable(paper_config_active(),
+                     "the RFC 6962 view fixture is pinned to CONFIG_N2048_K1_COMP "
+                     "(n = 2048, g = 8 gives rho = 256 and b = 2 at L = 12)");
+  PirParams scheme;
+  const size_t key_height = std::bit_width(DBConsts::PolyDegree) - 1;
+  constexpr size_t L = 12, a = 2, g = 8, entry_bits = 256;
+  const TreePirParams tree = make_tree_pir_params_for_scheme(L, a, g, scheme, key_height);
+  const tree_multiplane::Params params = tree_multiplane::make_params(tree, entry_bits);
+  const Hash zero{};
+
+  size_t verified = 0;
+  for (const size_t log_size : {tree.N - 1, tree.N / 2 + 1}) {
+    std::vector<std::vector<Hash>> V(L + 1);
+    std::vector<std::vector<bool>> present(L + 1);
+    V[L].assign(tree.N, zero);
+    present[L].assign(tree.N, false);
+    for (size_t j = 0; j < log_size; ++j) {
+      V[L][j] = rfc6962_leaf(j);
+      present[L][j] = true;
+    }
+    for (size_t level = L; level-- > 0;) {
+      V[level].assign(size_t{1} << level, zero);
+      present[level].assign(size_t{1} << level, false);
+      for (size_t j = 0; j < V[level].size(); ++j) {
+        if (present[level + 1][2 * j + 1]) {
+          V[level][j] = rfc6962_node(V[level + 1][2 * j], V[level + 1][2 * j + 1]);
+          present[level][j] = true;
+        } else if (present[level + 1][2 * j]) {
+          V[level][j] = V[level + 1][2 * j];
+          present[level][j] = true;
+        }
+      }
+    }
+    const Hash root = rfc6962_root(0, log_size);
+    require_test(V[0][0] == root, "the virtual root equals the RFC 6962 tree hash");
+
+    const tree_multiplane::EntrySource source = [&](size_t level, size_t node) {
+      const Hash &h = level == 0 ? V[0][0] : V[level][node ^ 1];
+      return tree_entry_codec::entry_from_bytes(h, entry_bits);
+    };
+    const tree_multiplane::Database db = tree_multiplane::preprocess(params, source, scheme);
+    PirClient client(scheme);
+    auto keys = client.create_session_keys(key_height);
+    PirServer server(tree_query_expansion_params(tree, scheme));
+    server.set_client_session_keys(client.get_client_id(), keys);
+    for (const size_t leaf : {size_t{0}, log_size - 1, log_size / 2, size_t{0x2BADBEEF} % log_size}) {
+      RlweCt query = make_tree_query(client, scheme, tree, leaf);
+      ExpandedTreeQuery expanded =
+          unpack_tree_query(server, scheme, tree, client.get_client_id(), query);
+      const auto path = tree_multiplane::extract(
+          tree_multiplane::answer(db, expanded, server, client.get_client_id(), params, scheme,
+                                  tree_packing::ResponsePacking::MlweMerge),
+          client, params);
+      std::vector<Hash> proof;
+      Hash decoded_root{};
+      std::memcpy(decoded_root.data(), path[0].bytes.data(), 32);
+      require_test(decoded_root == root, "returned root equals the log's root");
+      for (size_t level = L; level >= 1; --level) {
+        const size_t sibling = (leaf >> (L - level)) ^ 1;
+        Hash h{};
+        std::memcpy(h.data(), path[level].bytes.data(), 32);
+        if ((sibling << (L - level)) < log_size) {
+          proof.push_back(h);
+        } else {
+          require_test(h == zero, "an empty sibling range decodes to zero");
+        }
+      }
+      require_test(verify_inclusion(leaf, log_size, rfc6962_leaf(leaf), proof, root),
+                   "RFC 9162 verification accepts the proof without empty siblings");
+      proof.front()[0] ^= 1;
+      require_test(!verify_inclusion(leaf, log_size, rfc6962_leaf(leaf), proof, root),
+                   "a flipped proof bit must fail verification");
+      ++verified;
+    }
+  }
+  BENCH_PRINT("RFC 6962 virtual view: " << verified << " proofs from logs of "
+              << tree.N - 1 << " and " << tree.N / 2 + 1 << " leaves verified");
 }
