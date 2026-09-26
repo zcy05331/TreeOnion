@@ -361,7 +361,7 @@ AlphaPyramidM32 pyramid_to_m32(const AlphaPyramid &pyramid_ntt,
   // 与该行被消费时的选择宽度一致。
   for (const std::vector<RlweCt> &row : pyramid_ntt) {
     const size_t cols = row.size();
-    std::vector<uint32_t> lo(N * cols * 2), hi(N * cols * 2);
+    CacheAlignedVector<uint32_t> lo(N * cols * 2), hi(N * cols * 2);
     for (size_t k = 0; k < row.size(); ++k) {
       // 守卫：必须消费 pyramid_to_ntt 的输出（系数形式在此无意义）。
       require(row[k].ntt_form, "the m32 pyramid consumes the NTT-form pyramid");
@@ -425,9 +425,9 @@ AlphaPyramidM32 build_alpha_pyramid_m32(std::span<const RlweCt> alpha_cts,
   const auto q1 = static_cast<uint32_t>(crt.q1);
   const auto q2 = static_cast<uint32_t>(crt.q2);
   for (size_t c = 0; c < tree.a; ++c) {
-    const std::vector<uint32_t> &prev_lo = out.lo.back();
-    const std::vector<uint32_t> &prev_hi = out.hi.back();
-    std::vector<uint32_t> lo(prev_lo.size() / 2), hi(prev_hi.size() / 2);
+    const CacheAlignedVector<uint32_t> &prev_lo = out.lo.back();
+    const CacheAlignedVector<uint32_t> &prev_hi = out.hi.back();
+    CacheAlignedVector<uint32_t> lo(prev_lo.size() / 2), hi(prev_hi.size() / 2);
     for (size_t u = 0; u < lo.size() / w; ++u) {
       for (size_t e = 0; e < w; ++e) {
         const size_t x = 2 * w * u + e;

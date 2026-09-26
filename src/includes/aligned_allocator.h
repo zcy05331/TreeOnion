@@ -5,6 +5,7 @@
 #include <new>
 #include <cstddef>
 #include <memory>
+#include <vector>
 
 // A deleter that frees memory with std::free (for pointers allocated via aligned allocators)
 template <typename T>
@@ -31,5 +32,31 @@ inline std::unique_ptr<T[], AlignedDeleter<T>> make_unique_aligned(std::size_t c
     }
     return std::unique_ptr<T[], AlignedDeleter<T>>(static_cast<T*>(raw));
 }
+
+// std::vector allocator with a fixed over-alignment. glibc serves large
+// requests from mmap and returns a pointer 16 bytes past the page start, so
+// every 64-byte AVX-512 load of a plain std::vector buffer spans two cache
+// lines; buffers the matrix kernels stream use this instead.
+template <typename T, std::size_t Alignment>
+struct AlignedAllocator {
+    using value_type = T;
+    template <typename U>
+    struct rebind { using other = AlignedAllocator<U, Alignment>; };
+    AlignedAllocator() noexcept = default;
+    template <typename U>
+    AlignedAllocator(const AlignedAllocator<U, Alignment> &) noexcept {}
+    T *allocate(std::size_t n) {
+        return static_cast<T *>(::operator new(n * sizeof(T), std::align_val_t(Alignment)));
+    }
+    void deallocate(T *p, std::size_t) noexcept {
+        ::operator delete(p, std::align_val_t(Alignment));
+    }
+    friend bool operator==(const AlignedAllocator &, const AlignedAllocator &) noexcept {
+        return true;
+    }
+};
+
+template <typename T>
+using CacheAlignedVector = std::vector<T, AlignedAllocator<T, 64>>;
 
 #endif // ALIGNED_ALLOCATOR_H

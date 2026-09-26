@@ -1,5 +1,6 @@
 #pragma once
 
+#include "aligned_allocator.h"
 #include "logging.h"
 #include "matrix.h"
 #include "server.h"
@@ -154,8 +155,9 @@ struct TreeLevelDatabaseM32 {
   // AlphaBeta 为 N0）；恒有 rows·cols = R。
   size_t cols = 0;
   // 两个 CRT limb 的 u32 矩阵，各含 n·rows·cols 个元素：
-  // lo 存 mod q1 的值、hi 存 mod q2 的值。
-  std::vector<uint32_t> lo, hi;
+  // lo 存 mod q1 的值、hi 存 mod q2 的值。与 Standard 的 db_lo_/db_hi_ 一样
+  // 64 字节对齐（矩阵核按 64 字节向量流式读取）；下面的金字塔行和扫描输出同理。
+  CacheAlignedVector<uint32_t> lo, hi;
 };
 // 由规范层数据库 + 公开 plan 构建 m32 矩阵核视图（预处理期一次性完成）。
 TreeLevelDatabaseM32 build_level_m32_view(const TreeLevelDatabase &db,
@@ -211,7 +213,7 @@ RlweCt select_level_ntt(const TreeLevelDatabaseNtt &db, const LevelPlan &plan,
 // 一次，所有层共享。
 struct AlphaPyramidM32 {
   // 每个金字塔行一个缓冲区：lo 存 mod q1、hi 存 mod q2 的 u32 值。
-  std::vector<std::vector<uint32_t>> lo, hi;
+  std::vector<CacheAlignedVector<uint32_t>> lo, hi;
   Matrix32QueryLayout query_layout = Matrix32QueryLayout::Interleaved;
 };
 AlphaPyramidM32 pyramid_to_m32(const AlphaPyramid &pyramid_ntt,
@@ -242,7 +244,7 @@ RlweCt select_level_m32(const TreeLevelDatabaseM32 &db, const LevelPlan &plan,
 // 计时段内；应答路径为一次查询保留一份，按最大层的 N·rows·2 只增不减地复用。
 // level_mat_mat_32 会写满每一个元素，所以复用不需要清零。
 struct ScanScratch {
-  std::vector<uint64_t> lo, hi;
+  CacheAlignedVector<uint64_t> lo, hi;
 };
 RlweCt select_level_m32(const TreeLevelDatabaseM32 &db, const LevelPlan &plan,
                         const AlphaPyramidM32 &pyramid_m32,
