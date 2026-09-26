@@ -84,8 +84,11 @@ void add_rlwe_star_constant(RlweCt &ct, const PirParams &scheme,
 // §8.5：零加密 → 叠加 α one-hot 的 BFV 提升 → 叠加 β、γ 的 gadget 行——
 // 全程只有这一次编码，没有第二个独立的 BFV/RLWE 编码器。返回值中唯一与
 // 查询相关的就是这条密文；从中无法读出任何逐层值或 oracle 类型。
+// With `seed` set, the query's uniform component is expanded from a fresh
+// seed returned there, so it can be sent with save_seeded_query.
 RlweCt make_tree_query(PirClient &client, const PirParams &scheme,
-                       const TreePirParams &tree, size_t leaf);
+                       const TreePirParams &tree, size_t leaf,
+                       QuerySeed *seed = nullptr);
 
 // 服务端解包结果（蓝图 §9.1/§9.2）。展开出的前 N0 个叶保持 BFV 密文形态，
 // 加密 α one-hot 向量 A^(0)；每个 β/γ gadget 行组则用客户端注册的 RGSW(s)

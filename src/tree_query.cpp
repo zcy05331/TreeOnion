@@ -209,7 +209,8 @@ void add_rlwe_star_constant(RlweCt &ct, const PirParams &scheme,
 //      所有常数都预乘 W^{-1}，以抵消 ExpandBFV 的乘 W 效应。
 // 输出密文之外不泄露任何逐层信息：0 选择位与未选 α 槽位保持零加密。
 RlweCt make_tree_query(PirClient &client, const PirParams &scheme,
-                       const TreePirParams &tree, size_t leaf) {
+                       const TreePirParams &tree, size_t leaf,
+                       QuerySeed *seed) {
   // 前置守卫：树参数必须绑定当前方案，两侧尺度才一致。
   require_scheme_binding(tree, scheme);
   // 叶索引只分解一次：γ = ⌊leaf/P⌋、α = ⌊(leaf mod P)/B⌋、
@@ -218,7 +219,8 @@ RlweCt make_tree_query(PirClient &client, const PirParams &scheme,
 
   // 底座：一条新鲜的零加密。每次调用都从客户端 RNG 抽取新的 (a, e)，
   // 保证同一 leaf 的两次查询密文不同（语义安全所必需）。
-  RlweCt query = client.fresh_zero_ct();
+  RlweCt query = seed != nullptr ? client.fresh_zero_ct_seeded(*seed)
+                                 : client.fresh_zero_ct();
 
   // α one-hot：在逻辑槽位 α（实际系数 BitRev(α, h_q)）写入 BFV 值
   // W^{-1} mod t 的 Δ 提升。展开把每个槽位乘 W = 2^{h_q}，于是

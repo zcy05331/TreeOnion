@@ -4,6 +4,7 @@
 #include "gsw.h"
 #include "bv_keyswitch.h"
 #include "pir_session.h"
+#include "query_wire.h"
 #include "rlwe.h"
 #include <random>
 #include "csprng.h"
@@ -82,6 +83,11 @@ public:
   // 两类使用者：噪声基线测试；tree PIR 的外部打包 helper（在其上直接加消息常数，
   // 免于重新实现编码器）。
   RlweCt fresh_zero_ct();
+
+  // The same fresh encryption with its uniform component expanded from a new
+  // 32-byte seed drawn from the client RNG, returned in `seed`, so that the
+  // ciphertext can travel as (seed, c0); see query_wire.h.
+  RlweCt fresh_zero_ct_seeded(QuerySeed &seed);
 
   // 仅 response 的 PirServer::save_resp_to_stream inverse：先读 c0 再读 c1，
   // 每个 coefficient 固定 small_q_width bits，byte/field 内为 LSB-first。
