@@ -1,4 +1,4 @@
-# Campus Cluster matrix, Sept 22-24 2026
+# Campus Cluster matrix, Sept 22-25 2026
 
 Remote root `/u/zcy331/onionpir-icc-20260922T1837Z` on the Illinois Campus
 Cluster; branch `codex/icc-matrix-via-spiral`. `RESULTS-ICC.md` is the report,
@@ -42,3 +42,9 @@ commit.
   the TreePIR row is `treepir` plus `treepir-8g` on SealPIR d=2.
 - Spiral + PBC and Respire were not attempted at 8 GiB: their 4 GiB peaks
   put 8 GiB at about 336 and 400 GiB against 251 GiB per node.
+- `treepir-spiral` (added Sept 25, branch `codex/treepir-spiral`) runs
+  TreePIR's colors on Spiral (spiral-rs, as in Spiral + PBC) at every size,
+  8 GiB included, in one job. It reads the colors, color-local indices and
+  leaves from the `treepir` and `treepir-8g` formal results (linked under
+  `treepir-formal/`) and serves one color at a time; its 8 GiB peak was
+  4.4 GiB.

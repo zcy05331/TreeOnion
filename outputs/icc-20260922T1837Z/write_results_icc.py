@@ -6,7 +6,8 @@ RUNS_DIR holds one directory per pool job as synced from <root>/runs. Final
 rows: primary-v2 (Ours), core-slf-ep3, core-merged-ep3, core-packed-ep3 and
 core-cuckoo-ep3 (the OnionPIRv2 baselines on the ep3-s32 selector gadget),
 treepir, spiral-pbc, kspir-pbc, via-b, via-pbc, respire-small and respire-4g,
-with the 8 GiB rows in the <job>-8g runs. The earlier primary and exact-EP6
+with the 8 GiB rows in the <job>-8g runs, and treepir-spiral, which ran every
+size in one job. The earlier primary and exact-EP6
 core-slf, core-merged and core-cuckoo runs feed the gadget comparison and the
 same-gadget comparison with Utah.
 """
@@ -97,6 +98,7 @@ def core(table, i, c, h, run_of):
 
 
 VIA_ERR = {}  # (scheme, size index) -> largest decoding error in q4 units
+TS_EXPAND = {}  # size index -> share of TreePIR + Spiral's server time in Spiral's query expansion
 for i, (c, p, h, _) in enumerate(SIZES):
     primary(T, i, job("primary", c, "primary-v2"), p, h)
     core(T, i, c, h, lambda run: job(run, c, "{}-ep3"))
@@ -111,8 +113,9 @@ for i, (c, p, h, _) in enumerate(SIZES):
             d["measured_summary"]["actual_response_payload_bytes_mean"], d["actual_helper_key_bytes_uncompressed"],
             d["backend_label"])
     for name, run, fn in (("Spiral + PBC", "spiral-pbc", "spiral_pbc"), ("KsPIR + PBC", "kspir-pbc", "kspir_pbc"),
-                          ("VIA-B", "via-b", "via_b"), ("VIA + PBC", "via-pbc", "via_pbc")):
-        d = load(RUNS / f"{job(run, c)}/outputs/{run}/{c}/{fn}.json")
+                          ("VIA-B", "via-b", "via_b"), ("VIA + PBC", "via-pbc", "via_pbc"),
+                          ("TreePIR + Spiral", "treepir-spiral", "treepir_spiral")):
+        d = load(RUNS / f"{run if fn == 'treepir_spiral' else job(run, c)}/outputs/{run}/{c}/{fn}.json")
         if d:
             cm = d["communication"]
             if fn == "kspir_pbc":
@@ -125,6 +128,9 @@ for i, (c, p, h, _) in enumerate(SIZES):
             else:
                 sj = d["spiral_parameters"]["json"]
                 note = f"nu_1 {sj['nu_1']}, nu_2 {sj['nu_2']}, instances {sj['instances']}"
+                if fn == "treepir_spiral":
+                    ms = d["measured_summary"]
+                    TS_EXPAND[i] = ms["stages_ms_mean"]["expand"] / ms["server_ms_mean"]
             put(T, name, i, d["measured_summary"]["server_ms_mean"], h, cm["query_bytes_per_path"], cm["response_bytes_per_path"],
                 cm["public_parameter_bytes"], note)
 for run in ("respire-small", "respire-4g"):
@@ -138,7 +144,7 @@ for run in ("respire-small", "respire-4g"):
 
 OURS = "Ours h1 g8/P3"
 ORDER = [OURS, "Standard OnionPIR (single block)", "Layerwise tuned", "Cuckoo batch tuned", "Spiral + PBC",
-         "KsPIR + PBC", "VIA-B", "VIA + PBC", "TreePIR", "Flat", "Respire"]
+         "KsPIR + PBC", "VIA-B", "VIA + PBC", "TreePIR", "TreePIR + Spiral", "Flat", "Respire"]
 ABLATION = ["Layerwise tuned", "Layerwise + response merging", "Layerwise + merging + packed query", OURS]
 GADGET = ["Standard OnionPIR (single block)", "Layerwise tuned", "Layerwise + response merging", "Cuckoo batch tuned", "Flat"]
 COMM = ORDER + ABLATION[1:3]
@@ -218,13 +224,21 @@ F = [
     f"- **Lowest online communication**: VIA-B, {span(online('VIA-B'), kb)} per path after "
     f"{kb(T['VIA-B'][0]['k'])} of offline keys, at {span([x['tp'] for x in over_row('VIA-B')], lambda t: f'{t:.0f}')} MB/s. "
     f"Ours sends {span(online(OURS), kb)} at every size after {kb(T[OURS][0]['k'])} of keys.",
+    f"- **TreePIR + Spiral** (TreePIR's colors, indices and leaves, Spiral per color): "
+    f"{span([x['tp'] for x in over_row('TreePIR + Spiral')], lambda t: f'{t:.0f}')} MB/s, "
+    f"{span(ratios('TreePIR + Spiral', 'TreePIR'), lambda x: f'{x:.2f}x')} the throughput of TreePIR on SealPIR d=2 and "
+    f"{span(ratios('TreePIR + Spiral', 'Spiral + PBC'), lambda x: f'{x:.1f}x')} that of Spiral + PBC. Spiral's query expansion, "
+    f"paid once per color, is {pct(TS_EXPAND[0])} of its server time at 256 MiB and {pct(TS_EXPAND[NS - 1])} at 8 GiB. "
+    f"It cuts TreePIR's keys from {span([x['k'] for x in over_row('TreePIR')], kb)} to "
+    f"{span([x['k'] for x in over_row('TreePIR + Spiral')], kb)} and its online traffic from "
+    f"{span(online('TreePIR'), kb)} to {span(online('TreePIR + Spiral'), kb)} per path.",
     f"- **Ablation**: the merged Layerwise step reaches {span(ratios('Layerwise + response merging', OURS), pct)} of our "
     f"throughput, and packing its queries cuts its online traffic from "
     f"{span(online('Layerwise + response merging'), kb)} to {span(online('Layerwise + merging + packed query'), kb)} "
     f"at the same speed ({span(ratios('Layerwise + merging + packed query', 'Layerwise + response merging'), lambda x: f'{x:.2f}x')}).",
 ]
 
-L = ["# Campus Cluster results (Sept 22-24 2026)\n",
+L = ["# Campus Cluster results (Sept 22-25 2026)\n",
      "Nodes ccc0400-ccc0415 (Xeon Platinum 8358, 2 x 32 cores, 251 GiB), whole-node exclusive jobs, one thread pinned to "
      "CPU 0 with memory on node 0; every job checks the node configuration and repeats a Standard 1 GiB calibration row. "
      "Seed-7 leaf schedule; logical database = full tree, (2^(H+1)-1) x 32 B; throughput = logical bytes / mean server "
