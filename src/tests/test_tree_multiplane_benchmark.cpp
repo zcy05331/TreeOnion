@@ -84,11 +84,14 @@ void PirTest::test_tree_multiplane_benchmark() {
   const size_t entry_bits = positive_env("TREE_MULTIPLANE_ENTRY_BITS", 256);
   const size_t payload_bits = tree_entry_test::payload_bits(scheme);
   const auto layout = tree_entry_codec::choose_layout(entry_bits, payload_bits, n);
+  // TREE_MULTIPLANE_G may leave the layout policy for the plane-geometry
+  // ablation. The JSON records the policy shape beside the measured one, and
+  // the formal runners reject rows whose shape is not the policy's.
   const char *env_g = std::getenv("TREE_MULTIPLANE_G");
   const size_t g = env_g && *env_g ? positive_env("TREE_MULTIPLANE_G", layout.g)
                                    : layout.g;
-  require_test(g == layout.g,
-               "TREE_MULTIPLANE_G must match the final h1 layout policy");
+  require_test(std::has_single_bit(g) && n / g >= 2,
+               "TREE_MULTIPLANE_G must be a power of two with rho = n/g >= 2");
   const size_t leaf_count = size_t{1} << L;
   const size_t N0 = positive_env("TREE_MULTIPLANE_N0",
                                  std::min(size_t{512}, leaf_count / (n / g)));
@@ -98,8 +101,6 @@ void PirTest::test_tree_multiplane_benchmark() {
       L, std::bit_width(N0) - 1, g, scheme, key_height), entry_bits);
   const auto &tree = params.tree;
   const size_t planes = params.codec.plane_count;
-  require_test(planes == layout.plane_count,
-               "final h1 layout policy plane count mismatch");
   const size_t items = (L + 1) * planes;
   const auto bounds = tree_packing::path_chunk_bounds(items, tree.rho);
   const std::string packing_name = string_env("TREE_MULTIPLANE_PACKING", "mlwe");
@@ -278,6 +279,8 @@ void PirTest::test_tree_multiplane_benchmark() {
       {{"index_layout", "gamma-alpha-beta"}, {"h", "1"},
       {"g", std::to_string(g)}, {"plane_count", std::to_string(planes)},
        {"layout_policy", "P_le_6_max_util_tie_minP"},
+       {"policy_g", std::to_string(layout.g)},
+       {"policy_plane_count", std::to_string(layout.plane_count)},
        {"N0", std::to_string(N0)}, {"b", std::to_string(tree.b)},
        {"rho", std::to_string(tree.rho)}, {"ring_degree", std::to_string(n)},
        {"chunk_bits", std::to_string(params.codec.payload_bits_per_coeff)},

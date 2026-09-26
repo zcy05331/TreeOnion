@@ -97,7 +97,11 @@ def metadata_str(metadata: dict[str, Any], key: str, path: Path) -> str:
 
 def validate_result(path: Path, *, case: Case, leaf_count: int, entry_bits: int,
                     experiments: int, warmup: int, packing: str,
-                    query_layout: str, trial_seed: int) -> dict[str, Any]:
+                    query_layout: str, trial_seed: int,
+                    policy_layout: bool = True) -> dict[str, Any]:
+    """Check one benchmark JSON. policy_layout=False admits a plane geometry
+    outside the P<=6 policy (the plane-geometry ablation); every other check,
+    including the minimal plane count for the row's g, still applies."""
     try:
         data = json.loads(path.read_text())
     except FileNotFoundError as exc:
@@ -156,7 +160,7 @@ def validate_result(path: Path, *, case: Case, leaf_count: int, entry_bits: int,
     expected_planes = (entry_bits + chunk_bits * case.g - 1) // (chunk_bits * case.g)
     if plane_count != expected_planes:
         raise SweepError(f"{path}: metadata.plane_count {plane_count} != minimal {expected_planes}")
-    if (case.g, plane_count) != select_layout(entry_bits, chunk_bits, ring_degree):
+    if policy_layout and (case.g, plane_count) != select_layout(entry_bits, chunk_bits, ring_degree):
         raise SweepError(f"{path}: layout violates maximum utilization, minimum P, P<=6 policy")
     rho = ring_degree // case.g
     reported_rho = metadata_int(metadata, "rho", path)
