@@ -1,23 +1,24 @@
-# Campus Cluster results (Sept 22-25 2026)
+# Campus Cluster results (Sept 22-26 2026)
 
 Nodes ccc0400-ccc0415 (Xeon Platinum 8358, 2 x 32 cores, 251 GiB), whole-node exclusive jobs, one thread pinned to CPU 0 with memory on node 0; every job checks the node configuration and repeats a Standard 1 GiB calibration row. Seed-7 leaf schedule; logical database = full tree, (2^(H+1)-1) x 32 B; throughput = logical bytes / mean server time per complete path. Ours and the OnionPIRv2 baselines run the ep3-s32 selector gadget, built on each job's node.
 
 ## Findings
 
-- **Ours against Layerwise tuned**, both on ep3-s32: 1.31x, 1.26x, 1.20x, 1.11x, 1.04x, 0.94x from 256 MiB to 8 GiB. Layerwise is faster at 8 GiB; it makes 21 calls and sends 540.1 KB online per path against our 25.5 KB. The two 8 GiB jobs ran on different nodes whose calibration rows differ by 0.2%.
-- **Node consistency**: the Standard 1 GiB calibration row spans 807.8–817.5 ms (1.2%) over 28 jobs on 7 nodes.
-- **Ours against Standard OnionPIR** (one block, a speed reference, not a path protocol): 0.71x, 0.71x, 0.75x, 0.80x, 0.83x, 0.83x from 256 MiB to 8 GiB.
+- **Ours against Layerwise tuned**, both on ep3-s32: 1.43x, 1.45x, 1.37x, 1.23x, 1.12x, 1.05x from 256 MiB to 8 GiB. At 8 GiB Layerwise makes 21 calls and sends 540.1 KB online per path against our 25.5 KB. The two 8 GiB jobs ran on different nodes whose calibration rows differ by 0.0%.
+- **Aligned tree scan**: rerun on one node (primary-v3), Ours moves from 699–1345 to 762–1496 MB/s against the matrix build, +8.5% to +14.8% by size.
+- **Node consistency**: the Standard 1 GiB calibration row spans 807.8–817.5 ms (1.2%) over 29 jobs on 8 nodes.
+- **Ours against Standard OnionPIR** (one block, a speed reference, not a path protocol): 0.78x, 0.81x, 0.86x, 0.89x, 0.90x, 0.92x from 256 MiB to 8 GiB.
 - **Selector gadget**: moving the OnionPIRv2 baselines from exact EP6 to ep3-s32 raises them by Standard OnionPIR +6% to +8%; Layerwise tuned +9% to +21%; Layerwise + response merging +9% to +19%; Cuckoo batch tuned +6% to +19%; Flat +6% to +8% (256 MiB to 4 GiB). Ours ran ep3-s32 in both runs and moved by -0.8% to +2.0%.
-- **Fastest baseline outside the OnionPIRv2 family**: VIA + PBC at 50%–60% of our throughput (421–669 MB/s), with 12.57 MB–23.79 MB online per path and no offline keys.
+- **Fastest baseline outside the OnionPIRv2 family**: VIA + PBC at 45%–55% of our throughput (421–669 MB/s), with 12.57 MB–23.79 MB online per path and no offline keys.
 - **Lowest online communication**: VIA-B, 15.7 KB–22.2 KB per path after 6.36 MB of offline keys, at 27–47 MB/s. Ours sends 25.5 KB at every size after 1.53 MB of keys.
 - **TreePIR + Spiral** (TreePIR's colors, indices and leaves, Spiral per color): 19–123 MB/s, 0.31x–0.89x the throughput of TreePIR on SealPIR d=2 and 1.8x–2.4x that of Spiral + PBC. Spiral's query expansion, paid once per color, is 91% of its server time at 256 MiB and 31% at 8 GiB. It cuts TreePIR's keys from 716.50 MB–879.34 MB to 6.00 MB–7.75 MB and its online traffic from 38.52 MB–47.27 MB to 792.7 KB–1.48 MB per path.
-- **Ablation**: the merged Layerwise step reaches 59%–72% of our throughput, and packing its queries cuts its online traffic from 262.0 KB–334.6 KB to 29.5 KB–44.0 KB at the same speed (0.99x–1.03x).
+- **Ablation**: the merged Layerwise step reaches 53%–65% of our throughput, and packing its queries cuts its online traffic from 262.0 KB–334.6 KB to 29.5 KB–44.0 KB at the same speed (0.99x–1.03x).
 
 ## Throughput (MB/s)
 
 | Scheme | 256 MiB | 512 MiB | 1 GiB | 2 GiB | 4 GiB | 8 GiB |
 |---|---:|---:|---:|---:|---:|---:|
-| Ours h1 g8/P3 | 699 | 881 | 1076 | 1231 | 1333 | 1345 |
+| Ours h1 g8/P3 | 762 | 1012 | 1223 | 1363 | 1447 | 1496 |
 | Standard OnionPIR (single block) | 979 | 1246 | 1427 | 1536 | 1610 | 1630 |
 | Layerwise tuned | 534 | 697 | 894 | 1109 | 1287 | 1427 |
 | Cuckoo batch tuned | 137 | 195 | 240 | 304 | 368 | 372 |
@@ -34,7 +35,7 @@ Nodes ccc0400-ccc0415 (Xeon Platinum 8358, 2 x 32 cores, 251 GiB), whole-node ex
 
 | Scheme | 256 MiB | 512 MiB | 1 GiB | 2 GiB | 4 GiB | 8 GiB |
 |---|---:|---:|---:|---:|---:|---:|
-| Ours h1 g8/P3 | 384.1 | 609.0 | 998.2 | 1744.6 | 3221.3 | 6387.3 |
+| Ours h1 g8/P3 | 352.4 | 530.4 | 877.9 | 1576.0 | 2968.7 | 5741.4 |
 | Standard OnionPIR (single block) | 274.1 | 430.9 | 752.5 | 1398.1 | 2667.0 | 5270.0 |
 | Layerwise tuned | 502.6 | 770.0 | 1200.9 | 1937.2 | 3336.9 | 6021.2 |
 | Cuckoo batch tuned | 1959.1 | 2758.0 | 4475.3 | 7064.0 | 11681.1 | 23082.6 |
@@ -54,9 +55,18 @@ Nodes ccc0400-ccc0415 (Xeon Platinum 8358, 2 x 32 cores, 251 GiB), whole-node ex
 | Layerwise tuned | 534 | 697 | 894 | 1109 | 1287 | 1427 |
 | Layerwise + response merging | 410 | 539 | 682 | 817 | 921 | 975 |
 | Layerwise + merging + packed query | 412 | 542 | 679 | 813 | 922 | 999 |
-| Ours h1 g8/P3 | 699 | 881 | 1076 | 1231 | 1333 | 1345 |
+| Ours h1 g8/P3 | 762 | 1012 | 1223 | 1363 | 1447 | 1496 |
 
 Layerwise + response merging adds the primary algorithm's rotation and MLWE merge on the transposed layout with one shared gamma selector; the packed variant also packs every level's query into shared expansion slots. Both reuse the primary algorithm's selectors, so they are ablation steps, not baselines.
+
+## Ours before and after the aligned tree scan (MB/s)
+
+| Build | 256 MiB | 512 MiB | 1 GiB | 2 GiB | 4 GiB | 8 GiB |
+|---|---:|---:|---:|---:|---:|---:|
+| Matrix build (primary-v2, primary-8g) | 699 | 881 | 1076 | 1231 | 1333 | 1345 |
+| Aligned tree scan (primary-v3) | 762 | 1012 | 1223 | 1363 | 1447 | 1496 |
+
+The aligned build computes the m32 alpha pyramid's coarse rows in the u32 domain, allocates the tree's m32 database, pyramid rows and scan outputs on 64-byte boundaries (glibc starts large std::vector buffers 16 bytes past a page, so every 64-byte AVX-512 load spanned two cache lines) and scans every AlphaBeta level in one pass. The baselines' first-dimension buffers were already 64-byte aligned, so their rows are unchanged.
 
 ## Selector gadget (MB/s, exact EP6 / ep3-s32)
 
@@ -186,6 +196,7 @@ Ours from its first run and the OnionPIRv2 baselines from the exact-EP6 runs, as
 | primary | ccc0415 | 9accc56 | 807.9 |
 | primary-8g | ccc0414 | bec158e | 813.0 |
 | primary-v2 | ccc0414 | bec158e | 812.9 |
+| primary-v3 | ccc0413 | c77b45a | 814.2 |
 | respire-4g | ccc0414 | 1a18b4a | 812.6 |
 | respire-small | ccc0415 | ee0b305 | 807.8 |
 | spiral-pbc | ccc0414 | bec158e | 816.6 |
@@ -200,7 +211,7 @@ Ours from its first run and the OnionPIRv2 baselines from the exact-EP6 runs, as
 
 ## Row notes
 
-- Ours h1 g8/P3: 256 MiB: N0 256, split-columns; 512 MiB: N0 512, split-columns; 1 GiB: N0 512, split-columns; 2 GiB: N0 512, split-columns; 4 GiB: N0 512, split-columns; 8 GiB: N0 512, interleaved
+- Ours h1 g8/P3: 256 MiB: N0 256, split-columns; 512 MiB: N0 512, split-columns; 1 GiB: N0 512, split-columns; 2 GiB: N0 512, split-columns; 4 GiB: N0 512, split-columns; 8 GiB: N0 512, split-columns
 - Standard OnionPIR (single block): 256 MiB: 1 call, h10; 512 MiB: 1 call, h10; 1 GiB: 1 call, h10; 2 GiB: 1 call, h10; 4 GiB: 1 call, h10; 8 GiB: 1 call, h10
 - Layerwise tuned: 256 MiB: 16 calls, h10; 512 MiB: 17 calls, h10; 1 GiB: 18 calls, h10; 2 GiB: 19 calls, h10; 4 GiB: 20 calls, h10; 8 GiB: 21 calls, h10
 - Cuckoo batch tuned: 256 MiB: 34 buckets, h8; 512 MiB: 36 buckets, h8; 1 GiB: 37 buckets, h8; 2 GiB: 39 buckets, h9; 4 GiB: 40 buckets, h10; 8 GiB: 42 buckets, h10

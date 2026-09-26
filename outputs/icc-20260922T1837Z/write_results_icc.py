@@ -3,13 +3,14 @@
 
 usage: write_results_icc.py RUNS_DIR OUT.md
 RUNS_DIR holds one directory per pool job as synced from <root>/runs. Final
-rows: primary-v2 (Ours), core-slf-ep3, core-merged-ep3, core-packed-ep3 and
-core-cuckoo-ep3 (the OnionPIRv2 baselines on the ep3-s32 selector gadget),
-treepir, spiral-pbc, kspir-pbc, via-b, via-pbc, respire-small and respire-4g,
-with the 8 GiB rows in the <job>-8g runs, and treepir-spiral, which ran every
-size in one job. The earlier primary and exact-EP6
-core-slf, core-merged and core-cuckoo runs feed the gadget comparison and the
-same-gadget comparison with Utah.
+rows: primary-v3 (Ours on the aligned tree scan), core-slf-ep3,
+core-merged-ep3, core-packed-ep3 and core-cuckoo-ep3 (the OnionPIRv2 baselines
+on the ep3-s32 selector gadget), treepir, spiral-pbc, kspir-pbc, via-b,
+via-pbc, respire-small and respire-4g, with the 8 GiB rows in the <job>-8g
+runs; primary-v3 and treepir-spiral ran every size in one job. Ours on the
+matrix build (primary-v2, primary-8g) feeds the before/after table and, with
+the earlier primary and exact-EP6 core-slf, core-merged and core-cuckoo runs,
+the gadget comparison and the same-gadget comparison with Utah.
 """
 import glob
 import json
@@ -45,6 +46,7 @@ def logical(h):
 
 
 T = {}  # final rows
+V2 = {}  # Ours on the matrix build, before the aligned tree scan
 G = {}  # earlier runs: Ours' first run and the exact-EP6 baselines
 
 
@@ -100,7 +102,8 @@ def core(table, i, c, h, run_of):
 VIA_ERR = {}  # (scheme, size index) -> largest decoding error in q4 units
 TS_EXPAND = {}  # size index -> share of TreePIR + Spiral's server time in Spiral's query expansion
 for i, (c, p, h, _) in enumerate(SIZES):
-    primary(T, i, job("primary", c, "primary-v2"), p, h)
+    primary(T, i, "primary-v3", p, h)
+    primary(V2, i, job("primary", c, "primary-v2"), p, h)
     core(T, i, c, h, lambda run: job(run, c, "{}-ep3"))
     if c != "8gb":
         primary(G, i, "primary", p, h)
@@ -197,19 +200,27 @@ def online(k):
 lw = [x["tp"] / y["tp"] for x, y in zip(T[OURS], T["Layerwise tuned"])]
 std = ratios(OURS, "Standard OnionPIR (single block)")
 lift = {k: [x["tp"] / y["tp"] - 1 for x, y in zip(T[k][:-1], G[k][:-1])] for k in GADGET}
-ours_moved = [x["tp"] / y["tp"] - 1 for x, y in zip(T[OURS][:-1], G[OURS][:-1])]
+ours_moved = [x["tp"] / y["tp"] - 1 for x, y in zip(V2[OURS][:-1], G[OURS][:-1])]
+aligned = [x["tp"] / y["tp"] - 1 for x, y in zip(T[OURS], V2[OURS])]
 via = ratios("VIA + PBC", OURS)
 CAL = {}
 for run in RUNS.iterdir():
     d = load(run / "outputs/calibration/1gb/standard.json")
     if d:
         CAL[run.name] = d["cases"][0]["server_compute_ms"]
-cal_pair = CAL["core-slf-8g"] / CAL["primary-8g"] - 1
+cal_pair = CAL["core-slf-8g"] / CAL["primary-v3"] - 1
+same_node8 = len({(RUNS / r / "metadata/node.txt").read_text().strip() for r in ("core-slf-8g", "primary-v3")}) == 1
 F = [
     f"- **Ours against Layerwise tuned**, both on ep3-s32: {', '.join(f'{r:.2f}x' for r in lw)} from 256 MiB to 8 GiB. "
-    f"Layerwise is faster at 8 GiB; it makes {T['Layerwise tuned'][-1]['note'].split(',')[0]} and sends "
-    f"{kb(online('Layerwise tuned')[-1])} online per path against our {kb(online(OURS)[-1])}. The two 8 GiB jobs "
-    f"ran on different nodes whose calibration rows differ by {100 * abs(cal_pair):.1f}%.",
+    f"{'Layerwise is faster at 8 GiB; it' if lw[-1] < 1 else 'At 8 GiB Layerwise'} makes "
+    f"{T['Layerwise tuned'][-1]['note'].split(',')[0]} and sends "
+    f"{kb(online('Layerwise tuned')[-1])} online per path against our {kb(online(OURS)[-1])}. "
+    + ("The two 8 GiB jobs ran on the same node." if same_node8 else
+       f"The two 8 GiB jobs ran on different nodes whose calibration rows differ by {100 * abs(cal_pair):.1f}%."),
+    f"- **Aligned tree scan**: rerun on one node (primary-v3), Ours moves from "
+    f"{span([x['tp'] for x in V2[OURS] if x], lambda t: f'{t:.0f}')} to "
+    f"{span([x['tp'] for x in over_row(OURS)], lambda t: f'{t:.0f}')} MB/s against the matrix build, "
+    f"{span(aligned, lambda x: f'{100 * x:+.1f}%', ' to ')} by size.",
     f"- **Node consistency**: the Standard 1 GiB calibration row spans {min(CAL.values()):.1f}–{max(CAL.values()):.1f} ms "
     f"({100 * (max(CAL.values()) / min(CAL.values()) - 1):.1f}%) over {len(CAL)} jobs on "
     f"{len({(RUNS / r / 'metadata/node.txt').read_text().strip() for r in CAL})} nodes.",
@@ -238,7 +249,7 @@ F = [
     f"at the same speed ({span(ratios('Layerwise + merging + packed query', 'Layerwise + response merging'), lambda x: f'{x:.2f}x')}).",
 ]
 
-L = ["# Campus Cluster results (Sept 22-25 2026)\n",
+L = ["# Campus Cluster results (Sept 22-26 2026)\n",
      "Nodes ccc0400-ccc0415 (Xeon Platinum 8358, 2 x 32 cores, 251 GiB), whole-node exclusive jobs, one thread pinned to "
      "CPU 0 with memory on node 0; every job checks the node configuration and repeats a Standard 1 GiB calibration row. "
      "Seed-7 leaf schedule; logical database = full tree, (2^(H+1)-1) x 32 B; throughput = logical bytes / mean server "
@@ -250,10 +261,18 @@ L += table("Ablation: the primary algorithm's steps on the Layerwise baseline (M
 L.append("\nLayerwise + response merging adds the primary algorithm's rotation and MLWE merge on the transposed layout "
          "with one shared gamma selector; the packed variant also packs every level's query into shared expansion "
          "slots. Both reuse the primary algorithm's selectors, so they are ablation steps, not baselines.")
+L.append("\n## Ours before and after the aligned tree scan (MB/s)\n")
+L += ["| Build " + HDR, "|---|" + "---:|" * NS,
+      "| Matrix build (primary-v2, primary-8g) | " + " | ".join(f"{x['tp']:.0f}" for x in V2[OURS]) + " |",
+      "| Aligned tree scan (primary-v3) | " + " | ".join(f"{x['tp']:.0f}" for x in T[OURS]) + " |"]
+L.append("\nThe aligned build computes the m32 alpha pyramid's coarse rows in the u32 domain, allocates the tree's m32 "
+         "database, pyramid rows and scan outputs on 64-byte boundaries (glibc starts large std::vector buffers 16 bytes "
+         "past a page, so every 64-byte AVX-512 load spanned two cache lines) and scans every AlphaBeta level in one "
+         "pass. The baselines' first-dimension buffers were already 64-byte aligned, so their rows are unchanged.")
 L.append("\n## Selector gadget (MB/s, exact EP6 / ep3-s32)\n")
 L += ["| Scheme " + "| " + " | ".join(s[3] for s in SIZES[:-1]) + " |", "|---|" + "---:|" * (NS - 1)]
 for k in [OURS] + GADGET:
-    old, new = G.get(k), T.get(k)
+    old, new = G.get(k), (V2 if k == OURS else T).get(k)
     if old and new:
         L.append(f"| {k} | " + " | ".join("—" if not x or not y else f"{x['tp']:.0f} / {y['tp']:.0f}"
                                            for x, y in zip(old[:-1], new[:-1])) + " |")

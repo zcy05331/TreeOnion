@@ -1,4 +1,4 @@
-# Campus Cluster matrix, Sept 22-25 2026
+# Campus Cluster matrix, Sept 22-26 2026
 
 Remote root `/u/zcy331/onionpir-icc-20260922T1837Z` on the Illinois Campus
 Cluster; branch `codex/icc-matrix-via-spiral`. `RESULTS-ICC.md` is the report,
@@ -48,3 +48,38 @@ commit.
   leaves from the `treepir` and `treepir-8g` formal results (linked under
   `treepir-formal/`) and serves one color at a time; its 8 GiB peak was
   4.4 GiB.
+- `primary-v3` (Sept 26) reran Ours at every size on one node on main
+  e205ef5, the aligned tree scan: the m32 alpha pyramid's coarse rows built
+  in the u32 domain, the tree's m32 buffers on 64-byte boundaries and every
+  AlphaBeta level scanned in one pass. The synced tree is c77b45a, main plus
+  the TreePIR + Spiral commits with the same C++. The report's Ours row comes
+  from it; `primary-v2` and `primary-8g` remain for the before/after table and
+  the gadget comparison.
+
+## Same-node A/Bs behind primary-v3
+
+Under `$BASE/ab/`, one node each; raw results are kept locally in `ab/`
+(untracked) with `ab/analyze.py`. Ours times in ms per path.
+
+- `scan-20260925` (job 10884055, ccc0404): the stacked scan saved 2% at
+  256 MiB and 1 GiB and cost 1.8% at 4 GiB, where finalize rereads the
+  stacked output; MADV_HUGEPAGE changed nothing, since the nodes run THP
+  `always` and Ours' memory was already 84-86% huge pages; the u32 pyramid
+  saved 6-11 ms per query.
+- `align-20260926` (job 10898285, ccc0408): 64-byte alignment is the gain.
+  glibc starts large std::vector buffers 16 bytes past a page, so every
+  64-byte AVX-512 load of the tree database spanned two cache lines;
+  Standard's buffers were already aligned.
+
+  | Build | 256 MiB | 1 GiB | 4 GiB | 8 GiB |
+  |---|---:|---:|---:|---:|
+  | matrix build | 388.2 | 1031.5 | 3313.1 | 6465.4 |
+  | + u32 pyramid | 384.6 | 970.5 | 3328.7 | — |
+  | + 64-byte aligned m32 buffers | 363.0 | 906.5 | 2982.9 | 5775.1 |
+  | + stacked AlphaBeta scan (main) | 353.0 | 879.7 | 2978.4 | 5760.0 |
+
+  Ours' first-dimension scan now costs 1.45-1.47 us per plaintext against
+  Standard's 1.49 us at 1-8 GiB.
+- `align-g2-20260926` (job 10899862, ccc0410): on the aligned build G2/P11
+  against G8/P3 is +0.9% at 4 GiB and -3.3% at 8 GiB (5551.1 against 5740.5
+  ms, Layerwise 6055.9); at 1 GiB it is +21% (`align-20260926`).
