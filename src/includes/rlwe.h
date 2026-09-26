@@ -136,6 +136,21 @@ void encrypt_zero_rns(const RlweSk &sk, size_t N,
                       double sigma, ChaChaRng &rng,
                       RlweCt &ct, bool ntt_form = false);
 
+// The same encryption with the uniform component a drawn from `mask_rng` and
+// the error from `error_rng`. A seeded query passes a generator keyed by its
+// public seed as `mask_rng`, so the receiver can regenerate a
+// (sample_uniform_rns) and the ciphertext travels as (seed, c0). Passing one
+// generator for both reproduces the single-generator stream exactly.
+void encrypt_zero_rns(const RlweSk &sk, size_t N,
+                      const std::vector<uint64_t> &qs,
+                      double sigma, ChaChaRng &mask_rng, ChaChaRng &error_rng,
+                      RlweCt &ct, bool ntt_form = false);
+
+// N uniform coefficients per limb, limb-major, in the order encrypt_zero_rns
+// draws its uniform component.
+void sample_uniform_rns(uint64_t *out, size_t N,
+                        const std::vector<uint64_t> &qs, ChaChaRng &rng);
+
 // BFV encryption: encrypt_zero + add round(Q*m[i]/t) to c0[i]。
 // Delta≈Q/t；K=2 时必须先在 composite Q 上形成一致的 scale，再把
 // 同一个整数表示投影到每个 RNS limb，不能逐 limb 独立近似 Delta。

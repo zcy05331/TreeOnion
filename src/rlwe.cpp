@@ -227,25 +227,38 @@ RlweSk gen_secret_key_rns(size_t N, const std::vector<uint64_t> &qs,
   return sk;
 }
 
+void sample_uniform_rns(uint64_t *out, size_t N,
+                        const std::vector<uint64_t> &qs, ChaChaRng &rng) {
+  // RNS ciphertext polynomials are limb-major:
+  // [q0 的 N 个 coefficients][q1 的 N 个 coefficients]...
+  for (size_t k = 0; k < qs.size(); k++) {
+    utils::sample_uniform_poly(out + k * N, N, qs[k], rng);
+  }
+}
+
 void encrypt_zero_rns(const RlweSk &sk, size_t N,
                       const std::vector<uint64_t> &qs,
                       double sigma, ChaChaRng &rng,
+                      RlweCt &ct, bool ntt_form) {
+  encrypt_zero_rns(sk, N, qs, sigma, rng, rng, ct, ntt_form);
+}
+
+void encrypt_zero_rns(const RlweSk &sk, size_t N,
+                      const std::vector<uint64_t> &qs,
+                      double sigma, ChaChaRng &mask_rng, ChaChaRng &error_rng,
                       RlweCt &ct, bool ntt_form) {
   const size_t K = qs.size();
   ct.c0.assign(N * K, 0);
   ct.c1.assign(N * K, 0);
 
-  // Per-limb uniform a. RNS ciphertext polynomials are limb-major:
-  // [q0 的 N 个 coefficients][q1 的 N 个 coefficients]...
-  for (size_t k = 0; k < K; k++) {
-    utils::sample_uniform_poly(ct.c1.data() + k * N, N, qs[k], rng);
-  }
+  // Per-limb uniform a.
+  sample_uniform_rns(ct.c1.data(), N, qs, mask_rng);
 
   // Shared signed e, reduced per limb.
   // 同一个 signed Gaussian error 被投影到每个 limb；符号约定仍是
   // c0_k=-(a_k*sk_k+e_k)，decrypt phase_k=c0_k+c1_k*sk_k。
   std::vector<uint64_t> e(N * K);
-  sample_gaussian_rns(e.data(), N, qs, sigma, rng);
+  sample_gaussian_rns(e.data(), N, qs, sigma, error_rng);
 
   // c0_k = -(a_k * sk_k + e_k) mod q_k.
   std::vector<uint64_t> a_ntt(N);

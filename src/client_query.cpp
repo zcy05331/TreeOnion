@@ -208,3 +208,15 @@ RlweCt PirClient::fresh_zero_ct() {
   encrypt_zero_rns(rlwe_sk_, N, qs, sigma, rng_, ct, /*ntt_form=*/false);
   return ct;
 }
+
+RlweCt PirClient::fresh_zero_ct_seeded(QuerySeed &seed) {
+  constexpr size_t N = DBConsts::PolyDegree;
+  const auto &qs_arr = pir_params_.get_rns_mods();
+  const std::vector<uint64_t> qs(qs_arr.begin(), qs_arr.end());
+  const double sigma = pir_params_.get_noise_std_dev();
+  for (uint32_t &word : seed) word = static_cast<uint32_t>(rng_());
+  ChaChaRng mask_rng(seed);
+  RlweCt ct;
+  encrypt_zero_rns(rlwe_sk_, N, qs, sigma, mask_rng, rng_, ct, /*ntt_form=*/false);
+  return ct;
+}
