@@ -14,6 +14,7 @@
 #include <cstdlib>
 #include <fstream>
 #include <limits>
+#include <map>
 #include <numeric>
 #include <string_view>
 
@@ -142,7 +143,7 @@ void PirTest::test_tree_multiplane_benchmark() {
   server.set_client_session_keys(client.get_client_id(), keys);
   const double session_setup_ms = elapsed_ms(start);
   start = Clock::now();
-  const auto db = preprocess(params, source, scheme);
+  auto db = preprocess(params, source, scheme);
   const double setup_ms = elapsed_ms(start);
 
   size_t plaintexts = 0, fold_cmux = 0, rotate_cmux = 0, packing_keyswitches = 0;
@@ -163,6 +164,18 @@ void PirTest::test_tree_multiplane_benchmark() {
   int min_budget = std::numeric_limits<int>::max();
   const char *noise_stats_path = std::getenv("TREE_MULTIPLANE_NOISE_STATS");
   const bool collect_noise = noise_stats_path && *noise_stats_path;
+  // The raw error of every payload coordinate per measured query, for the
+  // joint error distribution (correlations within one response).
+  const char *noise_dump_path = std::getenv("TREE_MULTIPLANE_NOISE_DUMP");
+  const bool dump_noise = noise_dump_path && *noise_dump_path;
+  std::vector<std::vector<int64_t>> noise_dump;
+  std::vector<size_t> dump_leaves;
+  // Updated entries replace the synthetic ones; every check reads the current tree.
+  std::map<std::pair<size_t, size_t>, tree_entry_codec::EntryBits> overrides;
+  const EntrySource current = [&](size_t level, size_t node) {
+    const auto it = overrides.find({level, node});
+    return it == overrides.end() ? source(level, node) : it->second;
+  };
   NoiseStats payload_noise, other_noise;
   // Per level-plane item moments: count, sum, sum of squares, max |error|.
   std::vector<std::array<double, 4>> item_noise(items, {0.0, 0.0, 0.0, 0.0});
@@ -199,6 +212,7 @@ void PirTest::test_tree_multiplane_benchmark() {
     // Verify every response coefficient, including zero padding and unused
     // residues. Byte-only checks would miss noise failures in unused slots.
     require_test(response.small_q, "multiplane benchmark requires small-q responses");
+    std::vector<int64_t> dump_row(dump_noise && measured ? items * g : 0, 0);
     require_test(response.chunks.size() == bounds.size() &&
                      response.item_offsets.size() == items,
                  "multiplane response shape mismatch");
@@ -214,7 +228,7 @@ void PirTest::test_tree_multiplane_benchmark() {
         const size_t item = first + local;
         const size_t level = item / planes;
         const size_t plane = item % planes;
-        const auto entry = source(level, leaf >> (L - level));
+        const auto entry = current(level, leaf >> (L - level));
         const auto digits = tree_entry_codec::encode_entry(entry, params.codec);
         const size_t offset = tree_packing::packed_residue_offset(
             local, tree.rho, packing);
@@ -228,6 +242,13 @@ void PirTest::test_tree_multiplane_benchmark() {
         }
       }
       require_test(decoded.data == expected, "multiplane full response plaintext mismatch");
+      if (!dump_row.empty()) {
+        const std::vector<int64_t> errors = client.decrypt_mod_q_errors(response.chunks[chunk]);
+        for (size_t i = 0; i < n; ++i)
+          if (slot_item[i] >= 0)
+            dump_row[static_cast<size_t>(slot_item[i]) * g +
+                     static_cast<size_t>(slot_digit[i])] = errors[i];
+      }
       if (collect_noise) {
         const std::vector<int64_t> errors = client.decrypt_mod_q_errors(response.chunks[chunk]);
         for (size_t i = 0; i < n; ++i) {
@@ -247,10 +268,14 @@ void PirTest::test_tree_multiplane_benchmark() {
     }
     require_test(path.size() == L + 1, "multiplane path length mismatch");
     for (size_t level = 0; level <= L; ++level)
-      require_test(path[level] == source(level, leaf >> (L - level)),
+      require_test(path[level] == current(level, leaf >> (L - level)),
                    "multiplane entry byte mismatch");
     sample.correct = true;
     if (!measured) return;
+    if (!dump_row.empty()) {
+      noise_dump.push_back(std::move(dump_row));
+      dump_leaves.push_back(leaf);
+    }
     sample.stages_ms["query_expand"] = tree_profile_json::ns_to_ms(unpack_timing.query_expand);
     sample.stages_ms["selector_completion"] = tree_profile_json::ns_to_ms(unpack_timing.selector_completion);
     for (size_t k = 0; k < tree_profile_json::kScanTimerSections.size(); ++k)
@@ -265,6 +290,44 @@ void PirTest::test_tree_multiplane_benchmark() {
   };
   for (size_t i = 0; i < warmups; ++i) run_trial(schedule.warmup_leaf_indices[i], false, i);
   for (size_t i = 0; i < trials; ++i) run_trial(schedule.measured_leaf_indices[i], true, i);
+
+  // Appending a leaf without deepening the tree replaces the leaf and its L
+  // ancestors. Each update rewrites those L + 1 entries of a measured leaf in
+  // the preprocessed database, and a query for that leaf must return them.
+  const char *env_updates = std::getenv("TREE_MULTIPLANE_UPDATE_TRIALS");
+  const size_t update_trials = env_updates && *env_updates
+                                   ? positive_env("TREE_MULTIPLANE_UPDATE_TRIALS", 1)
+                                   : 0;
+  require_test(update_trials == 0 || (entry_fill == "synthetic" && entry_bits == 256),
+               "update trials need synthetic 256-bit entries");
+  std::vector<double> update_ms;
+  for (size_t k = 0; k < update_trials; ++k) {
+    const size_t leaf = schedule.measured_leaf_indices[k % trials];
+    std::vector<tree_entry_codec::EntryBits> old_entries, new_entries;
+    for (size_t level = 0; level <= L; ++level) {
+      const size_t node = leaf >> (L - level);
+      old_entries.push_back(current(level, node));
+      auto bytes = synthetic_tree_node_bytes(level, node);
+      bytes[0] ^= static_cast<uint8_t>(k + 1);
+      bytes[31] ^= 0xA5;
+      new_entries.push_back(tree_entry_codec::entry_from_bytes(bytes, entry_bits));
+    }
+    const auto tick = Clock::now();
+    for (size_t level = 0; level <= L; ++level)
+      update_entry(db, params, scheme, level, leaf >> (L - level), old_entries[level],
+                   new_entries[level]);
+    update_ms.push_back(elapsed_ms(tick));
+    for (size_t level = 0; level <= L; ++level)
+      overrides[{level, leaf >> (L - level)}] = new_entries[level];
+    run_trial(leaf, false, trials + k);
+  }
+  double update_mean = 0.0, update_sd = 0.0, update_max = 0.0;
+  if (!update_ms.empty()) {
+    update_mean = std::accumulate(update_ms.begin(), update_ms.end(), 0.0) / update_ms.size();
+    for (const double v : update_ms) update_sd += (v - update_mean) * (v - update_mean);
+    update_sd = update_ms.size() > 1 ? std::sqrt(update_sd / (update_ms.size() - 1)) : 0.0;
+    update_max = *std::max_element(update_ms.begin(), update_ms.end());
+  }
 
   const size_t helper_bytes = scheme.with_query_shape({1, 0, key_height})
                                  .get_bv_galois_key_size(true) + scheme.get_gsw_key_size(true);
@@ -300,6 +363,11 @@ void PirTest::test_tree_multiplane_benchmark() {
        {"packed_plaintexts", std::to_string(plaintexts)},
        {"path_entries", std::to_string(L + 1)}, {"response_items", std::to_string(items)},
        {"session_setup_ms", std::to_string(session_setup_ms)},
+       {"update_trials", std::to_string(update_trials)},
+       {"update_plaintexts_per_append", std::to_string(planes * (L + 1))},
+       {"update_ms_mean", std::to_string(update_mean)},
+       {"update_ms_sd", std::to_string(update_sd)},
+       {"update_ms_max", std::to_string(update_max)},
        {"min_noise_budget_bits", std::to_string(min_budget)},
        {"max_noise", std::to_string(max_noise)},
        {"acceptance_policy", "decryption_correctness_only; noise margins are diagnostic"}});
@@ -336,6 +404,28 @@ void PirTest::test_tree_multiplane_benchmark() {
     }
     out << "]}\n";
   }
+  if (dump_noise) {
+    std::ofstream out(noise_dump_path);
+    require_test(static_cast<bool>(out), "cannot open TREE_MULTIPLANE_NOISE_DUMP output");
+    out << "{\"leaf_count\": " << tree.N << ", \"N0\": " << N0 << ", \"g\": " << g
+        << ", \"planes\": " << planes << ", \"items\": " << items
+        << ", \"small_q\": " << scheme.get_small_q()
+        << ", \"plain_mod\": " << scheme.get_plain_mod()
+        << ", \"entry_fill\": \"" << entry_fill << "\""
+        << ", \"layout\": \"item = level * planes + plane; row index = item * g + digit\""
+        << ", \"leaves\": [";
+    for (size_t i = 0; i < dump_leaves.size(); ++i) out << (i ? "," : "") << dump_leaves[i];
+    out << "], \"errors\": [";
+    for (size_t i = 0; i < noise_dump.size(); ++i) {
+      out << (i ? ",\n[" : "\n[");
+      for (size_t j = 0; j < noise_dump[i].size(); ++j) out << (j ? "," : "") << noise_dump[i][j];
+      out << "]";
+    }
+    out << "]}\n";
+  }
+  if (update_trials)
+    BENCH_PRINT("path update: " << update_trials << " appends of " << planes * (L + 1)
+                << " plaintexts, mean " << update_mean << " ms (sd " << update_sd << ")");
   BENCH_PRINT("old gamma/alpha/beta h1: g=" << g << " P=" << planes << " N0=" << N0
               << " b=" << tree.b << " server=" << mean_ms << " ms; "
               << (static_cast<double>(logical_bytes) / (1 << 20)) * 1000 / mean_ms

@@ -1,5 +1,7 @@
 #include "tree_multiplane.h"
+#include "utils.h"
 
+#include <algorithm>
 #include <bit>
 #include <span>
 #include <stdexcept>
@@ -119,6 +121,53 @@ Database preprocess(const Params &params, const EntrySource &source,
     db.planes.push_back(std::move(out));
   }
   return db;
+}
+
+void update_entry(Database &db, const Params &params, const PirParams &scheme,
+                  size_t level, size_t node, const EntryBits &old_entry,
+                  const EntryBits &new_entry) {
+  constexpr size_t N = DBConsts::PolyDegree;
+  const CompositeRnsTables &crt = scheme.get_composite_rns();
+  require(crt.enabled, "updates need the m32 database");
+  const TreePirParams &tree = params.tree;
+  require(level <= tree.L && node < (size_t{1} << level), "node is out of range");
+  const LevelPlan &plan = db.planes.front().plans[level];
+  // Node j sits in slot u = j / R of plaintext p = j mod R, digit d at u + d*rho.
+  const size_t p = node % plan.R, u = node / plan.R;
+  const auto [rows, cols] = level_m32_shape(plan, tree);
+  const bool alpha_beta = plan.select_case == SelectCase::AlphaBeta;
+  const size_t row = alpha_beta ? p % rows : 0, col = alpha_beta ? p / rows : p;
+  const auto old_digits = encode_entry(old_entry, params);
+  const auto new_digits = encode_entry(new_entry, params);
+  const uint64_t q = scheme.get_rns_mods()[0];
+  std::vector<uint64_t> delta(N);
+  for (size_t plane = 0; plane < params.codec.plane_count; ++plane) {
+    std::fill(delta.begin(), delta.end(), 0);
+    for (size_t d = 0; d < tree.g; ++d)
+      delta[u + d * tree.rho] = (new_digits[plane][d] + q - old_digits[plane][d]) % q;
+    utils::ntt_fwd(delta.data(), N, q);
+    uint32_t *lo, *hi;
+    size_t total_rows, first_row;
+    if (alpha_beta) {
+      lo = db.stacked.lo.data();
+      hi = db.stacked.hi.data();
+      total_rows = db.stacked.rows;
+      first_row = db.stacked.first_row[plane][level];
+    } else {
+      TreeLevelDatabaseM32 &view = db.planes[plane].m32[level];
+      lo = view.lo.data();
+      hi = view.hi.data();
+      total_rows = view.rows;
+      first_row = 0;
+    }
+    // The m32 values are the NTT values mod q1 and mod q2; NTT is linear and
+    // q1, q2 divide q, so adding the reduced difference updates them exactly.
+    for (size_t coeff = 0; coeff < N; ++coeff) {
+      const size_t at = (coeff * total_rows + first_row + row) * cols + col;
+      lo[at] = static_cast<uint32_t>((lo[at] + delta[coeff] % crt.q1) % crt.q1);
+      hi[at] = static_cast<uint32_t>((hi[at] + delta[coeff] % crt.q2) % crt.q2);
+    }
+  }
 }
 
 }  // namespace tree_multiplane
