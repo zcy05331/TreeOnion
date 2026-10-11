@@ -22,6 +22,8 @@ typedef unsigned __int128 uint128_t;
 //   CONFIG_N2048_K1        K=1, N=2048, log Q ≈ 60.
 //   CONFIG_N2048_K1_COMP   K=1 composite split (q1*q2 ≈ 2^58, 29+29).
 //   CONFIG_N2048_K1_COMP_T257 same composite arithmetic, 8-bit payloads at t=257.
+//   CONFIG_N2048_K1_COMP_S128 composite split with q1*q2 about 2^52 (26+26) and
+//                          8-bit payloads at t=257, for a 128-bit estimate.
 //   CONFIG_N2048_K2_MP     K=2, N=2048, log Q ≈ 58.
 //   CONFIG_N4096_K2_MP     K=2, N=4096, log Q ≈ 120.
 //
@@ -37,6 +39,7 @@ typedef unsigned __int128 uint128_t;
 // into (mod q1, mod q2) for 32x32->64 multiplies.
 #define CONFIG_N2048_K1_COMP     3
 #define CONFIG_N2048_K1_COMP_T257 4
+#define CONFIG_N2048_K1_COMP_S128 5
 #ifndef ACTIVE_CONFIG
 #define ACTIVE_CONFIG CONFIG_N2048_K1
 #endif
@@ -93,7 +96,8 @@ namespace DBConsts {
   constexpr bool CompositeFirstDim = false;
   constexpr std::array<size_t, 2> FirstDimRNSMods = {0, 0};
 
-#elif ACTIVE_CONFIG == CONFIG_N2048_K1_COMP || ACTIVE_CONFIG == CONFIG_N2048_K1_COMP_T257
+#elif ACTIVE_CONFIG == CONFIG_N2048_K1_COMP || ACTIVE_CONFIG == CONFIG_N2048_K1_COMP_T257 || \
+    ACTIVE_CONFIG == CONFIG_N2048_K1_COMP_S128
   // K=1 composite paper path: RnsMods describes one logical q≈2^58, while
   // FirstDimRNSMods supplies the real 29-bit CRT limbs used only inside the
   // first-dimension matmul. This keeps Algorithm 1-4 on the single-mod layout
@@ -114,14 +118,16 @@ namespace DBConsts {
 #endif
   constexpr size_t TREE_HEIGHT  = 10;
   // The t257 comparison changes only plaintext capacity (8-bit digits).
-  constexpr size_t PlainMod     = ACTIVE_CONFIG == CONFIG_N2048_K1_COMP_T257 ? 9 : 13;
+  constexpr size_t PlainMod     = ACTIVE_CONFIG == CONFIG_N2048_K1_COMP ? 13 : 9;
   constexpr size_t SmallQWidth  = 22;
   // Logical (single) RNS view: rns_mods_ holds {q1*q2}, ~58 bits. The 58 here
   // is the bit width passed to inter_coeff_t / db_coeff_t selectors; actual
   // modulus is computed in PirParams::init_composite_rns.
-  constexpr std::array<size_t, 1> RnsMods = {58};
+  constexpr bool S128 = ACTIVE_CONFIG == CONFIG_N2048_K1_COMP_S128;
+  constexpr std::array<size_t, 1> RnsMods = {S128 ? size_t{52} : size_t{58}};
   constexpr bool CompositeFirstDim = true;
-  constexpr std::array<size_t, 2> FirstDimRNSMods = {29, 29};
+  constexpr std::array<size_t, 2> FirstDimRNSMods = {S128 ? size_t{26} : size_t{29},
+                                                     S128 ? size_t{26} : size_t{29}};
 
 #elif ACTIVE_CONFIG == CONFIG_N2048_K2_MP
   // K=2 MP comparison cell: two real NTT primes are generated from {29, 29}
