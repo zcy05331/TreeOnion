@@ -1,9 +1,9 @@
-# Onion Merkle PIR
+# OnionTreePIR
 
-Research prototype for privately retrieving a tree path. The primary algorithm
-uses h=1 and the original `(gamma, alpha, beta)` index layout with multiple
-planes. See the [source map](src/README.md) and [script guide](scripts/README.md)
-for implementation boundaries.
+Single-server PIR that retrieves a whole root-to-leaf path of a binary tree,
+such as a Merkle proof, with one query and one response. It builds on
+OnionPIRv2 and keeps its ring, moduli, error sampler and first-dimension
+kernel. The [source map](src/README.md) lists where each part lives.
 
 ## Primary algorithm
 
@@ -35,33 +35,6 @@ query buffers support a matched implementation comparison. Correctness checks
 cover the complete response plaintext, including padding; noise margins are
 diagnostic and do not impose a one-bit admission threshold.
 
-## Baselines
-
-The comparison contains these baseline families:
-
-| Baseline | Implementation |
-|---|---|
-| StandardOnionPIR | Original single-block OnionPIRv2 |
-| Layerwise tuned | One PIR per tree level, using measured layout tuning |
-| Cuckoo batch tuned | Cuckoo batch placement with measured layout tuning |
-| TreePIR | Colored-path baseline with VBPIR/SealPIR backend tuning |
-| TreePIR + Spiral | TreePIR's color buckets with Spiral as the per-color PIR |
-| Flat | One whole-tree PIR per requested path level |
-| Respire | Canonical tree-path workload on Respire batch PIR |
-| Spiral + PBC | Spiral per bucket of the Cuckoo baseline's PBC instance |
-| KsPIR + PBC | KsPIR per bucket of the same PBC instance |
-| VIA-B | VIA-B batch PIR, written from the paper |
-| VIA + PBC | VIA per bucket of the same PBC instance |
-
-Layerwise + response merging and its packed-query variant reuse the primary
-algorithm's shared selectors and merge, so they are ablation steps rather than
-baselines.
-
-StandardOnionPIR retrieves one plaintext block; it is a speed reference rather
-than a full-path protocol. The primary and Respire workloads include the root;
-the other baselines retrieve the root-excluded Merkle path. Reports retain
-these useful-node counts and distinguish measured bytes from modeled bytes.
-
 ## Build and test
 
 Use C++20 and Intel HEXL 1.2.6. Supply its CMake package path explicitly:
@@ -73,45 +46,12 @@ cmake --build build -j8
 ./build/Onion-PIR --test all --experiments 3 --warmup 1
 ```
 
-The default build retains exact EP6 arithmetic for the core baselines. The
-primary performance configuration uses `-DPIR_EP_ROWS=3 -DPIR_EP_LOW_BITS=32`
-with exact KS8; validate its encrypted primary tests before measuring it.
-The external adapters build separately against their pinned sources; their
-build and smoke gates are described in their adapter READMEs. After preparing
-these dependencies, `scripts/run_regression.sh` runs the core and integrated
-script gates, including an encrypted Respire smoke. Full Python discovery
-additionally requires `RESPIRE_PATH_ADAPTER_BIN` to name the built Respire
-adapter.
+`--test all` runs the correctness suite. `--test tree_multiplane` runs the
+scheme end to end on a small tree, and `--test merkle_sha256_e2e` retrieves
+SHA-256 Merkle proofs through the serialized query and response and
+recomputes the trusted root.
 
-For a single 1 GiB-tier primary run with 32-byte entries:
-
-```bash
-TREE_MULTIPLANE_N0=512 TREE_MULTIPLANE_PACKING=mlwe \
-  ./build/Onion-PIR --test tree_multiplane_bench --leaf-count 16777216 \
-  --experiments 50 --warmup 3 --trial-seed 7 --benchmark-json outputs/primary.json
-```
-
-For a layout-fixed N0 sweep:
-
-```bash
-python3 scripts/benchmark_tree_multiplane.py --binary build/Onion-PIR \
-  --output-dir outputs/primary-n0 --leaf-count 16777216 --entry-bits 256 \
-  --n0-values 128,256,512,1024 --experiments 8 --warmup 3 --trial-seed 7
-```
-
-## Experiment policy
-
-The current matrix uses 32-byte entries at 256 MiB, 512 MiB, 1 GiB, 2 GiB and
-4 GiB, corresponding to leaf heights 22 to 26; 8 GiB (height 27) runs on request. Normally use 50 measured queries;
-Cuckoo batch, TreePIR and Flat use 8. Each point has 3 warmups and seed 7.
-Record complete server latency, stage profiling, query/response bytes, setup,
-peak memory, hardware and source revision. A fresh host requires fresh timings.
-The serial runners wait for other computation to be idle and never signal it.
-Resource-infeasible points are reported explicitly rather than counted as runs.
-
-## Archived experiments
-
-Earlier algorithms, campaign scripts and raw results remain in
-[`codex/archive-full-pir-20260920`](https://github.com/zcy05331/OnionMerklePIR/tree/codex/archive-full-pir-20260920).
-They are not active baseline implementations in main. Current artifacts belong
-under `outputs/`; private drafts and `docs/` stay outside published source.
+The default build uses the exact EP6 selector gadget. The paper's
+configuration adds `-DPIR_EP_ROWS=3 -DPIR_EP_LOW_BITS=32`, a three-row
+approximate gadget with exact KS8. The 128-bit configuration is
+`-DACTIVE_CONFIG=CONFIG_N2048_K1_COMP_S128 -DPIR_EP_ROWS=3 -DPIR_EP_LOW_BITS=26`.
