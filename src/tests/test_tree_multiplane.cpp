@@ -86,6 +86,34 @@ std::vector<EntryBits> answer_path(const tree_multiplane::Database &db,
   return tree_multiplane::extract(response, client, params);
 }
 
+// Rewrites every node on the path to `leaf` in place. The leaf then decodes
+// the new nodes, and its sibling decodes the new ancestors next to its own
+// unchanged leaf.
+void require_path_update(tree_multiplane::Database &db, PirClient &client,
+                         PirServer &server, const PirParams &scheme,
+                         const tree_multiplane::Params &params,
+                         const tree_multiplane::EntrySource &source,
+                         size_t entry_bits, size_t leaf,
+                         tree_packing::ResponsePacking packing) {
+  const size_t L = params.tree.L;
+  std::vector<EntryBits> updated(L + 1);
+  for (size_t level = 0; level <= L; ++level) {
+    const size_t node = leaf >> (L - level);
+    updated[level] =
+        tree_entry_test::synthetic_entry(entry_bits, level, node, /*salt=*/1);
+    tree_multiplane::update_entry(db, params, scheme, level, node,
+                                  source(level, node), updated[level]);
+  }
+  require_test(answer_path(db, client, server, scheme, params, leaf, packing) ==
+                   updated,
+               "updated path decodes the new nodes");
+  std::vector<EntryBits> sibling = updated;
+  sibling[L] = source(L, leaf ^ 1);
+  require_test(answer_path(db, client, server, scheme, params, leaf ^ 1,
+                           packing) == sibling,
+               "sibling path decodes the updated ancestors");
+}
+
 // Every AlphaBeta level of every plane: finishing its rows of the stacked scan
 // gives the same ciphertext, bit for bit, as scanning its own m32 view.
 void require_stacked_scan_matches_levels(
@@ -142,7 +170,7 @@ void exercise_e2e(tree_packing::ResponsePacking packing) {
   server.set_client_session_keys(client.get_client_id(), keys);
   const tree_multiplane::EntrySource source =
       [&](size_t level, size_t node) { return entry_for(entry_bits, level, node); };
-  const tree_multiplane::Database db =
+  tree_multiplane::Database db =
       tree_multiplane::preprocess(params, source, scheme);
   require_test(db.planes.size() == params.codec.plane_count,
                "preprocess builds one tree per plane");
@@ -180,6 +208,13 @@ void exercise_e2e(tree_packing::ResponsePacking packing) {
       answer_path(db, client, server, scheme, params, repeated_leaf, packing);
   require_test(first == second,
                "fresh query/session randomness preserves decoded path");
+
+  // update_entry patches the m32 database, which only the composite configs
+  // build.
+  if (scheme.get_composite_rns().enabled) {
+    require_path_update(db, client, server, scheme, params, source, entry_bits,
+                        repeated_leaf, packing);
+  }
 }
 
 }  // namespace
