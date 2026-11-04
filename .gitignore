@@ -30,13 +30,8 @@ claude_resp/
 codex_resp/
 .*
 
-# Dedicated generated benchmark builds and transient result artifacts.
+# Dedicated generated builds.
 build-*/
-!outputs/
-outputs/*
-!outputs/merkle_baselines/
-outputs/merkle_baselines/*
-!outputs/merkle_baselines/.gitkeep
 overleaf/
 
 # Paper sources, backups and LaTeX build products live beside the code but

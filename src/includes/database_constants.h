@@ -13,12 +13,11 @@ typedef unsigned __int128 uint128_t;
 // ----------------------------------------------------------------------------
 //
 // [论文参数] 2025 论文评测使用 n=2048、log q≈58、log t=13、
-// log q'=22、σ=2.55。run.py 默认选择 CONFIG_N2048_K1_COMP，
-// 因而该 config 是阅读 Algorithm 1-4 时的主参考路径。
+// log q'=22、σ=2.55。CONFIG_N2048_K1_COMP 是阅读 Algorithm 1-4 时的
+// 主参考路径。
 //
 // Naming: CONFIG_N{poly_degree}_K{rns_limb_count}[_COMP]. Each config carries
-// its own gadget lengths and PlainMod. Keep configs aligned with the run.py
-// aliases.
+// its own gadget lengths and PlainMod.
 //   CONFIG_N2048_K1        K=1, N=2048, log Q ≈ 60.
 //   CONFIG_N2048_K1_COMP   K=1 composite split (q1*q2 ≈ 2^58, 29+29).
 //   CONFIG_N2048_K1_COMP_T257 same composite arithmetic, 8-bit payloads at t=257.
