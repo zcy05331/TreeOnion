@@ -24,4 +24,4 @@ RlweCt mlwe_merge_residues(std::vector<RlweCt> inputs, size_t rho,
                            const PirParams &scheme,
                            size_t *keyswitch_count = nullptr);
 
-}  // namespace tree_packing
+}

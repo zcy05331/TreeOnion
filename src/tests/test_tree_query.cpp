@@ -28,12 +28,8 @@ size_t selector_bit(const ClientCoordinates &coords, const TreePirParams &tree,
                         : coords.gamma_bits_le[group - tree.b];
 }
 
-}  // namespace
+}
 
-// Blueprint sec. 9.3 isolated gate: pack a tree query, expand it with the
-// production ExpandBFV walk, verify the exact logical order and scales of all
-// w recovered constants, then drive every selector through RGSW conversion
-// and an isolated CMux. Runs before any tree database exists.
 void PirTest::test_tree_query() {
   print_func_name(__FUNCTION__);
   constexpr size_t N = DBConsts::PolyDegree;
@@ -49,17 +45,10 @@ void PirTest::test_tree_query() {
   const std::vector<std::vector<uint64_t>> gadget =
       utils::gsw_gadget(ell, scheme.get_base_log2(), qs,
                         scheme.get_ep_low_bits());
-  // The phase-scale gate below only fires for gadget rows above 2^29. Under a
-  // single-limb config the top row must clear that floor, or the scale/order
-  // check would silently become vacuous; multi-limb configs skip it
-  // (phase_limb0 is a single-limb decryption) and rely on the CMux gate.
   require_test(qs.size() > 1 || scheme.get_ep_low_bits() > 0 ||
                    gadget[0][0] >= (uint64_t{1} << 29),
                "phase-scale gate is vacuous under this config");
 
-  // Phase of a coefficient-form ciphertext under the first limb:
-  // c0 + c1 * s mod q0. Gadget rows are RLWE* constants without a Delta
-  // factor, so their scale is only visible at phase level.
   auto phase_limb0 = [&](const RlweCt &ct) {
     std::vector<uint64_t> c1(ct.c1.begin(), ct.c1.begin() + N);
     std::vector<uint64_t> phase(N);
@@ -78,8 +67,6 @@ void PirTest::test_tree_query() {
     const ClientCoordinates coords = client_index(leaf, tree);
     RlweCt query = make_tree_query(client, scheme, tree, leaf);
 
-    // Packed-level bit reversal: before expansion the alpha slot holds the
-    // BFV value W^-1 mod t at coefficient BitRev(alpha, h_q).
     {
       uint64_t w_inv_t = 0;
       require_test(utils::try_invert_uint_mod(tree.W, t, w_inv_t),
@@ -95,9 +82,6 @@ void PirTest::test_tree_query() {
     require_test(expanded.size() == tree.w,
                  "expansion returns exactly w useful leaves");
 
-    // Alpha range [0, N0): an exact BFV one-hot. Every polynomial must be
-    // fully zero except constant coefficient 1 at slot alpha, which also
-    // certifies useful-leaf pruning and the W / W^-1 cancellation.
     for (size_t j = 0; j < tree.N0; ++j) {
       RlwePt pt = client.decrypt_ct(expanded[j]);
       if (j == coords.alpha) {
@@ -109,10 +93,6 @@ void PirTest::test_tree_query() {
       }
     }
 
-    // Selector groups: beta groups first, gamma groups after (sec. 8.1).
-    // Zero selectors decrypt to zero everywhere; one selectors carry the
-    // MSB-first gadget rows, phase-checked where the gadget value clears the
-    // expansion noise floor. (Low rows are validated by the CMux gate.)
     constexpr uint64_t kNoiseFloor = uint64_t{1} << 29;
     constexpr uint64_t kPhaseTolerance = uint64_t{1} << 27;
     for (size_t group = 0; group < tree.b + tree.r; ++group) {
@@ -133,10 +113,6 @@ void PirTest::test_tree_query() {
 
     if (!run_cmux_gate) return;
 
-    // Production unpack (sec. 9.1/9.2): expansion plus RGSW completion behind
-    // one server-side entry point. The alpha range must survive as the same
-    // BFV one-hot, and every converted selector must drive an isolated CMux:
-    // CMux(sel, x, y) returns x for bit 0 and y for bit 1.
     ExpandedTreeQuery unpacked = unpack_tree_query(
         server, scheme, tree, client.get_client_id(), query);
     require_test(unpacked.alpha.size() == tree.N0 &&
@@ -174,7 +150,6 @@ void PirTest::test_tree_query() {
     }
   };
 
-  // Shapes: the blueprint sec. 18 split (b = 2) and the b = 0 boundary.
   const std::vector<std::pair<size_t, size_t>> shapes = {
       {tree_height_for(3, 2), 3}, {tree_height_for(2, 0), 2}};
   for (const auto &[L, a] : shapes) {
@@ -190,30 +165,18 @@ void PirTest::test_tree_query() {
     PirServer server(qparams);
     server.set_client_session_keys(client.get_client_id(), keys);
 
-    // The mixed-bit leaf runs the full gate including RGSW conversion and
-    // CMux; boundary leaves cover pure one-hot / zero-selector patterns.
-    // Leaf 1 additionally pins the beta group <-> bit-index binding: its beta
-    // pattern (01 when b = 2) is asymmetric under bit reversal, so a packing
-    // layer that consumed beta bits in the wrong order would fail here, and
-    // its all-zero gamma drives zero selectors through the CMux gate too.
     const size_t mixed_leaf = 0x2BADBEEFULL % tree.N;
-    check_leaf(server, tree, mixed_leaf, /*run_cmux_gate=*/true);
-    check_leaf(server, tree, 0, /*run_cmux_gate=*/false);
-    check_leaf(server, tree, tree.N - 1, /*run_cmux_gate=*/false);
-    check_leaf(server, tree, 1, /*run_cmux_gate=*/true);
+    check_leaf(server, tree, mixed_leaf, true);
+    check_leaf(server, tree, 0, false);
+    check_leaf(server, tree, tree.N - 1, false);
+    check_leaf(server, tree, 1, true);
 
-    // Fresh query randomness (sec. 8.4): the same leaf packs to a different
-    // ciphertext each call; the expansion checks above already pinned the
-    // decrypted constants, so equality of c1 is the only remaining risk.
     RlweCt first = make_tree_query(client, scheme, tree, mixed_leaf);
     RlweCt second = make_tree_query(client, scheme, tree, mixed_leaf);
     require_test(first.c1 != second.c1,
                  "repeated queries use fresh encryption randomness");
   }
 
-  // Unpack must reject a server whose layout is not this tree's query shape
-  // before any homomorphic work (wrong expansion height here, so scales
-  // would silently disagree if it were accepted).
   {
     const TreePirParams tree =
         make_tree_pir_params_for_scheme(tree_height_for(3, 2), 3, scheme);
@@ -232,7 +195,6 @@ void PirTest::test_tree_query() {
                  "accepted a shape-mismatched server for unpack");
   }
 
-  // The query-shape view refuses shapes that overflow capacity or the ring.
   bool rejected = false;
   try {
     (void)scheme.with_query_shape({DBConsts::PolyDegree, 1, 3});

@@ -7,7 +7,6 @@
 #include <memory>
 #include <vector>
 
-// A deleter that frees memory with std::free (for pointers allocated via aligned allocators)
 template <typename T>
 struct AlignedDeleter {
     void operator()(T* p) const noexcept {
@@ -15,8 +14,6 @@ struct AlignedDeleter {
     }
 };
 
-// Factory: create a unique_ptr to an aligned array using std::aligned_alloc + std::free
-// Usage: auto ptr = make_unique_aligned<uint64_t, 64>(count);
 template <typename T, std::size_t Alignment>
 inline std::unique_ptr<T[], AlignedDeleter<T>> make_unique_aligned(std::size_t count) {
     if (count == 0) {
@@ -33,10 +30,6 @@ inline std::unique_ptr<T[], AlignedDeleter<T>> make_unique_aligned(std::size_t c
     return std::unique_ptr<T[], AlignedDeleter<T>>(static_cast<T*>(raw));
 }
 
-// std::vector allocator with a fixed over-alignment. glibc serves large
-// requests from mmap and returns a pointer 16 bytes past the page start, so
-// every 64-byte AVX-512 load of a plain std::vector buffer spans two cache
-// lines; buffers the matrix kernels stream use this instead.
 template <typename T, std::size_t Alignment>
 struct AlignedAllocator {
     using value_type = T;
@@ -59,4 +52,4 @@ struct AlignedAllocator {
 template <typename T>
 using CacheAlignedVector = std::vector<T, AlignedAllocator<T, 64>>;
 
-#endif // ALIGNED_ALLOCATOR_H
+#endif

@@ -5,13 +5,11 @@
 #include <sstream>
 
 std::string utils::uint128_to_string(uint128_t value) {
-    // Split the 128-bit value into two 64-bit parts
     uint64_t high = value >> 64;
     uint64_t low = static_cast<uint64_t>(value);
 
     std::ostringstream oss;
 
-    // Print the high part, if it's non-zero, to avoid leading zeros
     if (high != 0) {
         oss << high << " * 2^64 + " << low;
     } else {
@@ -22,7 +20,6 @@ std::string utils::uint128_to_string(uint128_t value) {
 
 
 
-// Plaintext checks and console output.
 void utils::print_plaintext(const RlwePt &plaintext, const size_t count) {
   const size_t coeff_count = plaintext.coeff_count();
   for (size_t i = 0; i < std::min(count, coeff_count); ++i) {
@@ -53,7 +50,6 @@ void utils::print_progress(size_t current, size_t total) {
     float progress = static_cast<float>(current) / total;
     size_t bar_width = 70;
 
-    // Move the cursor to the beginning and clear the line.
     std::cout << "\r\033[K[";
 
     size_t pos = static_cast<size_t>(bar_width * progress);
@@ -68,5 +64,3 @@ void utils::print_progress(size_t current, size_t total) {
     std::cout << "] " << size_t(progress * 100.0) << " %";
     std::cout.flush();
 }
-
-

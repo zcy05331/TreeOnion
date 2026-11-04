@@ -5,10 +5,6 @@
 
 void test_query_wire();
 
-// The seeded query codec under the active configuration: the byte count is
-// 32 + ceil(N ceil(log2 q) / 8), the reader returns c0 bit for bit through the
-// CRT composition, and it regenerates c1 from the seed alone. Two queries
-// draw different seeds.
 void test_query_wire() {
   print_func_name(__FUNCTION__);
   PirParams scheme;

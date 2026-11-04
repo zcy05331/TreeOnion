@@ -4,29 +4,18 @@
 
 void test_approx_gadget();
 void test_tree_multiplane();
-// TimerLogger accumulation, warm-up skipping and cleanup.
 void test_logging();
-// The complete response plaintext at the paper's first-dimension width.
 void test_tree_noise_envelope();
 void test_merkle_sha256_e2e();
-// RFC 6962 logs of non-power-of-two size served as a virtual perfect-tree view.
 void test_merkle_rfc6962_view();
-// The seeded query wire format.
 void test_query_wire();
-// PIR layouts: every row of a ragged and a perfect remaining-dimension
-// tree, and a query shape that fills the expansion capacity exactly.
 void test_pir_row_sweep();
 void test_query_shape_exact_fit();
-// Crypto primitives: the vectorized loops against the scalar primitives
-// they mirror, and the generated moduli.
 void test_bv_keyswitch_reference();
 void test_gsw_decomp_shapes();
 void test_ntt_friendly_primes();
 void test_paper_moduli_pin();
 
-// Correctness suite behind `--test all`: every registered test that asserts
-// its result and finishes in seconds to a few minutes. The informational
-// cpu_info and the plan_params search are excluded.
 static const std::vector<std::string> kRegressionTests = {
     "barrett", "utils_arith", "noise_sampling", "rlwe_enc", "hexl_ntt",
     "bfv", "decrypt_mod_q", "mod_switch", "bv_ks", "ext_prod",

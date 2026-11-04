@@ -2,13 +2,6 @@
 
 #include <chrono>
 
-// Exact per-stage wall time of one PirServer::make_query_profiled call. The
-// stages are the existing pipeline boundaries (nothing is reordered to take
-// the measurements): ExpandBFV, RGSW completion, the first-dimension query
-// NTT, the q1/q2 query packing, the first-dimension matrix core, the CRT
-// compose + INTT finalize, the remaining-dimension CMux tree, and the final
-// modulus switch. It attributes server time to the stages; make_query itself
-// never pays for a profile.
 struct PirPipelineProfile {
   std::chrono::nanoseconds expand{};
   std::chrono::nanoseconds convert{};
@@ -17,9 +10,6 @@ struct PirPipelineProfile {
   std::chrono::nanoseconds first_dim_core{};
   std::chrono::nanoseconds first_dim_finalize{};
   std::chrono::nanoseconds other_dim{};
-  // Merged-response path only: private rotation of each level result onto
-  // the stride grid, and the MLWE residue merge of all levels into one
-  // ciphertext. Zero for the single-ciphertext pipelines.
   std::chrono::nanoseconds response_rotate{};
   std::chrono::nanoseconds response_merge{};
   std::chrono::nanoseconds mod_switch{};

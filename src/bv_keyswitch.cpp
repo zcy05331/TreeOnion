@@ -9,14 +9,7 @@
 
 namespace bvks {
 
-// ----------------------------------------------------------------------------
-// Helpers
-// ----------------------------------------------------------------------------
 
-
-// Signed (zero-centered) gadget decomposition.
-// Digits are in [-B/2, B/2), stored mod q. Reconstruction: Σ out[i]·B^i ≡ val (mod q).
-// out[0] = least significant digit (B^0), out[num_digits-1] = most significant.
 void signed_gadget_decompose(uint64_t val, size_t base_log2,
                              uint64_t q, uint64_t *out, size_t num_digits,
                              size_t low_bits) {
@@ -24,16 +17,10 @@ void signed_gadget_decompose(uint64_t val, size_t base_log2,
   const uint64_t base = uint64_t{1} << base_log2;
   const uint64_t mask = base - 1;
 
-  // Center: [0, q) -> (-q/2, q/2]
   int64_t d = (val > half_q)
       ? static_cast<int64_t>(val) - static_cast<int64_t>(q)
       : static_cast<int64_t>(val);
-  // Integer rounding, including negative coefficients; ties go upward.
-  // The matching key weights include 2^low_bits. Modular division would not
-  // implement approximate decomposition and would not have a bounded residue.
   if (low_bits) d = (d + (int64_t{1} << (low_bits - 1))) >> low_bits;
-
-  // The goal here: d = r_0 B^0 + r_1 B^1 + r_2 B^2 + ... with r_i in [-B/2, B/2).
 
   for (size_t i = 0; i < num_digits; ++i) {
     const uint64_t low = static_cast<uint64_t>(d) & mask;
@@ -71,13 +58,6 @@ void signed_gadget_decompose_mp(uint128_t val, uint128_t Q, size_t base_log2,
   }
 }
 
-// Gadget base log: floor(log_q_data / L_KS) + 1.
-// The +1 guarantees B^L_KS > q, giving the signed-digit decomposition
-// enough headroom to absorb carries without leaving a non-zero residue in
-// the discarded (L_KS-th) digit. Without it, configurations where
-// base_log2 * L_KS == q_bits (e.g. L_KS=10 or 12 at q ~ 2^60) leak an
-// uncompensated sigma_k(s) * (B^L_KS mod q) term into the keyswitch noise.
-// Matches Spiral's convention (spiral/include/util.h:get_bits_per).
 static inline size_t bv_base_log2(const PirParams &pir_params) {
   static_assert(L_KS > 0 && L_KS <= 16, "BV gadget rows must be in [1,16]");
   const size_t q_bits = pir_params.get_ct_mod_width();
@@ -112,19 +92,13 @@ bool BvGaloisKeys::contains(uint32_t galois_k) const noexcept {
   return false;
 }
 
-// Compute (1 << (i * base_log2)) mod q, safely.
 static inline uint64_t power_of_two_mod(size_t exp_bits, uint64_t q) {
-  // Use repeated doubling mod q so we never overflow.
   uint64_t result = 1 % q;
   for (size_t b = 0; b < exp_bits; ++b) {
     result = (static_cast<uint128_t>(result) << 1) % q;
   }
   return result;
 }
-
-// ----------------------------------------------------------------------------
-// BvGaloisKeys: lookup, size, simple serialization
-// ----------------------------------------------------------------------------
 
 const BvKeySwitchKey &BvGaloisKeys::get(uint32_t galois_k) const {
   for (auto &k : keys) {
@@ -134,72 +108,6 @@ const BvKeySwitchKey &BvGaloisKeys::get(uint32_t galois_k) const {
   throw std::out_of_range("BvGaloisKeys::get: galois_k not found");
 }
 
-// bool BvGaloisKeys::has(uint32_t galois_k) const {
-//   for (auto &k : keys) {
-//     if (k.galois_k == galois_k)
-//       return true;
-//   }
-//   return false;
-// }
-
-// size_t BvGaloisKeys::save(std::ostream &stream, bool /*use_seed*/) const {
-//   // Simple uint64 dump — not bit-packed. Use compute_size_bytes for the
-//   // theoretical bit-packed size that we care about in measurements.
-//   size_t written = 0;
-//   auto wr = [&](const void *p, size_t n) {
-//     stream.write(reinterpret_cast<const char *>(p), n);
-//     written += n;
-//   };
-//   uint32_t num = static_cast<uint32_t>(keys.size());
-//   wr(&num, sizeof(num));
-//   for (auto &k : keys) {
-//     wr(&k.galois_k, sizeof(k.galois_k));
-//     uint32_t t = static_cast<uint32_t>(k.cts.size());
-//     wr(&t, sizeof(t));
-//     for (auto &ct : k.cts) {
-//       uint32_t n = static_cast<uint32_t>(ct.a.size());
-//       wr(&n, sizeof(n));
-//       wr(ct.a.data(), n * sizeof(uint64_t));
-//       wr(ct.b.data(), n * sizeof(uint64_t));
-//     }
-//   }
-//   return written;
-// }
-
-// void BvGaloisKeys::load(std::istream &stream) {
-//   auto rd = [&](void *p, size_t n) {
-//     stream.read(reinterpret_cast<char *>(p), n);
-//   };
-//   uint32_t num;
-//   rd(&num, sizeof(num));
-//   keys.clear();
-//   keys.resize(num);
-//   for (auto &k : keys) {
-//     rd(&k.galois_k, sizeof(k.galois_k));
-//     uint32_t t;
-//     rd(&t, sizeof(t));
-//     k.cts.resize(t);
-//     for (auto &ct : k.cts) {
-//       uint32_t n;
-//       rd(&n, sizeof(n));
-//       ct.a.resize(n);
-//       ct.b.resize(n);
-//       rd(ct.a.data(), n * sizeof(uint64_t));
-//       rd(ct.b.data(), n * sizeof(uint64_t));
-//     }
-//   }
-// }
-
-// ----------------------------------------------------------------------------
-// Key generation (client side)
-// ----------------------------------------------------------------------------
-
-// ----------------------------------------------------------------------------
-// K-aware helpers shared between K=1 and K=2 paths.
-// ----------------------------------------------------------------------------
-
-// Sample shared signed Gaussian e (one int64 per coefficient), reduced into
-// [0, q_k) for each limb. out has size N * K.
 static void sample_gaussian_shared_rns(uint64_t *out, size_t N,
                                        const std::vector<uint64_t> &qs,
                                        double sigma, ChaChaRng &rng) {
@@ -221,10 +129,6 @@ static void sample_gaussian_shared_rns(uint64_t *out, size_t N,
   }
 }
 
-// Build one RLWE row of a KSK. Encrypts msg under all K limbs:
-//   for each output limb j: b_j = msg_j - a_j · sk_j + e_j
-// where msg_j is supplied per-limb in NTT form (size N · K), and e is shared
-// across limbs (signed Gaussian, then reduced per-limb).
 static void build_ksk_row_rns(const std::vector<uint64_t> &msg_ntt,
                               const RlweSk &sk,
                               const std::vector<uint64_t> &qs,
@@ -266,7 +170,6 @@ BvKeySwitchKey gen_bv_ks_key(const PirParams &pir_params,
 
   const auto &qs = pir_params.get_rns_mods();
 
-  // σ_k(s) per limb, in NTT form.
   std::vector<uint64_t> sigma_s(N * K);
   for (size_t k = 0; k < K; ++k) {
     utils::automorphism_ntt(sk.data.data() + k * N, N, galois_k, qs[k],
@@ -276,9 +179,6 @@ BvKeySwitchKey gen_bv_ks_key(const PirParams &pir_params,
   BvKeySwitchKey ksk;
   ksk.galois_k = galois_k;
 
-  // MP gadget: L_KS rows，每个 row 在所有 K limbs 下加密 σ_k(s) * B^i。
-  // rows 是 NTT-form、limb-major；后续 BV apply 把 row.b MAC 到 RlweCt.c0，
-  // 把 row.a MAC 到 RlweCt.c1，匹配主路径的 (c0,c1) 命名。
   const size_t base_log2 = bv_base_log2(pir_params);
   const size_t low_bits = low_bits_for_scheme(pir_params);
   ksk.cts.resize(L_KS);
@@ -305,7 +205,6 @@ BvGaloisKeys gen_bv_galois_keys(const PirParams &pir_params,
   ChaChaRng rng;
 
   result.keys.reserve(expan_height);
-  // creates 2049, 1025, 513, ... keys.
   for (size_t i = 0; i < expan_height; ++i) {
     const uint32_t galois_k = static_cast<uint32_t>((N >> i) + 1);
     result.keys.push_back(gen_bv_ks_key(pir_params, sk, galois_k, rng));
@@ -313,25 +212,15 @@ BvGaloisKeys gen_bv_galois_keys(const PirParams &pir_params,
   return result;
 }
 
-// ----------------------------------------------------------------------------
-// Server-side apply
-// ----------------------------------------------------------------------------
-
-// scratch reused across calls to bv_apply_galois_inplace.
 namespace {
 struct GaloisScratch {
   std::vector<uint64_t> c0_perm, c1_perm, delta_a, delta_b, tmp;
-  std::vector<uint64_t> digits;  // L_KS contiguous N-blocks (row-major)
+  std::vector<uint64_t> digits;
   std::vector<int64_t> work;
 };
 static GaloisScratch g_scratch;
-}  // namespace
+}
 
-// K=1 BV Subs path。先对 (c0,c1) 做 coefficient-wise automorphism，得到
-// secret 为 σ_k(s) 的 ciphertext。随后把 σ_k(c1) 按 mod q centered，做
-// signed decomposition；每个 digit block 转 NTT 后与对应 KSK row 做
-// pointwise MAC。INTT 后 accumulated row.b/row.a 回到 coefficient form；
-// row.b 加到 σ_k(c0)，row.a 成为切回 secret s 后的新 c1。
 static void bv_apply_galois_inplace_k1(RlweCt &ct, uint32_t galois_k,
                                        const BvKeySwitchKey &key,
                                        const PirParams &pir_params) {
@@ -376,8 +265,6 @@ static void bv_apply_galois_inplace_k1(RlweCt &ct, uint32_t galois_k,
     const int64_t half_step = int64_t{1} << (low_bits - 1);
     for (size_t k = 0; k < N; ++k) work[k] = (work[k] + half_step) >> low_bits;
   }
-  // Extract one digit across all coefficients. The independent inner loop
-  // permits SIMD, unlike a complete carry chain for each individual coefficient.
   for (size_t i = 0; i < L_KS; ++i) {
     uint64_t *const row = digits + i * N;
     for (size_t k = 0; k < N; ++k) {
@@ -427,10 +314,6 @@ static void bv_apply_galois_inplace_k1(RlweCt &ct, uint32_t galois_k,
   std::memcpy(ct.data(1), delta_a, N * sizeof(uint64_t));
 }
 
-// K=2 BV Subs path。automorphism 仍然逐 limb 执行，但 decomposition 不能逐
-// limb 独立做：必须先把 σ_k(c1) CRT-compose 成 modulo Q=q0*q1 的单个值，
-// 再 centered 并 signed-decompose 一次。同一个 signed digit 分别 render 到
-// q0 和 q1 后进入 NTT/MAC，因此两个 limbs 共享同一次 full-q decomposition。
 static void bv_apply_galois_inplace_k2(RlweCt &ct, uint32_t galois_k,
                                        const BvKeySwitchKey &key,
                                        const PirParams &pir_params) {
@@ -442,7 +325,6 @@ static void bv_apply_galois_inplace_k2(RlweCt &ct, uint32_t galois_k,
   const size_t base_log2 = bv_base_log2(pir_params);
   const uint64_t B_mask = (uint64_t(1) << base_log2) - 1;
 
-  // Step 1: per-limb σ on (c0, c1).
   TIME_START(APPLY_GAL_SIGMA);
   std::vector<uint64_t> c0_perm(2 * N), c1_perm(2 * N);
   for (size_t k = 0; k < 2; ++k) {
@@ -453,9 +335,6 @@ static void bv_apply_galois_inplace_k2(RlweCt &ct, uint32_t galois_k,
   }
   TIME_END(APPLY_GAL_SIGMA);
 
-  // Step 2 + 3: per-coef CRT compose σ(c1) -> 128-bit MP integer, then signed
-  // base-B decomposition with carry. Both bundled under DECOMP since they're
-  // the variant-specific gadget extraction work.
   TIME_START(APPLY_GAL_DECOMP);
   std::vector<uint128_t> c1_mp(N);
   for (size_t j = 0; j < N; ++j) {
@@ -470,15 +349,13 @@ static void bv_apply_galois_inplace_k2(RlweCt &ct, uint32_t galois_k,
 
   const uint128_t Q_total = static_cast<uint128_t>(q0) * q1;
   std::vector<int64_t> sdigits(L_KS * N);
-  int64_t buf[16];  // L_KS ≤ 16 in all current configs
+  int64_t buf[16];
   for (size_t j = 0; j < N; ++j) {
     signed_gadget_decompose_mp(c1_mp[j], Q_total, base_log2, buf, L_KS);
     for (size_t i = 0; i < L_KS; ++i) sdigits[i * N + j] = buf[i];
   }
   TIME_END(APPLY_GAL_DECOMP);
 
-  // Step 4: 对每个 limb，把共享 signed digit render 成 uint64 mod qk，转 NTT，
-  // 再累加 KSK 的 row.b/row.a inner products。
   std::vector<uint64_t> delta_a(2 * N, 0), delta_b(2 * N, 0);
   std::vector<uint64_t> digit_buf(N), prod(N);
 
@@ -496,7 +373,6 @@ static void bv_apply_galois_inplace_k2(RlweCt &ct, uint32_t galois_k,
     uint64_t *db_k = delta_b.data() + k * N;
     uint64_t *da_k = delta_a.data() + k * N;
 
-    // First iteration: write instead of accumulate.
     TIME_START(APPLY_GAL_DECOMP);
     render_digits_for_limb(0, qk);
     TIME_END(APPLY_GAL_DECOMP);
@@ -532,7 +408,6 @@ static void bv_apply_galois_inplace_k2(RlweCt &ct, uint32_t galois_k,
     utils::ntt_inv(da_k, N, qk);
     TIME_END(APPLY_GAL_NTT_INV);
 
-    // c0_perm_k += delta_b_k
     intel::hexl::EltwiseAddMod(c0_perm.data() + k * N, c0_perm.data() + k * N,
                                db_k, N, qk);
   }
@@ -550,9 +425,6 @@ void bv_apply_galois_inplace(RlweCt &ct, uint32_t galois_k,
 
   constexpr size_t K = DBConsts::RnsMods.size();
 
-  // Dispatcher invariant：ct 进入和返回都保持 coefficient form。K=1 可以直接
-  // modulo q centered/decompose；K=2 必须先 CRT-compose 到 Q=q0*q1，再把同一组
-  // signed digits 分别落回两个 limbs。
   if constexpr (K == 1) {
     bv_apply_galois_inplace_k1(ct, galois_k, key, pir_params);
   } else {
@@ -560,4 +432,4 @@ void bv_apply_galois_inplace(RlweCt &ct, uint32_t galois_k,
   }
 }
 
-} // namespace bvks
+}

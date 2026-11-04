@@ -1,8 +1,6 @@
 #include "tests.h"
 #include "rlwe.h"
 
-// Homomorphic MUX: select(b, x, y) = x + b * (y - x). RGSW(1) must return y
-// and RGSW(0) must return x, coefficient for coefficient.
 void PirTest::test_ext_prod_mux() {
   print_func_name(__FUNCTION__);
   PirParams pir_params;
@@ -16,7 +14,6 @@ void PirTest::test_ext_prod_mux() {
   const double sigma = pir_params.get_noise_std_dev();
   ChaChaRng rng(0x1234ULL);
 
-  // Dense payloads so a wrong pairing or a dropped coefficient is visible.
   std::vector<uint64_t> a(coeff_count, 0), b(coeff_count, 0);
   for (size_t i = 0; i < coeff_count; ++i) {
     a[i] = (5 * i + 7) % t;
@@ -31,7 +28,6 @@ void PirTest::test_ext_prod_mux() {
   GSWCt zero_gsw = data_gsw.plain_to_gsw(zero, client.rlwe_sk_, rng);
 
   const auto mux = [&](GSWCt &selector) {
-    // ext_prod_mux consumes its second operand as scratch: encrypt fresh.
     RlweCt a_ct, b_ct;
     encrypt_bfv_rns(a, client.rlwe_sk_, coeff_count, qs, t, sigma, rng, a_ct);
     encrypt_bfv_rns(b, client.rlwe_sk_, coeff_count, qs, t, sigma, rng, b_ct);

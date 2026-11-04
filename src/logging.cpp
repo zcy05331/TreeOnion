@@ -1,18 +1,15 @@
 #include "logging.h"
 #include <iostream>
 
-// Singleton instance getter
 TimerLogger &TimerLogger::getInstance() {
   static TimerLogger instance;
   return instance;
 }
 
-// Start logging time for a section
 void TimerLogger::start(const std::string &sectionName) {
   startTimes[sectionName] = std::chrono::high_resolution_clock::now();
 }
 
-// Stop logging time for a section
 void TimerLogger::end(const std::string &sectionName) {
   auto it = startTimes.find(sectionName);
   if (it != startTimes.end()) {
@@ -25,13 +22,11 @@ void TimerLogger::end(const std::string &sectionName) {
   }
 }
 
-// End the current experiment and store the results
 void TimerLogger::endExperiment() {
   experimentRecords.push_back(currentExperiment);
-  currentExperiment.clear(); // Reset for the next experiment
+  currentExperiment.clear();
 }
 
-// Print timing results for a specific experiment or all experiments
 void TimerLogger::printResults(int expId) {
   if (experimentRecords.empty()) {
     std::cout << "No experiments recorded.\n";
@@ -39,7 +34,6 @@ void TimerLogger::printResults(int expId) {
   }
 
   if (expId == -1) {
-    // Print all experiments
     std::cout << "========================== Experiment Timing Results "
                  "=========================\n";
     for (size_t i = 0; i < experimentRecords.size(); ++i) {
@@ -49,7 +43,6 @@ void TimerLogger::printResults(int expId) {
       }
     }
   } else if (expId >= 1 && expId <= experimentRecords.size()) {
-    // Print a specific experiment
     std::cout << "========================== Experiment " << expId
               << " Timing Results =========================\n";
     for (const auto &[section, time] : experimentRecords[expId - 1]) {
@@ -61,7 +54,6 @@ void TimerLogger::printResults(int expId) {
   }
 }
 
-// Compute and print average timing results across experiments
 void TimerLogger::printAverageResults() {
   if (experimentRecords.size() <= WARMUP_ITERATIONS) {
     std::cout << "Not enough experiments to compute post-warm-up averages ("
@@ -73,7 +65,6 @@ void TimerLogger::printAverageResults() {
   std::unordered_map<std::string, double> totalTimes;
   std::unordered_map<std::string, int> count;
 
-  // start from WARMUP_ITERATIONS, not 0
   for (std::size_t idx = WARMUP_ITERATIONS; idx < experimentRecords.size();
        ++idx) {
     for (const auto &[section, time] : experimentRecords[idx]) {
@@ -135,7 +126,6 @@ void TimerLogger::prettyPrintHelper(
   }
 }
 
-// 2) ---- recompute averages (skipping warm-ups) and pass to helper ----
 void TimerLogger::prettyPrint() {
   if (experimentRecords.size() <= WARMUP_ITERATIONS) {
     std::cout << "Not enough experiments to compute post-warm-up averages ("
@@ -144,7 +134,6 @@ void TimerLogger::prettyPrint() {
     return;
   }
 
-  // -------- build the map of average times (post-warm-up only) --------
   std::unordered_map<std::string, double> totals;
   std::unordered_map<std::string, int> counts;
 
@@ -161,14 +150,12 @@ void TimerLogger::prettyPrint() {
     averages[section] = total / counts[section];
   }
 
-  // ------------------ offline section ------------------
   std::cout << "========== Offline Setup ==========\n";
   auto ntt_it = onceTimes_.find("DB NTT + realign");
   if (ntt_it != onceTimes_.end()) {
     std::cout << "  DB NTT + realign: " << static_cast<std::size_t>(ntt_it->second) << " ms" << std::endl;
   }
 
-  // ------------------ online section ------------------
   std::cout << "========== Online Average Results (after first " << WARMUP_ITERATIONS
             << " warm-up runs) ==========\n";
   prettyPrintHelper(SERVER_TOT_TIME, "", false, averages);

@@ -5,10 +5,6 @@
 #include <stdexcept>
 #include <unordered_map>
 
-// Extended Euclidean algorithm: given a, b > 0, returns (gcd, s) such that
-// s * a + t * b = gcd.  We only return s since that's the Bezout coefficient
-// for `value` in try_invert_uint_mod.
-// For moduli < 2^62 the coefficients stay within int64_t range.
 static int64_t xgcd(int64_t a, int64_t b, int64_t &s) {
   int64_t s0 = 1, s1 = 0;
   int64_t r0 = a, r1 = b;
@@ -18,15 +14,13 @@ static int64_t xgcd(int64_t a, int64_t b, int64_t &s) {
     tmp = s1; s1 = s0 - q * s1; s0 = tmp;
   }
   s = s0;
-  return r0; // gcd
+  return r0;
 }
 
-// (a * b) mod m without overflow, via 128-bit multiply.
 static inline uint64_t mulmod_u64(uint64_t a, uint64_t b, uint64_t m) {
   return static_cast<uint64_t>((static_cast<__uint128_t>(a) * b) % m);
 }
 
-// (base^exp) mod m via binary exponentiation.
 static uint64_t powmod_u64(uint64_t base, uint64_t exp, uint64_t m) {
   uint64_t result = 1 % m;
   base %= m;
@@ -38,7 +32,6 @@ static uint64_t powmod_u64(uint64_t base, uint64_t exp, uint64_t m) {
   return result;
 }
 
-// Miller-Rabin witness check: returns true if `a` is a witness that n is composite.
 static bool mr_composite_witness(uint64_t n, uint64_t d, int r, uint64_t a) {
   uint64_t x = powmod_u64(a, d, n);
   if (x == 1 || x == n - 1) return false;
@@ -51,17 +44,14 @@ static bool mr_composite_witness(uint64_t n, uint64_t d, int r, uint64_t a) {
 
 bool utils::is_prime(uint64_t n) {
   if (n < 2) return false;
-  // Small-prime shortcut (also handles witnesses equal to n).
   static constexpr uint64_t small_primes[] = {2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37};
   for (uint64_t p : small_primes) {
     if (n == p) return true;
     if (n % p == 0) return false;
   }
-  // Write n - 1 = d * 2^r with d odd.
   uint64_t d = n - 1;
   int r = 0;
   while ((d & 1) == 0) { d >>= 1; ++r; }
-  // Deterministic for all 64-bit n.
   for (uint64_t a : small_primes) {
     if (mr_composite_witness(n, d, r, a)) return false;
   }
@@ -84,10 +74,6 @@ std::vector<std::vector<uint64_t>> utils::gsw_gadget(size_t l, uint64_t base_log
   if (l == 0) {
     throw std::invalid_argument("gsw_gadget: gadget length must be positive");
   }
-  // Create RGSW gadget. Rows are MSB-first: row p is
-  // 2^(low_bits + base_log2 * (l-1-p)).
-  // QueryPack, RGSW encryption, and external-product decomposition must use
-  // this same row order or gadget digits will multiply the wrong powers.
   const size_t K = rns_mods.size();
   std::vector<std::vector<uint64_t>> gadget(K, std::vector<uint64_t>(l));
   for (size_t i = 0; i < K; i++) {
@@ -106,7 +92,6 @@ std::vector<std::vector<uint64_t>> utils::gsw_gadget(size_t l, uint64_t base_log
 
 uint64_t utils::crt_combine(uint64_t w1, uint64_t q1,
                              uint64_t w2, uint64_t q2) {
-  // Garner: w = w1 + q1 * ((w2 - w1) * q1^{-1} mod q2) ∈ [0, q1*q2).
   uint64_t q1_inv;
   if (!try_invert_uint_mod(q1 % q2, q2, q1_inv))
     throw std::invalid_argument("crt_combine: q1, q2 must be coprime");
@@ -115,19 +100,12 @@ uint64_t utils::crt_combine(uint64_t w1, uint64_t q1,
   return static_cast<uint64_t>(static_cast<uint128_t>(q1) * k + w1);
 }
 
-/**
- * @brief Generate the smallest prime that is at least bit_width bits long.
- * @param bit_width >= 2 and <= 64
- * @return std::uint64_t
- */
 std::uint64_t utils::generate_prime(size_t bit_width) {
   if (bit_width < 2) throw std::invalid_argument("Bit width must be at least 2.");
 
-  // Otherwise, generate a new prime
   std::uint64_t candidate = 1ULL << (bit_width - 1);
   do {
       candidate++;
-      // Ensure candidate is odd, as even numbers greater than 2 cannot be prime
       candidate |= 1;
   } while (!utils::is_prime(candidate));
   return candidate;
@@ -135,9 +113,6 @@ std::uint64_t utils::generate_prime(size_t bit_width) {
 
 std::vector<uint64_t> utils::generate_ntt_friendly_primes(
     const std::vector<size_t> &bit_widths, size_t N) {
-  // For each bit width bw, return the largest prime p < 2^bw with p ≡ 1 mod 2N.
-  // If the same bit width appears more than once, return distinct primes by
-  // continuing the downward scan from where we stopped last time.
   const uint64_t step = 2 * static_cast<uint64_t>(N);
   std::unordered_map<size_t, uint64_t> next_candidate;
   std::vector<uint64_t> out;
@@ -150,8 +125,7 @@ std::vector<uint64_t> utils::generate_ntt_friendly_primes(
     auto it = next_candidate.find(bw);
     uint64_t c;
     if (it == next_candidate.end()) {
-      const uint64_t upper = (uint64_t{1} << bw);   // exclusive
-      // Largest value < 2^bw with value ≡ 1 mod 2N.
+      const uint64_t upper = (uint64_t{1} << bw);
       c = upper - 1;
       c -= ((c - 1) % step);
     } else {
@@ -185,29 +159,6 @@ size_t utils::roundup_div(const size_t numerator, const size_t denominator) {
 }
 
 
-// Pick (fst_dim_sz, num_dims) so the database holds ≥ target_num_pt plaintexts
-// and the expansion output fits the chosen shape.
-//
-// The query expansion tree of height h produces capacity = 2^h BFV ciphertexts.
-// Of those, the first num_dims - 1 "other" dimensions are each binary muxes
-// driven by a full l-row GSW gadget reconstruction, so they consume
-//   reserved = l * (num_dims - 1)
-// expansion slots. The remaining
-//   slack    = capacity - reserved
-// slots feed the first dimension. fst_dim_sz is set from slack per the
-// FST_DIM_POW2 policy. Database capacity (in plaintexts) is then
-//   fst_dim_sz · 2^(num_dims - 1)
-// since each "other" dim is binary and doubles the addressable plaintexts.
-//
-// Loop walks num_dims upward and returns the smallest one that meets target.
-// max_num_dims is just a loop bound; the inner `reserved >= capacity` break
-// is the real correctness guard against size_t underflow.
-//
-// Args:
-//   target_num_pt: minimum plaintexts the DB must hold (= DB_SIZE_MB / pt size).
-//   l            : GSW gadget length used for "other"-dim reconstruction (= l_ep).
-//   h            : expansion tree height (= TREE_HEIGHT).
-// Returns: {fst_dim_sz, num_dims}.
 std::pair<size_t, size_t> utils::calculate_db_shape(
     size_t target_num_pt, size_t l, size_t h, bool fst_dim_pow2) {
   if (target_num_pt == 0) {
@@ -223,7 +174,7 @@ std::pair<size_t, size_t> utils::calculate_db_shape(
   const size_t max_num_dims = 1 + (capacity - 1) / l;
   for (size_t num_dims = 1; num_dims <= max_num_dims + 1; num_dims++) {
     const size_t reserved = l * (num_dims - 1);
-    if (reserved >= capacity) break;  // guard size_t underflow
+    if (reserved >= capacity) break;
     const size_t slack = capacity - reserved;
     const size_t fst_dim_sz = fst_dim_pow2
         ? (size_t{1} << (std::bit_width(slack) - 1))
@@ -239,8 +190,6 @@ uint64_t utils::rescale(uint64_t a, uint64_t inp_mod, uint64_t out_mod) {
   const int64_t inp_mod_i64 = static_cast<int64_t>(inp_mod);
   const __int128 out_mod_i128 = static_cast<__int128>(out_mod);
 
-  // Center first, then round by out_mod/inp_mod. Unsigned scaling would map
-  // representatives near inp_mod as large positives and corrupt negative noise.
   int64_t v = static_cast<int64_t>(a % inp_mod);
   if (v >= inp_mod_i64 / 2) v -= inp_mod_i64;
 

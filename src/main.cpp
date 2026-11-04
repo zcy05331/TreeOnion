@@ -74,7 +74,7 @@ int run_pir_test(const CommandLineOptions &cli) {
   return 0;
 }
 
-}  // namespace
+}
 
 int main(int argc, char *argv[]) {
   try {

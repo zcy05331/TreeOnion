@@ -8,18 +8,18 @@
 namespace tree_entry_codec {
 
 struct EntryBits {
-  std::vector<uint8_t> bytes;  // ceil(bit_length / 8) bytes, LSB-first
+  std::vector<uint8_t> bytes;
   size_t bit_length = 0;
 
   bool operator==(const EntryBits &) const = default;
 };
 
 struct CodecSpec {
-  size_t entry_bits = 0;              // E
-  size_t payload_bits_per_coeff = 0;  // c
-  size_t record_coeffs = 0;           // G
-  size_t plane_count = 0;             // P = ceil(E / (cG))
-  uint64_t plaintext_modulus = 0;     // t; every digit is < 2^c <= t
+  size_t entry_bits = 0;
+  size_t payload_bits_per_coeff = 0;
+  size_t record_coeffs = 0;
+  size_t plane_count = 0;
+  uint64_t plaintext_modulus = 0;
 };
 
 struct LayoutChoice {
@@ -30,7 +30,7 @@ struct LayoutChoice {
 };
 
 using PlaneDigits = std::vector<uint64_t>;
-using EncodedEntry = std::vector<PlaneDigits>;  // [plane][digit]
+using EncodedEntry = std::vector<PlaneDigits>;
 
 void validate_entry(const EntryBits &entry);
 void validate_codec_spec(const CodecSpec &spec);
@@ -45,9 +45,7 @@ size_t minimal_plane_count(size_t entry_bits, size_t payload_bits_per_coeff,
 LayoutChoice choose_layout(size_t entry_bits, size_t payload_bits_per_coeff,
                            size_t ring_degree);
 
-// Encodes one h=1 entry into exactly P planes of G c-bit digits. Missing plane
-// capacity is public zero padding.
 EncodedEntry encode_entry(const EntryBits &entry, const CodecSpec &spec);
 EntryBits decode_entry(const EncodedEntry &encoded, const CodecSpec &spec);
 
-}  // namespace tree_entry_codec
+}

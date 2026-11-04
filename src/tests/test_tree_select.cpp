@@ -8,9 +8,6 @@
 
 namespace {
 
-// Plaintext reference of the sec. 11.3 fold over an array in ordinary integer
-// order: consume the target's bits MSB-first, keeping the lower half for bit 0
-// and the upper half for bit 1.
 uint64_t plain_fold(std::vector<uint64_t> values, size_t target, size_t bits,
                     bool msb_first) {
   for (size_t step = 0; step < bits; ++step) {
@@ -25,15 +22,11 @@ uint64_t plain_fold(std::vector<uint64_t> values, size_t target, size_t bits,
   return values.front();
 }
 
-}  // namespace
+}
 
-// Milestone-2 gate (blueprint sec. 20): decrypted SelectLevel equals a direct
-// D_l[p_l] lookup for every tested leaf and level, across all three plan
-// cases, with the beta fold pinned MSB-first (sec. 21.5).
 void PirTest::test_tree_select() {
   print_func_name(__FUNCTION__);
 
-  // ---- Plaintext packing identity on a synthetic sec. 25 configuration ----
   {
     const TreePirParams small =
         make_tree_pir_params(6, 1, 8, 1, 1, 17, {577});
@@ -46,12 +39,10 @@ void PirTest::test_tree_select() {
     for (size_t level = 0; level <= small.L; ++level) {
       const TreeLevelDatabase &db = levels[level];
       const size_t node_count = size_t{1} << level;
-      // Forward direction: every node lands at D_l[j mod R][j div R].
       for (size_t j = 0; j < node_count; ++j) {
         require_test(db.plaintexts[j % db.R][j / db.R] == source(level, j),
                      "packed node value");
       }
-      // Zero fill beyond the occupied coefficients.
       for (size_t p = 0; p < db.R; ++p) {
         for (size_t u = 0; u < small.n; ++u) {
           if (p + u * db.R >= node_count) {
@@ -60,8 +51,6 @@ void PirTest::test_tree_select() {
         }
       }
     }
-    // Oracle direction: the target node sits at coefficient gamma_l of
-    // plaintext p_l for every leaf and level.
     for (size_t leaf = 0; leaf < small.N; ++leaf) {
       for (size_t level = 0; level <= small.L; ++level) {
         const LevelOracle oracle =
@@ -75,8 +64,6 @@ void PirTest::test_tree_select() {
     }
   }
 
-  // ---- Plaintext fold reference: MSB-first indexes correctly, LSB-first
-  // provably selects the wrong pairing for asymmetric targets ----
   for (size_t bits = 1; bits <= 3; ++bits) {
     const size_t count = size_t{1} << bits;
     std::vector<uint64_t> values(count);
@@ -93,7 +80,6 @@ void PirTest::test_tree_select() {
                  "LSB-first fold must fail for some target");
   }
 
-  // ---- Encrypted Milestone-2 gate over both tree shapes ----
   PirParams scheme;
   PirClient client(scheme);
   SharedPirSessionKeys keys = client.create_session_keys();
@@ -113,9 +99,6 @@ void PirTest::test_tree_select() {
         preprocess_tree_reference(tree, node_source);
     const std::vector<LevelPlan> plans = build_level_plans(tree);
 
-    // Boundary leaves, a mixed-bit leaf, and a beta-asymmetric leaf
-    // (gamma = 1, alpha = 1, beta = 1, i.e. beta bits 01) that distinguishes
-    // the fold order at the deepest level.
     const std::vector<size_t> leaves = {
         0, tree.N - 1, 0x2BADBEEFULL % tree.N,
         tree.P + tree.B + (tree.b >= 2 ? 1 : 0)};
@@ -127,9 +110,6 @@ void PirTest::test_tree_select() {
       AlphaPyramid pyramid =
           build_alpha_pyramid(unpacked.alpha, tree, scheme);
 
-      // Sec. 10 gate for every leaf (alpha = 0 for leaf 0, the maximal
-      // alpha for the last leaf): pyramid level c one-hot-selects
-      // floor(alpha / 2^c), and the apex encrypts the constant 1.
       for (size_t c = 0; c <= tree.a; ++c) {
         for (size_t j = 0; j < pyramid[c].size(); ++j) {
           RlwePt pt = client.decrypt_ct(pyramid[c][j]);
@@ -141,8 +121,6 @@ void PirTest::test_tree_select() {
         }
       }
 
-      // Milestone-2 gate: every level of the path decrypts to the exact
-      // packed plaintext D_l[p_l].
       for (size_t level = 0; level <= tree.L; ++level) {
         RlweCt selected = select_level(
             levels[level], plans[level], pyramid,
@@ -156,10 +134,6 @@ void PirTest::test_tree_select() {
                      "SelectLevel equals the direct plaintext lookup");
       }
 
-      // Sec. 21.5 regression at the encrypted layer: replaying the deepest
-      // level's fold with the selector order reversed (an LSB-first
-      // implementation) must select a different candidate for this
-      // beta-asymmetric leaf.
       if (tree.b >= 2 && leaf == leaves.back()) {
         const LevelPlan &deepest = plans[tree.L];
         std::vector<RlweCt> candidates = evaluate_alpha_dimension(

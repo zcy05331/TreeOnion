@@ -16,7 +16,6 @@ std::vector<uint64_t> moduli(const PirParams &params) {
   return std::vector<uint64_t>(qs.begin(), qs.end());
 }
 
-// ceil(log2 q) for the composite q, i.e., the bit width of q - 1.
 size_t coeff_bits(const std::vector<uint64_t> &qs) {
   u128 q = 1;
   for (uint64_t m : qs) q *= m;
@@ -32,7 +31,6 @@ void require_supported(const std::vector<uint64_t> &qs) {
   }
 }
 
-// Garner's composition of (x mod q_0, x mod q_1) into x mod q_0 q_1.
 struct Crt {
   uint64_t q0 = 0, q1 = 0, q0_inv_mod_q1 = 0;
   bool two = false;
@@ -53,7 +51,7 @@ struct Crt {
   }
 };
 
-}  // namespace
+}
 
 void expand_query_mask(const QuerySeed &seed, size_t N,
                        const std::vector<uint64_t> &qs, uint64_t *c1) {

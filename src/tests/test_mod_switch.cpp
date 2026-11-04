@@ -16,8 +16,6 @@ void PirTest::test_mod_switch() {
   const double sigma = pir_params.get_noise_std_dev();
   ChaChaRng rng(0x6d6f6473ULL);
 
-  // Dense plaintext including the extreme value t - 1, so a rounding error
-  // in the rescale shows up somewhere.
   std::vector<uint64_t> pt(coeff_count, 0);
   for (size_t i = 0; i < coeff_count; ++i) { pt[i] = rng() % t; }
   pt[0] = t - 1;
@@ -27,8 +25,6 @@ void PirTest::test_mod_switch() {
 
   RlweCt rlwe_ct;
   encrypt_bfv_rns(pt, client.rlwe_sk_, coeff_count, qs, t, sigma, rng, rlwe_ct);
-
-  // decrypt the see the oritinal pt
 
   server.mod_switch_inplace(rlwe_ct, small_q);
 
@@ -47,8 +43,6 @@ void PirTest::test_mod_switch() {
     }
   }
 
-  // The response codec writes exactly small_q_width bits per coefficient, so
-  // every switched coefficient of both components must lie below small_q.
   for (size_t i = 0; i < coeff_count; i++) {
     require_test(rlwe_ct.c0[i] < small_q && rlwe_ct.c1[i] < small_q,
                  "switched coefficient is not reduced below small_q");

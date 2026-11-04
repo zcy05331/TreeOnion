@@ -11,8 +11,6 @@
 
 namespace {
 
-// Plaintext negacyclic reference (blueprint sec. 12.4): multiply a Z_t
-// polynomial by X^e with e taken mod 2n; wrapped coefficients flip sign.
 std::vector<uint64_t> plain_mul_x_pow(const std::vector<uint64_t> &poly,
                                       size_t e, uint64_t t) {
   const size_t n = poly.size();
@@ -29,12 +27,8 @@ std::vector<uint64_t> plain_mul_x_pow(const std::vector<uint64_t> &poly,
   return out;
 }
 
-}  // namespace
+}
 
-// Sec. 12 gates: MulXPow against the plaintext negacyclic oracle for every
-// exponent in [0, 2n), RotSelect driven by every real unpacked gamma selector
-// (both bit values must occur), and PrivateRotateLevel aligning the target
-// record to coefficient zero on both tree shapes and the boundary leaves.
 void PirTest::test_tree_rotate() {
   print_func_name(__FUNCTION__);
   constexpr size_t N = DBConsts::PolyDegree;
@@ -47,7 +41,6 @@ void PirTest::test_tree_rotate() {
   const double sigma = scheme.get_noise_std_dev();
   ChaChaRng rng(0x726f74617465ULL);
 
-  // ---- MulXPow oracle: every exponent, dense sign-sensitive payload ----
   std::vector<uint64_t> msg(N);
   for (size_t i = 0; i < N; ++i) msg[i] = (3 * i + 1) % t;
   RlweCt msg_ct;
@@ -62,7 +55,6 @@ void PirTest::test_tree_rotate() {
     }
   }
 
-  // ---- RotSelect and PrivateRotateLevel over real queries ----
   SharedPirSessionKeys keys =
       client.create_session_keys(std::bit_width(N) - 1);
   const TreeNodeSource source = [&](size_t level, size_t index) {
@@ -89,11 +81,8 @@ void PirTest::test_tree_rotate() {
       const AlphaPyramid pyramid =
           build_alpha_pyramid(unpacked.alpha, tree, scheme);
 
-      // RotSelect in isolation on every gamma selector: bit 0 keeps the
-      // input, bit 1 multiplies by X^{-shift}. Leaf 0 has all-zero gamma
-      // bits and the last leaf all-one bits, so both branches are exercised.
       for (size_t v = 0; v < tree.r; ++v) {
-        const size_t shift = 7 + v;  // arbitrary shifts in (0, n)
+        const size_t shift = 7 + v;
         const RlweCt out = rot_select(msg_ct, unpacked.gamma_selectors[v],
                                       shift, server, scheme);
         RlwePt expected;
@@ -105,9 +94,6 @@ void PirTest::test_tree_rotate() {
                      "RotSelect must rotate exactly when the bit is one");
       }
 
-      // Algorithm 5 gate on every level: the selected level ciphertext
-      // rotated by X^{-gamma_l} equals the plaintext reference, and the
-      // target node reaches coefficient zero.
       for (size_t level = 0; level <= tree.L; ++level) {
         RlweCt selected = select_level(
             levels[level], plans[level], pyramid,

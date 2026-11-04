@@ -2,13 +2,6 @@
 
 #include <random>
 
-// fast_expand_qry on the packed standard query: the packed ciphertext must
-// carry its non-zero slot at BitRev(idx mod fst_dim, h) (the fast expansion
-// consumes a bit-reversed slot order), and after expansion the first-dimension
-// leaves must be an exact BFV one-hot at idx mod fst_dim, i.e. leaf j
-// decrypts to the constant [j == idx mod fst_dim] with every other
-// coefficient zero. Checked for the first row, the last row and one seeded
-// interior row of the default layout.
 void PirTest::test_fast_expand_query() {
   print_func_name(__FUNCTION__);
 
@@ -31,8 +24,6 @@ void PirTest::test_fast_expand_query() {
     RlweCt zero_ct = client.fresh_zero_ct();
     const int budget = client.noise_budget(zero_ct);
     BENCH_PRINT("fresh zero noise budget: " << budget << " bits");
-    // noise_budget is a first-limb diagnostic; multi-limb builds rely on
-    // the value checks below.
     if (pir_params.K() == 1) {
       require_test(budget > 0, "fresh zero ciphertext has no noise budget");
     }
@@ -49,8 +40,6 @@ void PirTest::test_fast_expand_query() {
     const size_t target = query_idx % fst_dim_sz;
     RlweCt fast_query = client.fast_generate_query(query_idx);
 
-    // Packed layout: the only non-zero slots are the bit-reversed first-dim
-    // slot and the bit-reversed RGSW selector rows above fst_dim_sz.
     {
       const RlwePt packed = client.decrypt_ct(fast_query);
       const size_t reversed = utils::bit_reverse(target, expan_height);

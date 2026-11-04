@@ -2,22 +2,6 @@
 
 #include <cstdio>
 
-// Pareto table over num_other_dims (y) for the OnionPIRv2 design:
-// server-stateful, single packed query, GSWs derived from RGSW(s) via
-// query_to_gsw. The user picks a row: smaller y ⇒ fewer external products
-// (higher throughput); larger y ⇒ smaller first dim (lower memory traffic
-// but more external products).
-//
-// Parameters
-//   target_num_pt   N  — total plaintexts in the database
-//   fst_dim_sz      x  — first-dimension size (plaintexts)
-//   num_other_dims  y  — number of subsequent (log-folded) dims, each size 2
-//   tree_height     k  — depth of per-query expansion tree (1 query → 2^k slots)
-//   L_EP               — gadget length for subsequent-dim external products
-//
-// Constraint:  2^k ≥ x + y · L_EP   and   x · 2^y ≥ N
-// Cost (this model): 1 BFV (just the query — keys server-resident).
-
 namespace {
 
 struct Row {
@@ -47,18 +31,18 @@ Row best_for_y(size_t y, size_t target_num_pt, size_t L_EP) {
     best.feasible = true;
     best.tree_height = k;
     best.fst_dim_sz = fst_dim_sz;
-    return best;  // smallest feasible k wins
+    return best;
   }
   return best;
 }
 
-}  // namespace
+}
 
 void PirTest::plan_params() {
   PirParams pir_params;
   const size_t target_num_pt = pir_params.get_num_pt();
   const size_t L_EP = pir_params.get_l();
-  const size_t bfv_bytes = pir_params.get_BFV_size(/*use_seed=*/true);
+  const size_t bfv_bytes = pir_params.get_BFV_size(true);
 
   std::printf("plan_params: Pareto over num_other_dims (y)\n");
   std::printf("  target_num_pt = %zu, L_EP = %zu, BFV size = %zu B (seed-compressed)\n",

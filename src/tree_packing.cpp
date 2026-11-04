@@ -33,7 +33,7 @@ size_t exact_log2(size_t value, const char *field) {
   return static_cast<size_t>(std::bit_width(value)) - 1;
 }
 
-}  // namespace
+}
 
 const char *response_packing_name(ResponsePacking packing) {
   return packing == ResponsePacking::MlweMerge ? "mlwe" : "projection";
@@ -131,4 +131,4 @@ RlweCt mlwe_merge_residues(std::vector<RlweCt> inputs, size_t rho,
   return std::move(inputs.front());
 }
 
-}  // namespace tree_packing
+}

@@ -7,13 +7,6 @@
 #include <utility>
 #include <vector>
 
-// Milestone-6 gate (blueprint sec. 20): the optimized NTT-view and m32
-// first-dimension kernels must agree with the scalar reference kernel
-// coefficient by coefficient (raw ciphertext bit equality, not merely equal
-// decryptions), and the scalar reference itself must decrypt to the packed
-// plaintext D_l[p_l] so a bug shared by all three kernels cannot hide. Runs
-// on the scalar g = 1 shapes and on the 32-chunk g = 32 shape that the real
-// node payload uses, for the first, last and an interior leaf.
 void PirTest::test_tree_kernel() {
   print_func_name(__FUNCTION__);
   constexpr size_t N = DBConsts::PolyDegree;
@@ -57,7 +50,6 @@ void PirTest::test_tree_kernel() {
       AlphaPyramidM32 pyramid_m32;
       if (scheme.get_composite_rns().enabled) {
         pyramid_m32 = pyramid_to_m32(pyramid_ntt, scheme);
-        // The answer path builds the coarse rows in the u32 domain.
         for (Matrix32QueryLayout layout : {Matrix32QueryLayout::Interleaved,
                                            Matrix32QueryLayout::SplitColumns}) {
           const AlphaPyramidM32 split = pyramid_to_m32(pyramid_ntt, scheme, layout);
@@ -72,7 +64,6 @@ void PirTest::test_tree_kernel() {
         const RlweCt scalar = select_level(
             db.canonical[level], db.plans[level], pyramid,
             std::span<GSWCt>(unpacked.beta_selectors), server, tree, scheme);
-        // Plaintext oracle for the reference kernel.
         const LevelOracle oracle =
             build_level_oracle_for_test(leaf, level, tree);
         RlwePt expected;

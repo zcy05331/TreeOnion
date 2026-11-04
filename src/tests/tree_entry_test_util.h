@@ -36,4 +36,4 @@ inline tree_entry_codec::EntryBits synthetic_entry(size_t entry_bits,
   return entry;
 }
 
-}  // namespace tree_entry_test
+}

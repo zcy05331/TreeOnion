@@ -25,7 +25,7 @@ tree_entry_codec::EncodedEntry encode_entry(const EntryBits &entry,
   return tree_entry_codec::encode_entry(entry, params.codec);
 }
 
-}  // namespace
+}
 
 Params make_params(const TreePirParams &tree, size_t entry_bits) {
   validate_tree_params(tree);
@@ -75,8 +75,6 @@ Database preprocess(const Params &params, const EntrySource &source,
   Database db;
   StackedAlphaBetaM32 &stacked = db.stacked;
   if (m32) {
-    // AlphaBeta rows stack level by level, plane by plane within a level, in
-    // the order answer consumes them.
     stacked.cols = params.tree.N0;
     stacked.first_row.assign(params.codec.plane_count,
                              std::vector<size_t>(params.tree.L + 1, 0));
@@ -132,7 +130,6 @@ void update_entry(Database &db, const Params &params, const PirParams &scheme,
   const TreePirParams &tree = params.tree;
   require(level <= tree.L && node < (size_t{1} << level), "node is out of range");
   const LevelPlan &plan = db.planes.front().plans[level];
-  // Node j sits in slot u = j / R of plaintext p = j mod R, digit d at u + d*rho.
   const size_t p = node % plan.R, u = node / plan.R;
   const auto [rows, cols] = level_m32_shape(plan, tree);
   const bool alpha_beta = plan.select_case == SelectCase::AlphaBeta;
@@ -160,8 +157,6 @@ void update_entry(Database &db, const Params &params, const PirParams &scheme,
       total_rows = view.rows;
       first_row = 0;
     }
-    // The m32 values are the NTT values mod q1 and mod q2; NTT is linear and
-    // q1, q2 divide q, so adding the reduced difference updates them exactly.
     for (size_t coeff = 0; coeff < N; ++coeff) {
       const size_t at = (coeff * total_rows + first_row + row) * cols + col;
       lo[at] = static_cast<uint32_t>((lo[at] + delta[coeff] % crt.q1) % crt.q1);
@@ -170,4 +165,4 @@ void update_entry(Database &db, const Params &params, const PirParams &scheme,
   }
 }
 
-}  // namespace tree_multiplane
+}

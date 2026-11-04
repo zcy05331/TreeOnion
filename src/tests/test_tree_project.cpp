@@ -10,11 +10,6 @@
 #include <utility>
 #include <vector>
 
-// Sec. 13 gates: the projection map itself for every depth 0..log2(n)
-// (including the exact 2^{-d} scaling), then the Milestone-3 gate — after
-// private rotation and projection the target value sits at coefficient zero
-// and every other coefficient is zero — plus the full-depth vs min(r, level)
-// equivalence above level r and the sec. 18 noise diagnostics.
 void PirTest::test_tree_project() {
   print_func_name(__FUNCTION__);
   constexpr size_t N = DBConsts::PolyDegree;
@@ -29,8 +24,6 @@ void PirTest::test_tree_project() {
   ChaChaRng rng(0x70726f6a656374ULL);
   SharedPirSessionKeys keys = client.create_session_keys(kLogN);
 
-  // ---- Pure projection oracle: pi_d keeps exactly the stride-2^d
-  // coefficients at their original scale ----
   std::vector<uint64_t> msg(N);
   for (size_t i = 0; i < N; ++i) msg[i] = (5 * i + 3) % t;
   for (size_t depth = 0; depth <= kLogN; ++depth) {
@@ -51,8 +44,6 @@ void PirTest::test_tree_project() {
       const int budget = client.noise_budget(projected);
       BENCH_PRINT("projection depth " << depth << " noise budget: "
                   << budget << " bits");
-      // noise_budget is a first-limb diagnostic; multi-limb builds rely on
-      // the coefficient checks above.
       if (scheme.K() == 1) {
         require_test(budget > 0,
                      "full-depth projection has no noise budget");
@@ -60,7 +51,6 @@ void PirTest::test_tree_project() {
     }
   }
 
-  // ---- Milestone-3 gate over both tree shapes ----
   const TreeNodeSource source = [&](size_t level, size_t index) {
     return synthetic_tree_node_value(level, index, t);
   };
@@ -104,8 +94,6 @@ void PirTest::test_tree_project() {
                                                expected),
                      "rotate + project must isolate the target node");
 
-        // Sec. 21.7: above level r the reduced depth min(r, level) and the
-        // full depth r agree on the valid packed layout.
         if (level < tree.r) {
           const RlweCt full_depth = project_keep_stride(
               rotated, tree.r, keys->bv_galois_keys, scheme);
@@ -114,8 +102,6 @@ void PirTest::test_tree_project() {
                                         expected),
               "full-depth projection must agree above level r");
         }
-        // Sec. 18: the remaining budget must stay positive at every level;
-        // the deepest level is the tightest point of the path pipeline.
         const int budget = client.noise_budget(projected);
         if (scheme.K() == 1) {
           require_test(budget > 0,

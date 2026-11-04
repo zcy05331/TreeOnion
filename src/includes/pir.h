@@ -5,59 +5,33 @@
 #include <cstdint>
 #include <vector>
 
-// [运行期参数] DBConsts 只给 bit width 与策略；PirParams 负责生成实际
-// NTT-friendly moduli、CRT tables、small_q、gadget base 和数据库 shape。
-// logical DB size、physical NTT storage 和 modeled communication bytes 是
-// 三种不同口径，不能用同一个 size getter 替代。
-//
-// Precomputed constants used by the K=2 CRT compose/decompose helpers.
 struct RnsTables {
   uint64_t q0_inv_mod_q1 = 0;
   std::vector<uint64_t> r64_mod_q;
 };
 
-// Constants for the composite-mod first-dim split. Only populated when the
-// active config splits the (single, logical) ciphertext modulus q into two
-// CRT limbs (q = q1*q2) for the first-dimension matmul. enabled = false
-// otherwise; rest of the pipeline still sees a single-mod K=1 view.
 struct CompositeRnsTables {
   bool enabled = false;
-  uint64_t q1 = 0;              // first RNS limb (~29 bits)
-  uint64_t q2 = 0;              // second RNS limb (~29 bits)
-  uint64_t w1 = 0;              // primitive 2N-th root mod q1
-  uint64_t w2 = 0;              // primitive 2N-th root mod q2
-  uint64_t w_crt = 0;           // CRT-combined primitive 2N-th root mod q1*q2
-  uint64_t q1_inv_mod_q2 = 0;   // for CRT-compose hot path
+  uint64_t q1 = 0;
+  uint64_t q2 = 0;
+  uint64_t w1 = 0;
+  uint64_t w2 = 0;
+  uint64_t w_crt = 0;
+  uint64_t q1_inv_mod_q2 = 0;
 };
 
-// Database-layout inputs that may vary between PIR calls while the underlying
-// BFV/RGSW scheme parameters and helper keys remain unchanged.
 struct PirLayoutConfig {
   size_t target_num_pt;
   size_t expansion_height;
   bool fst_dim_pow2;
 };
 
-// [Tree PIR] 直接指定的打包查询形状：恰好 fst_dim_sz 个首维槽位，加
-// num_selector_bits 个 gadget 行组，共用 2^expansion_height 的展开容量。
-// 与 PirLayoutConfig 不同，它不从明文条数派生，因此数据库规划器永远不会选出的
-// 形状（例如树查询的 N₀ + (b + r)·L_EP 布局）也能被精确表达。
 struct PirQueryShapeConfig {
-  // 首维（BFV one-hot）槽位数；树查询里等于 N₀。约束：1 ≤ fst_dim_sz ≤ 2^height。
   size_t fst_dim_sz;
-  // 高维二进制 selector 个数（树查询里为 b + r）；每个占 L_EP 个 gadget 行槽位。
-  // 约束：fst_dim_sz + L_EP·num_selector_bits ≤ 2^expansion_height。
   size_t num_selector_bits;
-  // 展开树高度 h_q，容量 = 2^h_q 个逻辑槽位；上界 log₂ N（环自同构能力）。
   size_t expansion_height;
 };
 
-// Structural identity of one HE scheme instance: every
-// quantity that the packed-query scale, the gadget rows, the composite
-// first-dimension split, and the small-q response codec depend on. It is the
-// single source of truth for scheme compatibility checks; layout fields
-// (num_pt, fst_dim_sz, expansion height) are deliberately absent so one
-// identity covers every query shape.
 struct PirSchemeIdentity {
   uint32_t schema_version = 1;
 
@@ -66,15 +40,15 @@ struct PirSchemeIdentity {
   std::vector<size_t> rns_modulus_bits;
   std::vector<uint64_t> rns_moduli;
 
-  uint64_t response_modulus = 0;      // small q
-  size_t response_modulus_bits = 0;   // SmallQWidth
+  uint64_t response_modulus = 0;
+  size_t response_modulus_bits = 0;
 
-  size_t selector_gadget_rows = 0;        // L_EP
+  size_t selector_gadget_rows = 0;
   size_t selector_base_log2 = 0;
   size_t selector_low_bits = 0;
-  size_t completion_key_gadget_rows = 0;  // L_KEY
+  size_t completion_key_gadget_rows = 0;
   size_t completion_key_base_log2 = 0;
-  size_t bv_ks_rows = 0;                  // L_KS
+  size_t bv_ks_rows = 0;
   size_t bv_ks_base_log2 = 0;
   size_t bv_ks_low_bits = 0;
 
@@ -89,36 +63,21 @@ struct PirSchemeIdentity {
   uint64_t composite_w_crt = 0;
   uint64_t composite_q1_inv_mod_q2 = 0;
 
-  // std::bit_cast of the Gaussian standard deviation: exact equality instead
-  // of an approximate floating-point comparison.
   uint64_t noise_std_dev_ieee754 = 0;
 
   bool operator==(const PirSchemeIdentity &) const = default;
 };
 
-// ================== CLASS DEFINITIONS ==================
 class PirParams {
 public:
   PirParams();
   PirParams(const PirParams &pir_params) = default;
 
   PirParams with_layout(const PirLayoutConfig &layout) const;
-  // [Tree PIR] 仅展开的参数视图：按 shape 原样写入 fst_dim_sz_、
-  // num_dims_ = 1 + num_selector_bits 与 expansion_height_，其余 scheme 字段全部
-  // 保留。num_pt_ 折叠为 fst_dim_sz（视图不承载数据库）：可用于查询打包、
-  // fast_expand_qry 与会话密钥校验，不可用于装载数据库或回答 make_query。
-  // 详细机制见 pir.cpp 实现处注释。
   PirParams with_query_shape(const PirQueryShapeConfig &shape) const;
-  // Two parameter sets are scheme-compatible exactly when their structural
-  // identities are equal; database layout may differ.
   bool scheme_compatible(const PirParams &other) const;
   PirSchemeIdentity scheme_identity() const;
 
-  // ================== getters ==================
-  // Getter group exposes derived runtime parameters. Treat get_DBSize_MB() as
-  // logical plaintext payload, get_physical_storage_MB() as aligned NTT
-  // coefficient storage, and get_BFV_size()/key helpers as communication-size
-  // models; they intentionally answer different questions.
   const size_t get_ct_mod_width() const;
 
   inline const size_t get_uint_size() const { return sizeof(db_coeff_t); }
@@ -143,7 +102,6 @@ public:
   inline size_t get_ep_low_bits() const { return ep_low_bits_; }
   inline size_t get_fst_dim_sz() const { return fst_dim_sz_; }
   inline size_t get_other_dim_sz() const { return num_pt_ / fst_dim_sz_; }
-  // Number of RNS limbs (matches DBConsts::RnsMods.size()).
   inline size_t K() const { return rns_mods_.size(); }
   inline size_t get_coeff_val_cnt() const {
     return DBConsts::PolyDegree * K();
@@ -158,23 +116,17 @@ public:
   inline bool get_fst_dim_pow2() const { return fst_dim_pow2_; }
   inline size_t get_num_other_dims() const { return num_dims_ - 1; }
 
-  // Standard deviation σ of the Gaussian error distribution used during
-  // encryption and key generation. Defined in DBConsts::NoiseStdDev.
   inline double get_noise_std_dev() const { return DBConsts::NoiseStdDev; }
 
-  // Seed-compressed BFV communication model only. This is not an actual
-  // query/key serializer and does not promise byte-for-byte wire layout.
   inline const size_t get_BFV_size(bool use_seed = true) const {
     const size_t per_poly_bits = DBConsts::PolyDegree * get_ct_mod_width();
     if (use_seed) {
-      return 32 + (get_ct_mod_width() * DBConsts::PolyDegree) / 8; // assuming 32 bytes for the seed
+      return 32 + (get_ct_mod_width() * DBConsts::PolyDegree) / 8;
     } else {
-      return (get_ct_mod_width() * DBConsts::PolyDegree * 2) / 8; // two polynomials per ciphertext
+      return (get_ct_mod_width() * DBConsts::PolyDegree * 2) / 8;
     }
   }
 
-  // Seed-compressed key-size models used for reporting communication bytes;
-  // concrete key objects are built elsewhere and are not serialized here.
   inline const size_t get_gsw_key_size(bool use_seed = true) const {
     return 2 * l_key_ * get_BFV_size(use_seed);
   }
@@ -209,10 +161,6 @@ private:
   RnsTables rns_tables_;
   CompositeRnsTables composite_rns_;
 
-  // [Composite NTT] 流水线把 q=q1*q2 当成一个 logical K=1 modulus；
-  // 只有首维 matrix multiplication 临时把 coefficient 投影到 q1/q2，
-  // 以使用 29-bit 的 32x32->64 kernel。w_crt 是在 composite q 下可用的
-  // 2N-th root，必须注册给 NTT wrapper；它不是普通 prime-modulus root。
   void init_composite_rns();
   void apply_layout(const PirLayoutConfig &layout);
 };

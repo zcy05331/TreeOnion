@@ -64,7 +64,7 @@ EntryBits entry_with_positions(size_t bits,
   return entry;
 }
 
-}  // namespace
+}
 
 void PirTest::test_tree_entry_codec() {
   print_func_name(__FUNCTION__);

@@ -5,15 +5,6 @@
 #include <cstdint>
 #include <random>
 
-// ChaCha20 keystream generator (the RFC 8439 block function, 20 rounds, with
-// a 64-bit block counter) behind the UniformRandomBitGenerator interface, so
-// the standard distributions and the samplers in utils work unchanged. It
-// replaces std::mt19937_64 for every secret-dependent draw: the client secret
-// key, encryption masks and errors, and the key-switching keys.
-//
-// Default construction draws the 256-bit key from the operating system
-// (std::random_device); the seeded constructor gives reproducible streams and
-// is meant for tests.
 class ChaChaRng {
  public:
   using result_type = uint64_t;
@@ -81,5 +72,5 @@ class ChaChaRng {
   std::array<uint32_t, 8> key_{};
   uint64_t counter_ = 0;
   std::array<uint32_t, 16> block_{};
-  size_t next_ = 16;  // next unused word of block_; 16 forces the first refill
+  size_t next_ = 16;
 };

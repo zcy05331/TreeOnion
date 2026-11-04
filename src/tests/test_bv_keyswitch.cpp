@@ -47,9 +47,6 @@ static void test_rounded_bv_digits() {
   }
 }
 
-// ============================================================================
-// Unit test: signed gadget decomposition
-// ============================================================================
 static void test_signed_decompose() {
   std::cout << "--- test_signed_decompose ---\n";
 
@@ -69,7 +66,6 @@ static void test_signed_decompose() {
     uint64_t digits[bvks::L_KS];
     bvks::signed_gadget_decompose(val, base_log2, q, digits, bvks::L_KS);
 
-    // 1. Reconstruction: Σ digits[i] * B^i ≡ val (mod q)
     uint128_t reconstructed = 0;
     uint128_t Bi = 1;
     for (size_t i = 0; i < bvks::L_KS; ++i) {
@@ -79,7 +75,6 @@ static void test_signed_decompose() {
     require_test(static_cast<uint64_t>(reconstructed) == val,
                  "signed gadget decomposition does not reconstruct");
 
-    // 2. Each digit has signed magnitude ≤ B/2
     for (size_t i = 0; i < bvks::L_KS; ++i) {
       uint64_t mag = (digits[i] > half_q) ? (q - digits[i]) : digits[i];
       if (mag > max_digit_mag) max_digit_mag = mag;
@@ -93,13 +88,6 @@ static void test_signed_decompose() {
             << ", max digit magnitude=" << max_digit_mag << " (B/2=" << (B / 2) << ")\n";
 }
 
-// ============================================================================
-// Unit test: BV key-switching correctness
-//
-// Encrypt a known plaintext, apply the galois automorphism σ_k via BV
-// key-switching, decrypt natively, and verify the result matches the
-// automorphism applied directly to the plaintext.
-// ============================================================================
 void PirTest::test_bv_keyswitch() {
   test_rounded_bv_digits();
   test_signed_decompose();
@@ -112,19 +100,17 @@ void PirTest::test_bv_keyswitch() {
   const uint64_t t    = pir_params.get_plain_mod();
   const double sigma  = pir_params.get_noise_std_dev();
   const RnsTables &tables = pir_params.get_rns_tables();
-  const uint32_t galois_k = 257; // 2^8 + 1
+  const uint32_t galois_k = 257;
 
   BENCH_PRINT("K=" << qs.size() << " N=" << N << " t=" << t);
 
   ChaChaRng rng(0x62766b73ULL);
   RlweSk sk = gen_secret_key_rns(N, qs, rng);
 
-  // Build a plaintext with a few distinctive coefficients.
   std::vector<uint64_t> pt(N, 0);
   pt[0] = 1; pt[1] = 2; pt[2] = 3;
   pt[10] = 10; pt[11] = 11; pt[12] = 12;
 
-  // Encrypt (coeff form).
   RlweCt ct;
   encrypt_bfv_rns(pt, sk, N, qs, t, sigma, rng, ct);
 
@@ -134,21 +120,14 @@ void PirTest::test_bv_keyswitch() {
     BENCH_PRINT("fresh decrypt[0..2]: " << dec.data[0] << ", " << dec.data[1] << ", " << dec.data[2]);
   }
 
-  // Expected result after σ_k: apply automorphism to the plaintext directly.
   std::vector<uint64_t> pt_auto(N, 0);
   utils::automorphism_coeff(pt.data(), N, galois_k, t, pt_auto.data());
 
-  // bv_apply_galois_inplace expects a coefficient-form ciphertext.
   auto bv_ksk = bvks::gen_bv_ks_key(pir_params, sk, galois_k, rng);
   bvks::bv_apply_galois_inplace(ct, galois_k, bv_ksk, pir_params);
 
   RlwePt dec_bv;
   decrypt_rns(ct, sk, N, qs, t, tables, dec_bv);
-  // BENCH_PRINT("BV galois decrypt[0..2]: " << dec_bv.data[0] << ", " << dec_bv.data[1] << ", " << dec_bv.data[2]);
-  // BENCH_PRINT("coeff at idx " << 1 << " maps to: " << galois_k << " got=" << dec_bv.data[galois_k] << " expected: " << pt_auto[galois_k]);
-  // BENCH_PRINT("coeff at idx " << 2 << " maps to: " << galois_k * 2 << " got=" << dec_bv.data[galois_k * 2] << " expected: " << pt_auto[galois_k * 2]);
-  // BENCH_PRINT("coeff at idx " << 3 << " maps to: " << galois_k * 3 << " got=" << dec_bv.data[galois_k * 3] << " expected: " << pt_auto[galois_k * 3]);
-  // Compare against expected automorphism of the plaintext.
   size_t diffs = 0;
   for (size_t i = 0; i < N; i++) {
     if (dec_bv.data[i] != pt_auto[i]) {
@@ -164,20 +143,6 @@ void PirTest::test_bv_keyswitch() {
   std::cout << "PASS: BV key-switch matches native automorphism of plaintext\n";
 }
 
-// ============================================================================
-// Unit test: the vectorized K=1 key switch is bit-exact against the scalar
-// primitive.
-//
-// bv_apply_galois_inplace_k1 re-implements the digit extraction of
-// bvks::signed_gadget_decompose as one loop per digit over all coefficients
-// (bv_keyswitch.cpp, APPLY_GAL_DECOMP) so the inner loop vectorizes.
-// Decryption cannot tell the two apart: a wrong least-significant digit
-// (~B * sqrt(N) of phase), a dropped +half_step rounding, a flipped tie rule
-// or a reversed row order all stay inside the ordinary key-switch noise and
-// far below q/(2t). This test rebuilds the key switch from the public pieces
-// (automorphism, scalar decomposition, NTT, the KSK rows) and requires the
-// production ciphertext to equal it exactly, for three automorphisms.
-// ============================================================================
 void test_bv_keyswitch_reference() {
   print_func_name(__FUNCTION__);
   PirParams params;
@@ -196,11 +161,6 @@ void test_bv_keyswitch_reference() {
   std::vector<uint64_t> pt(N);
   for (size_t i = 0; i < N; ++i) pt[i] = (3 * i + 1) % t;
 
-  // c1 coefficients on the decomposition's decision boundaries: the centering
-  // split at q/2, the balanced-digit tie at B/2 in both signs, and (in a
-  // PIR_KS_LOW_BITS build) a value exactly half a rounding step above a
-  // multiple of 2^low_bits. The remaining coefficients are the encryption's
-  // uniform randomness.
   const uint64_t probes[8] = {
       0, 1, q - 1, q / 2, q / 2 + 1, B / 2, q - B / 2,
       low_bits ? (uint64_t{1} << low_bits) + (uint64_t{1} << (low_bits - 1))
@@ -220,10 +180,6 @@ void test_bv_keyswitch_reference() {
     for (size_t i = 0; i < 8; ++i) ct.c1[i] = probes[i];
     const RlweCt ref = ct;
 
-    // Reference: sigma_k on both polynomials; scalar signed decomposition of
-    // sigma_k(c1) with digit i feeding KSK row i (the row encrypting
-    // sigma_k(s) * 2^low_bits * B^i); pointwise MAC in the NTT domain; then
-    // c0' = sigma_k(c0) + sum_i d_i * b_i and c1' = sum_i d_i * a_i.
     std::vector<uint64_t> c0p(N), c1p(N);
     utils::automorphism_coeff(ref.c0.data(), N, galois_k, q, c0p.data());
     utils::automorphism_coeff(ref.c1.data(), N, galois_k, q, c1p.data());

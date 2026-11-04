@@ -17,7 +17,6 @@ namespace {
 
 using Hash = std::array<uint8_t, 32>;
 
-// FIPS 180-4 SHA-256, enough to build a real Merkle tree inside the test.
 Hash sha256(const uint8_t *data, size_t len) {
   static constexpr uint32_t k[64] = {
       0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1,
@@ -81,8 +80,6 @@ std::string hex(const Hash &h) {
   return s;
 }
 
-// The client's check: fold the leaf with the decoded siblings up to the root,
-// ordering each pair by the bit of the current node index.
 Hash root_from_proof(const Hash &leaf_hash, size_t leaf, size_t L,
                      const std::vector<Hash> &decoded_path) {
   Hash h = leaf_hash;
@@ -93,7 +90,6 @@ Hash root_from_proof(const Hash &leaf_hash, size_t leaf, size_t L,
   return h;
 }
 
-// RFC 6962 hashing: leaves hash 0x00 || data, inner nodes 0x01 || left || right.
 Hash rfc6962_leaf(size_t index) {
   uint8_t buf[13] = {0x00, 'l', 'e', 'a', 'f'};
   for (int b = 0; b < 8; ++b) buf[5 + b] = static_cast<uint8_t>(index >> (8 * b));
@@ -107,8 +103,6 @@ Hash rfc6962_node(const Hash &left, const Hash &right) {
   return sha256(buf, sizeof(buf));
 }
 
-// RFC 6962 tree hash of leaves [lo, hi), split at the largest power of two
-// below the size, computed directly from the definition.
 Hash rfc6962_root(size_t lo, size_t hi) {
   if (hi - lo == 1) return rfc6962_leaf(lo);
   size_t k = 1;
@@ -116,8 +110,6 @@ Hash rfc6962_root(size_t lo, size_t hi) {
   return rfc6962_node(rfc6962_root(lo, lo + k), rfc6962_root(lo + k, hi));
 }
 
-// Inclusion-proof verification of RFC 9162, Section 2.1.3.2 (the same tree
-// hash as RFC 6962), independent of how the view builds the proof.
 bool verify_inclusion(size_t leaf, size_t tree_size, Hash r, const std::vector<Hash> &proof,
                       const Hash &root) {
   if (leaf >= tree_size) return false;
@@ -136,17 +128,8 @@ bool verify_inclusion(size_t leaf, size_t tree_size, Hash r, const std::vector<H
   return sn == 0 && r == root;
 }
 
-}  // namespace
+}
 
-// Encrypted retrieval of real SHA-256 Merkle proofs through the evaluated
-// pipeline: an ordinary tree, its sibling-swapped view as the entry source, the
-// g = 8, P = 3 layout, one packed query, the MLWE merge, the small-q response,
-// and the client's recomputation of the trusted root. The query and the
-// response cross the wire as bytes: the server answers the query it loads
-// from (seed, c0), and the client decodes the response it loads from the
-// response codec. L = 12 and N0 = 4 give shallow (R = 1), coarsened-alpha
-// (1 < R < N0), and beta-fold (R >= N0) levels. Several registrations use
-// fresh keys.
 void test_merkle_sha256_e2e() {
   print_func_name(__FUNCTION__);
   const uint8_t abc[3] = {'a', 'b', 'c'};
@@ -165,8 +148,6 @@ void test_merkle_sha256_e2e() {
   require_test(tree.N0 == 4 && tree.b == 2 && params.codec.plane_count == 3,
                "fixture must use N0 = 4, b = 2, and three planes");
 
-  // Ordinary Merkle tree: leaves hash a label and the leaf index; inner nodes
-  // hash the concatenation of their children.
   std::vector<std::vector<Hash>> M(L + 1);
   M[L].resize(tree.N);
   for (size_t i = 0; i < tree.N; ++i) {
@@ -181,7 +162,6 @@ void test_merkle_sha256_e2e() {
   }
   const Hash trusted_root = M[0][0];
 
-  // Public sibling-swapped view: V[0][0] is the root, V[l][j] = M[l][j ^ 1].
   const tree_multiplane::EntrySource source = [&](size_t level, size_t node) {
     const Hash &h = level == 0 ? M[0][0] : M[level][node ^ 1];
     return tree_entry_codec::entry_from_bytes(h, entry_bits);
@@ -237,12 +217,6 @@ void test_merkle_sha256_e2e() {
               << " B and response " << response_bytes << " B on the wire");
 }
 
-// A log whose size is not a power of two, served through the evaluated
-// pipeline as a virtual view of the perfect tree over 2^L leaves: the node of
-// an aligned range holds the RFC 6962 hash of the range's leaves below the log
-// size (its left child's value when the right half is empty) and zero when the
-// range is empty. The client drops the siblings with empty ranges, and RFC
-// 9162's verification algorithm must accept the rest against the log's root.
 void test_merkle_rfc6962_view() {
   print_func_name(__FUNCTION__);
   require_applicable(paper_config_active(),

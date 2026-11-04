@@ -28,8 +28,6 @@ Params make_params(const TreePirParams &tree, size_t entry_bits);
 
 struct Database {
   std::vector<PreprocessedTree> planes;
-  // m32 path: every plane's AlphaBeta levels, scanned together; their per-level
-  // m32 views keep only the shape.
   StackedAlphaBetaM32 stacked;
 };
 
@@ -38,9 +36,6 @@ TreeLevelDatabase pack_level(size_t level, size_t plane, const Params &params,
 Database preprocess(const Params &params, const EntrySource &source,
                     const PirParams &scheme);
 
-// Replaces the entry of one node in place. Every plane holds the node in one
-// plaintext, so the update adds the NTT of the digit difference to that
-// plaintext's m32 values: one NTT and n scattered writes per plane.
 void update_entry(Database &db, const Params &params, const PirParams &scheme,
                   size_t level, size_t node, const EntryBits &old_entry,
                   const EntryBits &new_entry);
@@ -62,4 +57,4 @@ Response answer(const Database &db, ExpandedTreeQuery &query, PirServer &server,
 std::vector<EntryBits> extract(const Response &response, PirClient &client,
                                const Params &params);
 
-}  // namespace tree_multiplane
+}

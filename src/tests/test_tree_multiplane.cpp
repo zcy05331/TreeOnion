@@ -86,9 +86,6 @@ std::vector<EntryBits> answer_path(const tree_multiplane::Database &db,
   return tree_multiplane::extract(response, client, params);
 }
 
-// Rewrites every node on the path to `leaf` in place. The leaf then decodes
-// the new nodes, and its sibling decodes the new ancestors next to its own
-// unchanged leaf.
 void require_path_update(tree_multiplane::Database &db, PirClient &client,
                          PirServer &server, const PirParams &scheme,
                          const tree_multiplane::Params &params,
@@ -100,7 +97,7 @@ void require_path_update(tree_multiplane::Database &db, PirClient &client,
   for (size_t level = 0; level <= L; ++level) {
     const size_t node = leaf >> (L - level);
     updated[level] =
-        tree_entry_test::synthetic_entry(entry_bits, level, node, /*salt=*/1);
+        tree_entry_test::synthetic_entry(entry_bits, level, node, 1);
     tree_multiplane::update_entry(db, params, scheme, level, node,
                                   source(level, node), updated[level]);
   }
@@ -114,8 +111,6 @@ void require_path_update(tree_multiplane::Database &db, PirClient &client,
                "sibling path decodes the updated ancestors");
 }
 
-// Every AlphaBeta level of every plane: finishing its rows of the stacked scan
-// gives the same ciphertext, bit for bit, as scanning its own m32 view.
 void require_stacked_scan_matches_levels(
     const tree_multiplane::Database &db, PirClient &client, PirServer &server,
     const PirParams &scheme, const tree_multiplane::Params &params,
@@ -209,15 +204,13 @@ void exercise_e2e(tree_packing::ResponsePacking packing) {
   require_test(first == second,
                "fresh query/session randomness preserves decoded path");
 
-  // update_entry patches the m32 database, which only the composite configs
-  // build.
   if (scheme.get_composite_rns().enabled) {
     require_path_update(db, client, server, scheme, params, source, entry_bits,
                         repeated_leaf, packing);
   }
 }
 
-}  // namespace
+}
 
 void test_tree_multiplane() {
   require_chunk_bounds_arithmetic();

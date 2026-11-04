@@ -3,12 +3,6 @@
 
 #include <sstream>
 
-// decrypt_mod_q is the client's small-q response decoder: it always works
-// under small_q, so its input must be a modulus-switched ciphertext. This
-// test runs the exact response path a real query produces after the last
-// homomorphic operation: encrypt under full q, switch to small_q, serialize
-// with the wire codec, load, decode. A dense plaintext with both extreme
-// values makes any rounding or codec truncation visible.
 void PirTest::test_decrypt_mod_q() {
   print_func_name(__FUNCTION__);
   PirParams pir_params;
@@ -32,13 +26,10 @@ void PirTest::test_decrypt_mod_q() {
   encrypt_bfv_rns(a, client.rlwe_sk_, coeff_count, qs, t, sigma, rng, rlwe_ct);
   server.mod_switch_inplace(rlwe_ct, small_q);
 
-  // Direct decode of the switched ciphertext.
   const RlwePt direct = client.decrypt_mod_q(rlwe_ct);
   require_test(direct.data == a,
                "decrypt_mod_q must recover every coefficient after the switch");
 
-  // Wire round trip: the codec writes small_q_width bits per coefficient and
-  // the loader must hand back the identical single-limb ciphertext.
   std::stringstream wire;
   const size_t bytes = server.save_resp_to_stream(rlwe_ct, wire);
   const size_t small_q_bits = std::bit_width(small_q - 1);
@@ -54,15 +45,6 @@ void PirTest::test_decrypt_mod_q() {
   BENCH_PRINT("decoded " << coeff_count << " coefficients from " << bytes
               << " wire bytes");
 
-  // Gauge semantics behind every reported noise margin: decrypt_mod_q_measured
-  // feeds test_pir's canary, noise_budget the tree tests' min_budget_bits /
-  // max_noise JSON fields. With c1 = 0 the phase is c0 whatever the secret
-  // key, so each coefficient's residue is known exactly. The gauge must report
-  // the largest centered residue |phase - round(q*m/t)| including the negative
-  // branch (e = -3 at m = 0 wraps c0 to q - 3) and the m = t-1 edge, decode
-  // every coefficient, and turn max_noise into floor(log2(q / (2*t*max))).
-  // Comparing against floor(q/t)*m instead (the past bug the decoder comment
-  // records) would report a residue near m*(q mod t)/t ~ 1000 at m = t-1.
   {
     std::vector<uint64_t> m(coeff_count);
     for (size_t i = 0; i < coeff_count; ++i) m[i] = (5 * i) % t;
@@ -76,7 +58,7 @@ void PirTest::test_decrypt_mod_q() {
     constexpr uint64_t kMaxResidue = 7;
     auto build = [&](uint64_t q, size_t limbs) {
       RlweCt ct;
-      ct.resize(limbs * coeff_count);  // c1 = 0: the secret key cancels
+      ct.resize(limbs * coeff_count);
       ct.ntt_form = false;
       for (size_t i = 0; i < coeff_count; ++i) {
         const uint64_t lift =
@@ -87,7 +69,6 @@ void PirTest::test_decrypt_mod_q() {
       }
       return ct;
     };
-    // budget == floor(log2(q / (2*t*max))) as an integer inequality.
     auto budget_matches = [&](int budget, uint64_t q) {
       if (budget < 0) return false;
       const uint128_t unit = static_cast<uint128_t>(2) * t * kMaxResidue;
@@ -110,8 +91,6 @@ void PirTest::test_decrypt_mod_q() {
                  "budget must be floor(log2(small_q / (2*t*max_noise))), got " +
                      std::to_string(budget));
 
-    // The same residues under the full first limb, the debug gauge the tree
-    // tests read as min_budget_bits.
     const uint64_t q0 = qs[0];
     const RlweCt full = build(q0, qs.size());
     const int full_budget = client.noise_budget(full);

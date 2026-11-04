@@ -10,15 +10,6 @@
 
 namespace {
 
-// Native RNS ↔ multi-precision conversions (CRT), replacing
-// seal::util::RNSBase::compose_array / decompose_array. Only K=2 is actually
-// reached by any of our configs (RnsMods contains at most 3 entries, the
-// last being the "special" modulus that is excluded from the RNS base).
-// A K=1 call is a no-op since the layout already matches.
-
-// RNS → multi-precision, in-place.
-// Before: buf[i*N + k] = coeff_k mod q_i, for i in [0, K), k in [0, N).
-// After:  buf[k*K + i] = limb_i (little-endian) of the CRT composition.
 void compose_rns_to_mp(uint64_t *buf, size_t N,
                        const std::vector<uint64_t> &moduli, size_t K,
                        const RnsTables &tables) {
@@ -30,29 +21,22 @@ void compose_rns_to_mp(uint64_t *buf, size_t N,
   const uint64_t q1 = moduli[1];
   const uint64_t q0_inv_mod_q1 = tables.q0_inv_mod_q1;
 
-  // Snapshot the two RNS rows; transpose then overwrites buf in K=2 layout.
   std::vector<uint64_t> r0(buf + 0 * N, buf + 0 * N + N);
   std::vector<uint64_t> r1(buf + 1 * N, buf + 1 * N + N);
 
   for (size_t k = 0; k < N; k++) {
     const uint64_t r0k = r0[k];
     const uint64_t r1k = r1[k];
-    // diff = (r1 - (r0 mod q1)) mod q1
     const uint64_t r0_mod_q1 = r0k % q1;
     const uint64_t diff = (r1k + q1 - r0_mod_q1) % q1;
-    // s = diff * q0^{-1} mod q1; s ∈ [0, q1)
     const uint64_t s = static_cast<uint64_t>(
         (static_cast<uint128_t>(diff) * q0_inv_mod_q1) % q1);
-    // x = r0 + q0 * s  fits in 128 bits since q0 * s < q0 * q1.
     const uint128_t x = static_cast<uint128_t>(q0) * s + r0k;
     buf[k * 2 + 0] = static_cast<uint64_t>(x);
     buf[k * 2 + 1] = static_cast<uint64_t>(x >> 64);
   }
 }
 
-// Multi-precision → RNS, in-place.
-// Before: buf[k*K + i] = limb_i (little-endian) of a K-limb integer.
-// After:  buf[i*N + k] = value_k mod q_i.
 void decompose_mp_to_rns(uint64_t *buf, size_t N,
                          const std::vector<uint64_t> &moduli, size_t K,
                          const RnsTables &tables) {
@@ -74,7 +58,6 @@ void decompose_mp_to_rns(uint64_t *buf, size_t N,
   for (size_t k = 0; k < N; k++) {
     const uint64_t L = lo[k];
     const uint64_t H = hi[k];
-    // x mod q = ((H mod q) * (2^64 mod q) + (L mod q)) mod q.
     const uint64_t m0 = static_cast<uint64_t>(
         (static_cast<uint128_t>(H % q0) * r64_mod_q0 + (L % q0)) % q0);
     const uint64_t m1 = static_cast<uint64_t>(
@@ -84,22 +67,7 @@ void decompose_mp_to_rns(uint64_t *buf, size_t N,
   }
 }
 
-} // namespace
-
-// external_product 的数据形状是 Algorithm 3/QueryUnpack 后续 selector
-// evaluation 的核心不变量：把输入 BFV/RLWE ciphertext 的两个 components
-// c0、c1 各自 gadget-decompose 成 l rows，拼成 [1 x 2*l] polynomial vector；
-// 再与 RGSW ciphertext 的 flat [2*l x 2] matrix 做 polynomial matmul，得到
-// 输出 BFV/RLWE 的两个 components。每个 GSWCt row 都是 [c0][c1]，其中 c0/c1
-// 各有 K*N limb-major values。
-//
-// 乘法分三阶段：
-//   1. 在 coefficient form 分解输入 BFV 的 c0/c1。
-//   2. 将每个 digit row 转到 NTT domain。
-//   3. 与已经 NTT-form 的 RGSW matrix 做 pointwise polynomial matmul。
-// 因此 res_ct 输出保持 NTT form；是否 INTT 由 caller 决定。GSWEval 内部的
-// ep_decomp_/ep_tmp_/ep_dwork_ scratch 跨调用复用，当前对象只适合本仓库
-// 单线程 evaluation path。
+}
 
 
 void GSWEval::gsw_ntt_forward(GSWCt &gsw) {
@@ -107,7 +75,6 @@ void GSWEval::gsw_ntt_forward(GSWCt &gsw) {
   const size_t K = pir_params_.K();
   const auto &rns_mods = pir_params_.get_rns_mods();
 
-  // Each poly holds c0||c1, each split into K limbs of coeff_count.
   for (auto &poly : gsw) {
     for (size_t i = 0; i < 2 * K; i++) {
       utils::ntt_fwd(poly.data() + coeff_count * i, coeff_count,
@@ -121,20 +88,10 @@ void GSWEval::external_product(GSWCt const &gsw_enc, RlweCt const &bfv,
                               LogContext context) {
   const auto& log_keys = ext_log_keys(context);
 
-  // ============================ Parameters ============================
   const size_t K = pir_params_.K();
   constexpr size_t coeff_count = DBConsts::PolyDegree;
-  const size_t coeff_val_cnt = DBConsts::PolyDegree * K; // polydegree * RNS moduli count
+  const size_t coeff_val_cnt = DBConsts::PolyDegree * K;
 
-  // ============================ Decomposition ============================
-  // Decompose the BFV input into the [c0 digits][c1 digits] vector consumed by
-  // the RGSW matrix. K=1 的 data external product 直接使用 centered signed
-  // digits；K=2 的 data external product 走 CRT-compose -> unsigned base-B
-  // digit extraction -> decompose-back-to-RNS。后者不同于 BV K=2 signed
-  // decomposition path，也不是论文 signed optimization 的完整实现。
-  //
-  // Reuse the per-instance scratch (sized once) so the thousands of external
-  // products don't each heap-allocate the decomposition rows.
   const size_t gsw_rows = 2 * l_;
   if (ep_decomp_.size() != gsw_rows) ep_decomp_.assign(gsw_rows, std::vector<uint64_t>(coeff_val_cnt));
   else for (auto &row : ep_decomp_) if (row.size() != coeff_val_cnt) row.assign(coeff_val_cnt, 0);
@@ -147,15 +104,8 @@ void GSWEval::external_product(GSWCt const &gsw_enc, RlweCt const &bfv,
   }
   TIME_END(log_keys.decomp);
 
-  // Stage 2: transform decomposed coefficient rows to NTT form.
   decomp_to_ntt(decomposed_bfv, context);
 
-  // ============================ Polynomial Matrix Multiplication ============================
-  // Stage 3: result = decomp(bfv) [1 x 2l] * gsw [2l x 2], accumulated per output poly and
-  // per RNS limb using HEXL's vectorized modular mult/add (AVX-512), matching the
-  // BV-keyswitch inner-product path. Writes straight into res_ct -- no 128-bit
-  // intermediate, no scalar % reduction. res_ct may alias bfv: safe because the
-  // decomposition above already captured bfv's coefficients.
   TIME_START(log_keys.matmul);
   const auto &rns_mods = pir_params_.get_rns_mods();
   if (ep_tmp_.size() != coeff_count) ep_tmp_.resize(coeff_count);
@@ -165,7 +115,6 @@ void GSWEval::external_product(GSWCt const &gsw_enc, RlweCt const &bfv,
     for (size_t mod_id = 0; mod_id < K; ++mod_id) {
       const uint64_t qk = rns_mods[mod_id];
       const size_t off = mod_id * coeff_count;
-      // Row 0 initialises the accumulator; subsequent rows multiply-then-add.
       intel::hexl::EltwiseMultMod(out + off, decomposed_bfv[0].data() + off,
                                   gsw_enc[0].data() + k * coeff_val_cnt + off,
                                   coeff_count, qk, 1);
@@ -178,18 +127,14 @@ void GSWEval::external_product(GSWCt const &gsw_enc, RlweCt const &bfv,
     }
   }
   TIME_END(log_keys.matmul);
-  res_ct.is_ntt_form() = true;  // the result of two NTT form polynomials is still in NTT form.
+  res_ct.is_ntt_form() = true;
 }
 
 void GSWEval::decomp_rlwe_mp(RlweCt const &ct, std::vector<std::vector<uint64_t>> &output,
                          LogContext context) {
   const auto& log_keys = ext_log_keys(context);
 
-  // ============================ Parameters ============================
-  // `output` is the caller's reusable scratch, pre-sized to 2*l_ rows of
-  // coeff_val_cnt each; we write digit rows in place (no allocation here).
   assert(output.size() == 2 * l_);
-  // Setup parameters
   if (low_bits_ != 0) {
     throw std::invalid_argument(
         "approximate GSW decomposition is only implemented for K=1");
@@ -202,23 +147,14 @@ void GSWEval::decomp_rlwe_mp(RlweCt const &ct, std::vector<std::vector<uint64_t>
   const size_t coeff_val_cnt = pir_params_.get_coeff_val_cnt();
   std::vector<uint64_t> ct_coeffs(coeff_val_cnt);
 
-  // ============================ Decomposition ============================
   for (size_t poly_id = 0; poly_id < 2; poly_id++) {
-    // we need a copy because we need to compose the array. This copy is very fast.
     memcpy(ct_coeffs.data(), ct.data(poly_id), coeff_val_cnt * sizeof(uint64_t));
     TIME_START(log_keys.compose);
-    // Transform the coefficients from RNS form to multi-precision integer form
-    // (little-endian limbs, K limbs per coefficient). This K>=2 GSW path extracts
-    // unsigned base-B digits after CRT composition; compare bv_keyswitch.cpp for
-    // the separate BV signed decomposition path.
-    // ! compose / decompose are slow when K > 1 because of the per-coeff CRT work.
     compose_rns_to_mp(ct_coeffs.data(), coeff_count, rns_mods, K,
                       pir_params_.get_rns_tables());
     TIME_END(log_keys.compose);
 
-    // Extract unsigned base-B digits by right shift/mask. Rows are MSB-first:
-    // p = l_-1 (largest shift) lands in this poly's row 0.
-    for (size_t p = l_; p-- > 0;) { // loop from l_ - 1 to 0.
+    for (size_t p = l_; p-- > 0;) {
       std::vector<uint64_t> &res = output[poly_id * l_ + (l_ - 1 - p)];
       memcpy(res.data(), ct_coeffs.data(), coeff_val_cnt * sizeof(uint64_t));
       TIME_START(log_keys.right_shift);
@@ -229,7 +165,6 @@ void GSWEval::decomp_rlwe_mp(RlweCt const &ct, std::vector<std::vector<uint64_t>
             res_ptr[0] &= mask;
             res_ptr[1] = 0;
         } else {
-          // Generic n-limb little-endian right shift (only reached for K > 2).
           const size_t shift = p * base_log2_;
           const size_t word_shift = shift / 64;
           const size_t bit_shift  = shift % 64;
@@ -254,24 +189,12 @@ void GSWEval::decomp_rlwe_mp(RlweCt const &ct, std::vector<std::vector<uint64_t>
 }
 
 void GSWEval::decomp_rlwe_single_mod(RlweCt const &ct, std::vector<std::vector<uint64_t>> &output,
-                                   LogContext /*context*/) {
-  // ============================ Parameters ============================
-  // `output` is the caller's reusable scratch, pre-sized to 2*l_ rows of
-  // coeff_count each; we write digits in place (no allocation here).
-  // Vectorized signed decomposition: instead of decomposing one coefficient at a
-  // time (the bvks::signed_gadget_decompose primitive, kept for the
-  // keyswitch/tests), we extract one DIGIT across the whole polynomial at a time.
-  // The carry chain is serial across digits, but all N coefficients within a
-  // digit are independent, so the inner loops auto-vectorize (AVX-512). The math
-  // mirrors the scalar primitive exactly (balanced digits, MSB-first).
+                                   LogContext ) {
   assert(output.size() == 2 * l_);
   constexpr size_t N = DBConsts::PolyDegree;
   const uint64_t q = pir_params_.get_rns_mods()[0];
   const int64_t qi = static_cast<int64_t>(q);
   const uint64_t half_q = q >> 1;
-  // Copy parameters before writing scratch/output. Otherwise GCC reloads the
-  // potentially aliased members inside the coefficient loops and scalarizes
-  // both centering and digit extraction.
   const size_t ell = l_;
   const size_t base_log2 = base_log2_;
   const size_t low_bits = low_bits_;
@@ -284,7 +207,6 @@ void GSWEval::decomp_rlwe_single_mod(RlweCt const &ct, std::vector<std::vector<u
     const uint64_t *poly_ptr = ct.data(poly_id);
     const size_t base_row = poly_id * ell;
 
-    // Center [0, q) -> (-q/2, q/2].
     for (size_t k = 0; k < N; ++k) {
       const int64_t v = static_cast<int64_t>(poly_ptr[k]);
       d[k] = (poly_ptr[k] > half_q) ? v - qi : v;
@@ -296,13 +218,9 @@ void GSWEval::decomp_rlwe_single_mod(RlweCt const &ct, std::vector<std::vector<u
       }
     }
 
-    // Digit i is the B^i coefficient (extracted LSB-first); store MSB-first, so
-    // it lands in row (l_-1-i). Poly 0 -> rows [0,l_), poly 1 -> rows [l_,2*l_).
     for (size_t i = 0; i < ell; ++i) {
       uint64_t *const outrow = output[base_row + (ell - 1 - i)].data();
       for (size_t k = 0; k < N; ++k) {
-        // Unsigned left shift preserves the baseline branchless extraction
-        // without signed-overflow UB. C++20 signed right shift sign-extends.
         const int64_t r = static_cast<int64_t>(
             static_cast<uint64_t>(d[k]) << native_shift) >> native_shift;
         d[k] = (d[k] - r) >> base_log2;
@@ -317,12 +235,10 @@ void GSWEval::decomp_to_ntt(std::vector<std::vector<uint64_t>> &decomp_coeffs,
                            LogContext context) {
   const auto& log_keys = ext_log_keys(context);
 
-  // ============================ Parameters ============================
   constexpr size_t coeff_count = DBConsts::PolyDegree;
   const size_t K = pir_params_.K();
   const auto rns_mods = pir_params_.get_rns_mods();
 
-  // ============================ NTT Transformation ============================
   TIME_START(log_keys.ntt);
   for (auto &coeffs : decomp_coeffs) {
     for (size_t i = 0; i < K; i++) {
@@ -340,12 +256,6 @@ void GSWEval::query_to_gsw(std::vector<RlweCt> query, GSWCt gsw_key,
   constexpr size_t coeff_count = DBConsts::PolyDegree;
   const size_t K = pir_params_.K();
 
-  // Algorithm 3 / QueryUnpack: client-side QueryPack placed L_EP BFV
-  // ciphertexts per non-first dimension into the expanded query stream. After
-  // server expansion, the first N0 ciphertexts remain the first-dimension BFV
-  // vector; every following L_EP block is one selector's top half. `query`
-  // here is exactly that selector block. Copy those L_EP BFV rows as the top
-  // half of an RGSW selector, preserving [c0 K*N][c1 K*N] flat row layout.
   for (size_t i = 0; i < curr_l; i++) {
     for (size_t j = 0; j < coeff_count * K; j++) {
       output[i].push_back(query[i].data(0)[j]);
@@ -354,14 +264,9 @@ void GSWEval::query_to_gsw(std::vector<RlweCt> query, GSWCt gsw_key,
       output[i].push_back(query[i].data(1)[j]);
     }
   }
-  gsw_ntt_forward(output);  // Top rows must be NTT-form before external products.
+  gsw_ntt_forward(output);
   
-  // Complete the selector using the uploaded RGSW(s) completion key. key_gsw_
-  // was constructed with L_KEY/base_log2_key, so the decomposition used inside
-  // these external products is the key-decomposition one. The final selector
-  // shape, however, is determined by the L_EP rows supplied above: 2*L_EP rows.
   output.resize(2 * curr_l);
-  // Each top row external-multiplied by RGSW(s) gives the matching bottom row.
   for (size_t i = 0; i < curr_l; i++) {
     TIME_START(CONVERT_EXTERN);
     external_product(gsw_key, query[i], query[i], LogContext::QUERY_TO_GSW);
@@ -385,16 +290,12 @@ GSWCt GSWEval::plain_to_gsw(std::vector<uint64_t> const &plaintext,
 
   const double sigma = pir_params_.get_noise_std_dev();
 
-  // MP gadget table: gadget_table[k][p] = B^(l_-1-p) mod q_k, MSB-first
-  // (p=0 = largest power B^(l_-1)).
   std::vector<std::vector<uint64_t>> gadget_table =
       utils::gsw_gadget(l_, base_log2_, rns_mods_arr, low_bits_);
 
   const size_t rows_per_half = l_;
   GSWCt output(2 * rows_per_half, std::vector<uint64_t>(2 * K * N));
 
-  // Re-canonicalise plaintext supplied in [0, q_0) when K > 1: a value above
-  // q_0/2 is logically negative and becomes q_k - |v| under limb k.
   const uint64_t q0 = qs[0];
   const uint64_t half_q0 = q0 >> 1;
   auto canon_mj = [&](size_t coef, uint64_t qk) -> uint64_t {
@@ -408,10 +309,8 @@ GSWCt GSWEval::plain_to_gsw(std::vector<uint64_t> const &plaintext,
   RlweCt ct;
   for (size_t half = 0; half < 2; ++half) {
     for (size_t r = 0; r < rows_per_half; ++r) {
-      // Fresh K-limb Enc_sk(0) in coefficient form.
-      encrypt_zero_rns(sk, N, qs, sigma, rng, ct, /*ntt_form=*/false);
+      encrypt_zero_rns(sk, N, qs, sigma, rng, ct, false);
 
-      // Add gadget * plaintext under every limb.
       for (size_t k = 0; k < K; ++k) {
         const uint64_t qk = qs[k];
         const uint64_t g  = gadget_table[k][r];
@@ -424,7 +323,6 @@ GSWCt GSWEval::plain_to_gsw(std::vector<uint64_t> const &plaintext,
         }
       }
 
-      // NTT each limb in place, then concatenate into the row.
       for (size_t k = 0; k < K; ++k) {
         utils::ntt_fwd(ct.c0.data() + k * N, N, qs[k]);
         utils::ntt_fwd(ct.c1.data() + k * N, N, qs[k]);

@@ -13,7 +13,7 @@ size_t reversed_index(size_t index, size_t bits) {
   return result;
 }
 
-}  // namespace
+}
 
 void PirTest::test_tree_packing() {
   using namespace tree_packing;
@@ -47,8 +47,6 @@ void PirTest::test_tree_packing() {
     expected.data.assign(n, 0);
     for (size_t i = 0; i < count; ++i) {
       std::vector<uint64_t> message(n);
-      // Dense non-target coefficients catch missing projection rounds and
-      // incorrect negacyclic signs, not just misplaced desired fragments.
       for (uint64_t &x : message) x = rng() % t;
       const size_t offset = reversed_index(i, r);
       for (size_t j = 0; j < n; j += rho) expected.data[j + offset] = message[j];

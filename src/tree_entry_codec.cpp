@@ -29,7 +29,7 @@ size_t checked_mul(size_t a, size_t b, const char *field) {
   return a * b;
 }
 
-}  // namespace
+}
 
 void validate_entry(const EntryBits &entry) {
   require(entry.bit_length > 0, "entry bit length must be positive");
@@ -201,4 +201,4 @@ EntryBits decode_entry(const EncodedEntry &encoded, const CodecSpec &spec) {
   return entry;
 }
 
-}  // namespace tree_entry_codec
+}

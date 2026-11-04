@@ -20,16 +20,8 @@ tree_entry_codec::EncodedEntry encode_one(
   return tree_entry_codec::encode_entry(entry, params.codec);
 }
 
-}  // namespace
+}
 
-// Complete response plaintext at the final h=1 32-byte layout with the paper's
-// first-dimension width. The retained primary path uses the old
-// (gamma, alpha, beta) tree layout with g = 8 and P = 3, so the smallest b = 0
-// fixture with N0 = 512 has L = log2(n/g) + a = 8 + 9 = 17. This gate decrypts
-// every small-q coefficient of every response chunk: selected entry planes must
-// appear at the public residue lattice, and all padding coefficients must remain
-// zero. The historical one-bit noise-margin assertion is intentionally gone;
-// correctness is the contract for these prototype performance experiments.
 void test_tree_noise_envelope() {
   print_func_name(__FUNCTION__);
   constexpr size_t N = DBConsts::PolyDegree;

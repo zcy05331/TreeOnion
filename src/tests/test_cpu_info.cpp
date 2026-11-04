@@ -8,7 +8,6 @@ void PirTest::print_cpu_info() {
   BENCH_PRINT("CPU Information:");
   PRINT_BAR;
 
-  // Get CPU model name
   std::ifstream cpuinfo("/proc/cpuinfo");
   std::string line;
   std::string model_name;
@@ -35,19 +34,15 @@ void PirTest::print_cpu_info() {
   BENCH_PRINT("Model Name: " << model_name);
   BENCH_PRINT("CPU Count: " << cpu_count);
 
-  // Get additional CPU information using lscpu
   BENCH_PRINT("\nDetailed CPU Information:");
   system("lscpu | grep -E 'Model name|Architecture|CPU op-mode|Thread|Core|Socket|NUMA|L1d|L1i|L2|L3'");
 
-  // Get memory information
   BENCH_PRINT("\nMemory Information:");
   system("free -h");
 
-  // Get cache information
   BENCH_PRINT("\nCache Information:");
   system("lscpu | grep -E 'L1d|L1i|L2|L3'");
 
-  // Get CPU flags (instruction sets)
   BENCH_PRINT("\nCPU Flags (Instruction Sets):");
   system("lscpu | grep -E 'Flags|avx|sse|fma'");
 

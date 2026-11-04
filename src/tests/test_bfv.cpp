@@ -4,9 +4,6 @@
 #include "hexl/hexl.hpp"
 #include <random>
 
-// BFV primitives on the native RLWE layer: encrypt, add (coefficient and NTT
-// form), multiply a ciphertext by an NTT-form plaintext, decrypt. Every
-// result is checked against the Z_t[x]/(x^N+1) arithmetic it must implement.
 void PirTest::bfv_example() {
   print_func_name(__FUNCTION__);
 
@@ -20,7 +17,6 @@ void PirTest::bfv_example() {
   ChaChaRng rng(0x626676ULL);
   RlweSk sk = gen_secret_key(N, q, rng);
 
-  // ============== BFV + BFV addition (coefficient form) ==============
   std::vector<uint64_t> a(N, 0), b(N, 0);
   a[0] = 1; a[1] = 9;
   b[0] = 3; b[1] = 6;
@@ -50,8 +46,6 @@ void PirTest::bfv_example() {
   require_test(sum_budget > 0, "BFV addition exhausted the noise budget");
   PRINT_BAR;
 
-  // ============== NTT-form add ==============
-  // encrypt, transform, add, transform back, decrypt.
   RlweCt ct_a_ntt = ct_a;
   RlweCt ct_b_ntt = ct_b;
   rlwe_ntt_fwd_inplace(ct_a_ntt, q, N);
@@ -66,9 +60,6 @@ void PirTest::bfv_example() {
                "NTT-form addition differs from coefficient-form addition");
   PRINT_BAR;
 
-  // ============== Ciphertext × plaintext in NTT form ==============
-  // This is the operation used in the first-dimension matrix-vector multiply.
-  // ct in NTT form, scalar plaintext in NTT form. Pointwise multiply c0, c1.
   std::vector<uint64_t> scalar(N, 0);
   scalar[0] = 2;
   scalar[1] = 3;
@@ -88,8 +79,6 @@ void PirTest::bfv_example() {
 
   RlwePt pt_mul;
   int mul_budget = decrypt_and_budget(ct_mul, sk, N, q, t, pt_mul);
-  // Negacyclic product a * scalar in Z_t[x]/(x^N+1); both operands live in
-  // degrees 0..1 so no wrap-around term appears.
   std::vector<uint64_t> expected(N, 0);
   for (size_t i = 0; i < N; ++i) {
     if (a[i] == 0) continue;

@@ -3,14 +3,8 @@
 #include <chrono>
 #include <vector>
 
-// make_query_profiled must be the same pipeline as make_query: for one packed
-// query evaluated twice (a copy each), the responses are bit-for-bit equal,
-// and every profiled stage that runs is positive.
 void PirTest::test_pir_profile() {
   print_func_name(__FUNCTION__);
-  // Ragged multidimensional layout: 43 plaintexts under expansion height 5
-  // exercises expansion pruning, RGSW completion, the first dimension and
-  // the remaining-dimension CMux tree.
   const PirParams params = PirParams().with_layout({43, 5, true});
   PirClient client(params);
   SharedPirSessionKeys keys = client.create_session_keys();
@@ -43,11 +37,9 @@ void PirTest::test_pir_profile() {
                    profile.convert > std::chrono::nanoseconds::zero() &&
                    profile.other_dim > std::chrono::nanoseconds::zero(),
                "expand/convert/other-dim stages were not measured");
-  // The stage sum is the whole call: no stage is double counted or skipped.
   const PirPipelineProfile zero;
   require_test(profile.first_dim_finalize > zero.first_dim_finalize,
                "first-dimension finalize was not measured");
-  // Decrypting the profiled response recovers the requested plaintext.
   const RlwePt decrypted = client.decrypt_mod_q(profiled);
   RlwePt expected;
   source(29, expected);

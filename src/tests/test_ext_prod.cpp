@@ -2,7 +2,6 @@
 #include "rlwe.h"
 #include <stdexcept>
 
-// Pretty-print an RlwePt like seal::Plaintext::to_string (hex, high-deg first).
 static std::string pt_to_string(const RlwePt &pt) {
   std::string s;
   bool first = true;
@@ -24,17 +23,13 @@ static std::string pt_to_string(const RlwePt &pt) {
   return first ? "0" : s;
 }
 
-// This is a BFV x GSW example
 void PirTest::test_external_product() {
   print_func_name(__FUNCTION__);
   PirParams pir_params;
-  // Single-modulus fixture (encrypt_bfv / decrypt_and_budget are the K = 1
-  // specialisation); the K-limb external product is covered by test_pir.
   require_applicable(pir_params.K() == 1,
                      "test_external_product is a single-modulus fixture");
   const size_t coeff_count = DBConsts::PolyDegree;
 
-  // ================== Create RGSW(1) ==================
   const size_t gsw_l = pir_params.get_l();
   const size_t base_log2 = pir_params.get_base_log2();
   GSWEval data_gsw(pir_params, gsw_l, base_log2,
@@ -52,18 +47,15 @@ void PirTest::test_external_product() {
   GSWCt one_gsw  = data_gsw.plain_to_gsw(one,  rlwe_sk, rng);
   GSWCt zero_gsw = data_gsw.plain_to_gsw(zero, rlwe_sk, rng);
 
-  // ================== Create BFV(a) ==================
   std::vector<uint64_t> a(coeff_count);
   a[0] = t / 2 + 1; a[1] = t / 2 + 2; a[2] = t / 2 + 3;
   RlweCt a_encrypted;
   encrypt_bfv(a, rlwe_sk, coeff_count, q, t,
               pir_params.get_noise_std_dev(), rng, a_encrypted);
 
-  // Expected plaintexts: BFV(a) * RGSW(1) = a, BFV(a) * RGSW(0) = 0.
   RlwePt expect_a;    expect_a.data = a;
   RlwePt expect_zero; expect_zero.data = zero;
 
-  // ================== Test external product ==================
   RlweCt ext_prod_result;
   ext_prod_result.resize(coeff_count);
   RlwePt result;
@@ -100,7 +92,6 @@ void PirTest::test_external_product() {
   }
   PRINT_BAR;
 
-  // external product: BFV(a) * RGSW(1) for 100 times
   TIME_START("External product");
   for (size_t i = 0; i < 100; i++) {
     data_gsw.external_product(one_gsw, a_encrypted, ext_prod_result, LogContext::GENERIC);

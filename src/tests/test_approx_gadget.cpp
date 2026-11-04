@@ -176,13 +176,6 @@ void check_ext_product(size_t ell, size_t low_bits) {
 }
 
 
-// One gadget shape this build ships. decomp_rlwe_single_mod must reconstruct
-// every coefficient exactly (to within half a rounding step when low_bits > 0),
-// keep every digit balanced, and agree digit for digit with
-// bvks::signed_gadget_decompose, the scalar primitive it claims to mirror
-// (gsw.cpp: "The math mirrors the scalar primitive exactly"). External
-// products cannot see a wrong low digit (B <= 2^10 against a decode threshold
-// near 2^45), so only this direct comparison catches one.
 void check_shipped_shape(const PirParams &params, size_t ell,
                          size_t base_log2, size_t low_bits) {
   constexpr size_t N = DBConsts::PolyDegree;
@@ -196,9 +189,6 @@ void check_shipped_shape(const PirParams &params, size_t ell,
     ct.c0[i] = rng() % q;
     ct.c1[i] = rng() % q;
   }
-  // Boundary coefficients written into c0 and negated into c1: the centering
-  // split at q/2 and the balanced-digit tie at B/2 in both signs, plus
-  // (B/2) * B^(ell-1) mod q, whose top digit sits on the tie.
   const uint64_t B = uint64_t{1} << base_log2;
   uint64_t top = (B / 2) % q;
   for (size_t r = 1; r < ell; ++r) {
@@ -236,7 +226,6 @@ void check_shipped_shape(const PirParams &params, size_t ell,
         require_test(digit >= -digit_bound && digit < digit_bound,
                      "shipped gadget shape emits an unbalanced digit" + shape);
       }
-      // The scalar primitive is LSB-first; the rows are stored MSB-first.
       bvks::signed_gadget_decompose(poly[j], base_log2, q, scalar.data(), ell,
                                     low_bits);
       for (size_t i = 0; i < ell; ++i) {
@@ -248,7 +237,7 @@ void check_shipped_shape(const PirParams &params, size_t ell,
   }
 }
 
-}  // namespace
+}
 
 void test_approx_gadget() {
   print_func_name(__FUNCTION__);
@@ -264,10 +253,6 @@ void test_approx_gadget() {
   PRINT_BAR;
 }
 
-// The data-selector gadget (L_EP rows, ep_low_bits) and the RGSW(s)
-// completion-key gadget (L_KEY rows) as PirParams derives them for this build:
-// the shapes every K=1 external product and query_to_gsw actually run, which
-// test_approx_gadget's synthetic ell in {2,3} shapes do not reach.
 void test_gsw_decomp_shapes() {
   print_func_name(__FUNCTION__);
   PirParams params;

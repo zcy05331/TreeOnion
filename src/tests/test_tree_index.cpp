@@ -18,10 +18,6 @@ bool throws_invalid_argument(Fn &&fn) {
   return false;
 }
 
-// Exhaust every (leaf, level) pair of one configuration against the direct
-// tree walk. This is the blueprint sec. 21.2 layout gate: the cross-level
-// identity j_l = gamma_l * R_l + p_l, the (alpha, beta) reconstruction of
-// p_l, and the gamma-prefix rule above level r.
 void exhaust_config(const TreePirParams &params) {
   const auto plans = build_level_plans(params);
   require_test(plans.size() == params.L + 1, "one plan per level");
@@ -31,8 +27,6 @@ void exhaust_config(const TreePirParams &params) {
     const size_t gamma = leaf / params.P;
     const size_t beta = (leaf % params.P) % params.B;
 
-    // Bits are little-endian encodings of the arithmetic coordinates, and the
-    // coordinates reassemble the leaf exactly.
     size_t beta_bits = 0, gamma_bits = 0;
     for (size_t u = 0; u < params.b; ++u) {
       beta_bits |= static_cast<size_t>(coords.beta_bits_le[u]) << u;
@@ -76,8 +70,6 @@ void exhaust_config(const TreePirParams &params) {
   }
 }
 
-// Plan-level checks that do not depend on a leaf: case boundaries, bit
-// ranges, and projection depth per blueprint sec. 5.2-5.4.
 void check_plans(const TreePirParams &params) {
   const auto plans = build_level_plans(params);
   for (size_t level = 0; level <= params.L; ++level) {
@@ -126,26 +118,21 @@ void check_plans(const TreePirParams &params) {
   }
 }
 
-}  // namespace
+}
 
 void PirTest::test_tree_index() {
   print_func_name(__FUNCTION__);
 
-  // Blueprint sec. 25 sanity configurations, exhausted leaf by leaf. Small
-  // odd t and odd moduli stand in for the scheme's NTT primes; index math
-  // never touches them beyond the invertibility gates.
   const std::vector<uint64_t> mods{577};
-  exhaust_config(make_tree_pir_params(6, 1, 8, 1, 1, 17, mods));   // (64, 8, 2)
-  exhaust_config(make_tree_pir_params(7, 1, 8, 1, 1, 17, mods));   // (128, 8, 2)
-  exhaust_config(make_tree_pir_params(8, 2, 16, 1, 1, 17, mods));  // (256, 16, 4)
+  exhaust_config(make_tree_pir_params(6, 1, 8, 1, 1, 17, mods));
+  exhaust_config(make_tree_pir_params(7, 1, 8, 1, 1, 17, mods));
+  exhaust_config(make_tree_pir_params(8, 2, 16, 1, 1, 17, mods));
   check_plans(make_tree_pir_params(6, 1, 8, 1, 1, 17, mods));
   check_plans(make_tree_pir_params(7, 1, 8, 1, 1, 17, mods));
   check_plans(make_tree_pir_params(8, 2, 16, 1, 1, 17, mods));
-  // b = 0 boundary: L = r + a exactly, every AlphaBeta level has d_l = 0.
   exhaust_config(make_tree_pir_params(5, 2, 8, 1, 1, 17, mods));
   check_plans(make_tree_pir_params(5, 2, 8, 1, 1, 17, mods));
 
-  // Hard validation gates (sec. 21.1): no silent padding or fallback.
   require_test(throws_invalid_argument([&] {
                  (void)make_tree_pir_params(4, 2, 8, 1, 1, 17, mods);
                }),
@@ -167,13 +154,10 @@ void PirTest::test_tree_index() {
                }),
                "accepted an out-of-range first-dimension width");
   require_test(throws_invalid_argument([&] {
-                 // w = 2 + 4*(b + r) > 8 forces W = 16 > n = 8.
                  (void)make_tree_pir_params(6, 1, 8, 4, 4, 17, mods);
                }),
                "accepted W above the ring degree");
   require_test(throws_invalid_argument([&] {
-                 // ell*(b + r) = 16 * 2^60 wraps to 0 mod 2^64; unchecked
-                 // arithmetic would fold w back to N0 and pass every gate.
                  (void)make_tree_pir_params(19, 3, 2048, size_t{1} << 60,
                                             size_t{1} << 60, 17, mods);
                }),
@@ -206,12 +190,6 @@ void PirTest::test_tree_index() {
                }),
                "accepted out-of-range leaf");
 
-  // Scheme binding: n, t, moduli and both gadget lengths come from the live
-  // PirParams. The frozen blueprint sec. 18 anchor applies to the L_EP = 6
-  // paper configuration.
-  // Every expectation is derived from the live scheme (n, L_EP), so the
-  // check holds for any ring size; at n = 2048, L_EP = 6 it reproduces the
-  // frozen blueprint anchor r = 11, b = 2, B = 4, w = 86, W = 128, h_q = 7.
   PirParams scheme;
   const TreePirParams bound = make_tree_pir_params_for_scheme(tree_height_for(3, 2), 3, scheme);
   const size_t log_n = std::bit_width(scheme.get_poly_degree()) - 1;
@@ -220,7 +198,7 @@ void PirTest::test_tree_index() {
   require_test(bound.ell_beta == scheme.get_l() &&
                    bound.ell_gamma == scheme.get_l(),
                "scheme gadget binding");
-  const size_t expected_b = bound.L - log_n - 3;  // the (a = 3, b = 2) shape
+  const size_t expected_b = bound.L - log_n - 3;
   require_test(bound.N0 == 8 && bound.b == expected_b &&
                    bound.B == (size_t{1} << expected_b),
                "blueprint shape-test split");
@@ -234,22 +212,11 @@ void PirTest::test_tree_index() {
                      bound.W == 128 && bound.h_q == 7,
                  "frozen blueprint sec. 18 anchor");
   }
-  // Runtime capability bound: N0 = 2^10 gives w > 1024, so h_q = 11 stays
-  // within W <= n yet exceeds the scheme's session-key expansion height (10).
-  // The scheme-bound factory must reject it instead of letting the failure
-  // surface later at set_client_session_keys.
   require_test(throws_invalid_argument([&] {
                  (void)make_tree_pir_params_for_scheme(bound.r + 10, 10,
                                                        scheme);
                }),
                "accepted an expansion height beyond the session keys");
-  // Boundary of that gate (5-argument overload): a registered key height
-  // equal to h_q is accepted, one below it is rejected. The old 32-byte and
-  // compressed-response benchmarks searched a downward with the default key
-  // height and take the first accepted shape, so a gate regressed from '>' to
-  // '>=' would pass every h_q = 7 fixture above and silently pick the next
-  // smaller first dimension for the paper's g = 32 benchmark.
-  // A shape the gate must accept; a rejection is reported as `what`.
   const auto accepted = [&](size_t L, size_t a, size_t g, size_t key_height,
                             const char *what) {
     try {
@@ -272,11 +239,6 @@ void PirTest::test_tree_index() {
                  "accepted a session-key height one below h_q");
   }
   if (paper_config_active()) {
-    // The production g = 32 shape at 2^22 leaves: under the default key
-    // height (10) a = 9 is the widest accepted first dimension (N0 = 512,
-    // W = 1024, h_q exactly at the gate) and a = 10 is refused by the gate
-    // alone -- registering one more key level admits it (N0 = 1024,
-    // h_q = 11), the fold-halving shape the benchmark comment records.
     const size_t key_height = scheme.get_expan_height();
     const TreePirParams g32 =
         accepted(22, 9, 32, key_height,

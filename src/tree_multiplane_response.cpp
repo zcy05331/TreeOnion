@@ -75,7 +75,7 @@ tree_entry_codec::EncodedEntry decode_level_planes(
   return encoded;
 }
 
-}  // namespace
+}
 
 Response answer(const Database &db, ExpandedTreeQuery &query, PirServer &server,
                 size_t client_id, const Params &params,
@@ -116,8 +116,6 @@ Response answer(const Database &db, ExpandedTreeQuery &query, PirServer &server,
   }
   TIME_END(TREE_PYRAMID_TIME);
 
-  // Every AlphaBeta level of every plane is scanned here in one pass; the
-  // loop below finishes its rows. The small levels share one more scratch.
   ScanScratch stacked_scan, scan_scratch;
   const bool stacked = use_m32 && db.stacked.rows != 0;
   if (stacked) {
@@ -223,4 +221,4 @@ std::vector<EntryBits> extract(const Response &response, PirClient &client,
   return path;
 }
 
-}  // namespace tree_multiplane
+}

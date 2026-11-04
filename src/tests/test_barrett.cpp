@@ -35,7 +35,6 @@ void check_case(uint128_t x, uint64_t q) {
   }
 }
 
-// Random uint128_t uniformly over [0, 2^width) for width in [1, 128].
 uint128_t random_u128(ChaChaRng &rng, size_t width) {
   if (width == 0) return 0;
   if (width <= 64) {
@@ -50,17 +49,16 @@ uint128_t random_u128(ChaChaRng &rng, size_t width) {
 
 uint64_t sample_prime(ChaChaRng &rng, size_t bit_width) {
   const uint64_t base = utils::generate_prime(bit_width);
-  return base; // Deterministic given bit_width; sufficient for this test.
+  return base;
 }
 
-} // namespace
+}
 
 void PirTest::test_barrett() {
   print_func_name(__FUNCTION__);
 
   ChaChaRng rng(0xBA77E77Fu);
 
-  // === 64-bit-input reducer: correctness over common and edge moduli ===
   const std::array<uint64_t, 12> q_u64_set = {
       1,
       2,
@@ -94,7 +92,6 @@ void PirTest::test_barrett() {
 
   BENCH_PRINT("Barrett u64 correctness: " << u64_cases << " cases OK");
 
-  // === Correctness grid: every (q_bits, x_bits) combo that actually appears ===
   const std::array<size_t, 7> q_bits_set  = {8, 17, 32, 40, 50, 60, 61};
   const std::array<size_t, 7> x_bits_set  = {16, 32, 64, 96, 120, 127, 128};
   constexpr size_t samples_per_combo = 1000;
@@ -111,7 +108,6 @@ void PirTest::test_barrett() {
     }
   }
 
-  // === Edge cases ===
   const uint64_t q60 = utils::generate_prime(60);
   check_case(0, q60);
   check_case(1, q60);
@@ -119,20 +115,15 @@ void PirTest::test_barrett() {
   check_case(q60, q60);
   check_case(q60 + 1, q60);
   check_case((uint128_t)q60 * q60, q60);
-  check_case(~static_cast<uint128_t>(0), q60);                  // 2^128 - 1
+  check_case(~static_cast<uint128_t>(0), q60);
   check_case(~static_cast<uint128_t>(0) - 1, q60);
-  check_case(static_cast<uint128_t>(1) << 127, q60);            // top bit only
+  check_case(static_cast<uint128_t>(1) << 127, q60);
   check_case((static_cast<uint128_t>(1) << 127) | 1, q60);
 
   BENCH_PRINT("Barrett correctness: " << cases << " random + 10 edge cases OK");
 
-  // === Perf sanity check: Barrett vs % ===
-  //
-  // Compute-bound microbenchmark: a small buffer that fits in L1 (16 KB),
-  // many passes so cache misses vanish. The only thing varying is the
-  // reduction method.
-  constexpr size_t N = 1 << 10;              // 1024 coefficients (16 KB)
-  constexpr int iters = 20000;               // 20M reductions per variant
+  constexpr size_t N = 1 << 10;
+  constexpr int iters = 20000;
   std::vector<uint128_t> xs(N);
   for (size_t i = 0; i < N; i++) xs[i] = random_u128(rng, 120);
   const uint64_t q = q60;
@@ -140,7 +131,6 @@ void PirTest::test_barrett() {
 
   volatile uint64_t sink = 0;
 
-  // Warm up
   for (int r = 0; r < 10; r++)
     for (size_t i = 0; i < N; i++) sink ^= utils::barrett_reduce_u128(xs[i], b);
   for (int r = 0; r < 10; r++)
@@ -162,7 +152,6 @@ void PirTest::test_barrett() {
   const double barrett_ns = std::chrono::duration<double, std::nano>(t1 - t0).count() / total;
   const double percent_ns = std::chrono::duration<double, std::nano>(t3 - t2).count() / total;
 
-  // 64-bit-input variant benchmark.
   std::vector<uint64_t> xs64(N);
   for (size_t i = 0; i < N; i++) xs64[i] = rng();
   const utils::BarrettU64 b64 = utils::barrett_u64_setup(q);

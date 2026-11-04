@@ -5,9 +5,6 @@ void PirTest::test_fst_dim_mult() {
   print_func_name(__FUNCTION__);
   CLEAN_TIMER();
 
-  // Regression oracle for the CONFIG_N2048_K1_COMP scalar first-dimension
-  // kernel. The composite production path calls level_mat_mat_32 with n=512
-  // and 29-bit residues; one output row is enough to expose 64-bit overflow.
   PirParams composite_params;
   const auto &composite = composite_params.get_composite_rns();
   if (composite.enabled) {
@@ -39,10 +36,6 @@ void PirTest::test_fst_dim_mult() {
     }
   }
 
-  // Stress test against a mod-q reference. Inputs are full-width random values
-  // in [0, q), and ref_n is large enough that the chunked accumulator must
-  // reduce mid-loop. This is the shape that exposed the uint128 overflow at
-  // fst_dim_sz ≈ 1000 with q ~ 2^60.
   constexpr size_t ref_m = 4;
   constexpr size_t ref_n = 1024;
   constexpr size_t ref_p = 2;
@@ -92,10 +85,6 @@ void PirTest::test_fst_dim_mult() {
   }
   BENCH_PRINT("Correctness check: PASS (full-q random, n=" << ref_n << ", q=" << ref_q << ")");
 
-  // Throughput benchmark.
-  // Set USE_PIR_SHAPE=true to mirror the active PirParams first-dim shape
-  // (m=other_dim_sz, n=fst_dim_sz, levels=coeff_val_cnt). Set false to use
-  // the custom (m, n, levels) below — handy for sweeping shapes independently.
   constexpr bool USE_PIR_SHAPE = true;
   constexpr size_t custom_m = 1 << 5;
   constexpr size_t custom_n = 512;
@@ -115,7 +104,6 @@ void PirTest::test_fst_dim_mult() {
   std::vector<db_coeff_t> B_data(n * p * levels);
   std::vector<inter_coeff_t> C_data(m * p * levels);
 
-  // fill randome data for A and B
   for (size_t i = 0; i < A_data.size(); ++i)
     A_data[i] = static_cast<db_coeff_t>(rand());
   for (size_t i = 0; i < B_data.size(); ++i)
@@ -125,24 +113,18 @@ void PirTest::test_fst_dim_mult() {
   db_matrix_t B_mat{B_data.data(), n, p, levels};
   inter_matrix_t C_mat{C_data.data(), m, p, levels};
 
-  // Per-level moduli matching the active PIR params: limb (lvl / N) for each level.
   const auto &qs_arr = pir_params.get_rns_mods();
   const size_t N_test = DBConsts::PolyDegree;
   std::vector<uint64_t> level_qs(levels);
   for (size_t lvl = 0; lvl < levels; ++lvl)
     level_qs[lvl] = qs_arr[(lvl / N_test) % qs_arr.size()];
 
-  // First chunk: the production level_mat_mat. db_coeff_t / inter_coeff_t are
-  // chosen at compile time from max_ct_mod_width() — uint32→uint64 for the
-  // K=2 (29-bit) cell, uint64→uint128 for the K=1 (60-bit) cell.
   constexpr size_t INTER_BITS = sizeof(inter_coeff_t) * 8;
   const std::string MAT_MULT_128 = "level mat mat (build inter_coeff_t)";
   TIME_START(MAT_MULT_128);
   level_mat_mat(&A_mat, &B_mat, &C_mat, level_qs.data());
   TIME_END(MAT_MULT_128);
 
-  // No-chunk variant: uint128 accumulator, single reduction per column.
-  // Isolates the cost of the chunked path's mid-loop `% q`.
   std::vector<inter_coeff_t> C_data_nc(m * p * levels, 0);
   inter_matrix_t C_mat_nc{C_data_nc.data(), m, p, levels};
   const std::string MAT_MULT_NC = "level mat mat nochunk";
@@ -159,15 +141,6 @@ void PirTest::test_fst_dim_mult() {
   }
   BENCH_PRINT("Checksum: " << utils::uint128_to_string(checksum));
 
-  // ============================================================================
-  // 32->64 chunk: same shape, but force uint32_t inputs and uint64_t accumulator.
-  // Models the K=2 / 29-bit-prime regime where each limb's coefficients fit in
-  // 32 bits, so the per-level matmul can stay in 64-bit arithmetic and skip
-  // uint128 entirely. Reported alongside the 128-bit number above so the
-  // throughput gap is directly visible from a single PIR-shape run.
-  // Only meaningful when max_ct_mod_width() <= 32 (otherwise inputs would not
-  // fit in uint32_t); we still execute it but check the modulus at runtime.
-  // ============================================================================
   const std::string MAT_MULT_64 = "level mat mat 64 bits";
   const uint64_t max_q_test = *std::max_element(qs_arr.begin(), qs_arr.end());
   const bool can_run_32to64 = max_q_test < (uint64_t(1) << 32);
@@ -182,11 +155,10 @@ void PirTest::test_fst_dim_mult() {
     for (size_t i = 0; i < B32.size(); ++i) B32[i] = static_cast<uint32_t>(rand());
     db64 = m * n * levels * sizeof(uint32_t);
 
-    // Per-level chunk so the running 64-bit accumulator never overflows.
     auto pick_chunk_64 = [](uint64_t q, size_t cols) -> size_t {
       if (q == 0) return cols;
       const uint64_t MAX_ACC = ~uint64_t(0);
-      const uint64_t q2 = q * q;        // safe: q < 2^32 ⇒ q² < 2^64
+      const uint64_t q2 = q * q;
       const uint64_t r  = (MAX_ACC - q) / q2;
       if (r == 0) return 1;
       return r >= cols ? cols : static_cast<size_t>(r);
@@ -239,10 +211,6 @@ void PirTest::test_fst_dim_mult() {
     BENCH_PRINT("Checksum (32->64): " << checksum64);
   }
 
-  // 32->64 with NO chunking. uint64 accumulator overflows when n·q² > 2^64
-  // (true here for K=2 with n=512, q≈2^29). Output is wrong mod q; we only
-  // care about the timing — establishes the upper bound for "stay in uint64,
-  // skip all mid-loop reductions".
   const std::string MAT_MULT_64_NC = "level mat mat 32->64 nochunk";
   std::vector<uint64_t> C64_nc;
   if (can_run_32to64) {
@@ -255,7 +223,6 @@ void PirTest::test_fst_dim_mult() {
     for (size_t i = 0; i < C64_nc.size(); ++i) checksum64_nc += C64_nc[i];
     BENCH_PRINT("Checksum (32->64 nochunk, may wrap): " << checksum64_nc);
 
-    // Pure A-stream ceiling.
     const std::string MAT_MULT_STREAM = "level mat mat stream only";
     TIME_START(MAT_MULT_STREAM);
     volatile uint32_t sink = level_mat_mat_stream_only(A32.data(), m, n, levels);

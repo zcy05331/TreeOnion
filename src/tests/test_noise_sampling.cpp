@@ -4,9 +4,6 @@
 void PirTest::test_noise_sampling() {
   print_func_name(__FUNCTION__);
 
-  // Every sampler draws from ChaChaRng. RFC 8439 A.1 test vectors #1 and #2
-  // (zero key and nonce, block counters 0 and 1) pin the keystream; two
-  // OS-seeded generators must not share one.
   {
     ChaChaRng kat(std::array<uint32_t, 8>{});
     const uint64_t first = kat();
@@ -17,29 +14,10 @@ void PirTest::test_noise_sampling() {
     require_test(a() != b(), "OS-seeded ChaCha20 generators differ");
   }
 
-  constexpr size_t N = 10000; // large N for reliable statistics
+  constexpr size_t N = 10000;
   PirParams pir_params;
   const uint64_t q = pir_params.get_rns_mods()[0];
   ChaChaRng rng(12345);
-
-  // ---------------------------------------------------------------------------
-  // Background: sigma_std vs. width parameter (used in Spiral / Respire / Inspire)
-  //
-  // Spiral/Respire define the discrete Gaussian weight as:
-  //   p(x) ∝ exp(-π * x² / width²)
-  //
-  // The standard Gaussian density is:
-  //   f(x) ∝ exp(-x² / (2 * sigma_std²))
-  //
-  // Matching exponents:  -π / width² = -1 / (2 * sigma_std²)
-  //   => sigma_std = width / sqrt(2π)
-  //
-  // Verification from Spiral source (core.cpp:183-184):
-  //   width = 6.4,  std_dev = 2.55323059
-  //   6.4 / sqrt(2π) ≈ 2.55323  ✓
-  //
-  // Our sampler takes sigma_std directly (the standard deviation).
-  // ---------------------------------------------------------------------------
 
   const double SQRT_2PI = std::sqrt(2.0 * M_PI);
   BENCH_PRINT("Sigma/width conversion: sigma_std = width / sqrt(2*pi)");
@@ -51,15 +29,9 @@ void PirTest::test_noise_sampling() {
     BENCH_PRINT("  width=" << width << "  => sigma_std=" << width / SQRT_2PI);
   }
 
-  // ---------------------------------------------------------------------------
-  // Test 1: sample_gaussian — mean ≈ 0, std dev ≈ sigma
-  // ---------------------------------------------------------------------------
   BENCH_PRINT("\n--- Test 1: sample_gaussian statistics (sigma_std parameterization) ---");
 
   auto centred = [&](uint64_t v) -> double {
-    // Map from [0, q) to signed (-q/2, q/2].
-    // Subtraction must be done in int64_t before converting to double: q is a
-    // 60-bit prime (> 2^53), so double(q-1) - double(q) rounds to 0 instead of -1.
     if (v > q / 2)
       return static_cast<double>(static_cast<int64_t>(v) - static_cast<int64_t>(q));
     return static_cast<double>(v);
@@ -84,7 +56,7 @@ void PirTest::test_noise_sampling() {
     double stddev = std::sqrt(var);
 
     bool mean_ok   = std::abs(mean) < 0.15 * sigma_std;
-    bool stddev_ok = std::abs(stddev - sigma_std) / sigma_std < 0.05; // within 5%
+    bool stddev_ok = std::abs(stddev - sigma_std) / sigma_std < 0.05;
     total1 += 2;
     pass1  += (mean_ok ? 1 : 0) + (stddev_ok ? 1 : 0);
     BENCH_PRINT("sigma_std=" << sigma_std << "  (equiv. width=" << width_equiv << ")"
@@ -93,9 +65,6 @@ void PirTest::test_noise_sampling() {
                 << "  stddev_ok=" << (stddev_ok ? "YES" : "NO"));
   }
 
-  // ---------------------------------------------------------------------------
-  // Test 2: sample_uniform_poly — values in [0, q), uniform distribution
-  // ---------------------------------------------------------------------------
   BENCH_PRINT("\n--- Test 2: sample_uniform_poly ---");
   {
     std::vector<uint64_t> buf(N);
@@ -103,7 +72,6 @@ void PirTest::test_noise_sampling() {
 
     bool range_ok = std::all_of(buf.begin(), buf.end(), [&](uint64_t v){ return v < q; });
 
-    // Split [0,q) into 8 buckets — expect roughly N/8 each.
     std::vector<size_t> buckets(8, 0);
     for (uint64_t v : buf) buckets[v * 8 / q]++;
     double chi2 = 0.0;
@@ -112,7 +80,6 @@ void PirTest::test_noise_sampling() {
       double d = static_cast<double>(cnt) - expected;
       chi2 += d * d / expected;
     }
-    // Chi-squared with 7 dof: p=0.001 critical value ≈ 24.3.
     bool uniform_ok = (chi2 < 25.0);
     BENCH_PRINT("Range check (all < q): " << (range_ok ? "OK" : "FAIL"));
     BENCH_PRINT("Chi-squared statistic: " << chi2 << " (pass < 25.0): "
@@ -121,9 +88,6 @@ void PirTest::test_noise_sampling() {
     require_test(uniform_ok, "uniform sample failed the chi-squared check");
   }
 
-  // ---------------------------------------------------------------------------
-  // Test 3: sample_ternary — values in {0, 1, q-1}, roughly equal probability
-  // ---------------------------------------------------------------------------
   BENCH_PRINT("\n--- Test 3: sample_ternary ---");
   {
     std::vector<uint64_t> buf(N);
@@ -149,9 +113,6 @@ void PirTest::test_noise_sampling() {
     require_test(balance_ok, "ternary sample is unbalanced");
   }
 
-  // ---------------------------------------------------------------------------
-  // Summary
-  // ---------------------------------------------------------------------------
   BENCH_PRINT("\n--- Summary ---");
   BENCH_PRINT("Test 1 sub-checks: " << pass1 << "/" << total1
               << " (mean and stddev for 3 sigma values)");

@@ -7,7 +7,6 @@
 void PirTest::test_hexl_ntt() {
   print_func_name(__FUNCTION__);
 
-  // ===================== Parameters =====================
   constexpr size_t N = DBConsts::PolyDegree;
   PirParams pir_params;
   const uint64_t q = pir_params.get_rns_mods()[0];
@@ -22,7 +21,6 @@ void PirTest::test_hexl_ntt() {
 
   ChaChaRng rng(42);
 
-  // ===================== Test 1: NTT(INTT(x)) == x =====================
   BENCH_PRINT("\n--- Test 1: NTT(INTT(x)) == x ---");
   std::vector<uint64_t> original(N), transformed(N), recovered(N);
   for (size_t i = 0; i < N; i++) original[i] = rng() % q;
@@ -38,9 +36,6 @@ void PirTest::test_hexl_ntt() {
     }
   }
 
-  // ===================== Test 2: Polynomial multiplication via NTT =====================
-  // a(x) = 1 + 2x + 3x^2, b(x) = 4 + 5x
-  //   a*b = 4 + 13x + 22x^2 + 15x^3  (N=2048 is large enough for no wrap-around)
   BENCH_PRINT("\n--- Test 2: Polynomial multiplication via NTT ---");
   std::vector<uint64_t> a(N, 0), b(N, 0);
   a[0] = 1; a[1] = 2; a[2] = 3;
@@ -58,13 +53,12 @@ void PirTest::test_hexl_ntt() {
   bool mult_ok = (c[0] == 4 && c[1] == 13 && c[2] == 22 && c[3] == 15 && c[4] == 0);
   BENCH_PRINT("Multiplication correct: " << (mult_ok ? "YES" : "NO"));
 
-  // ===================== Test 3: Polynomial addition (mod q) =====================
   BENCH_PRINT("\n--- Test 3: Polynomial addition (mod q) ---");
   std::vector<uint64_t> x(N, 0), y(N, 0), z(N);
-  x[0] = q - 1;   // -1 mod q
+  x[0] = q - 1;
   x[1] = 100;
-  y[0] = 2;       // x[0]+y[0] = q+1 ≡ 1 mod q
-  y[1] = q - 50;  // x[1]+y[1] = 100 + (q-50) ≡ 50 mod q
+  y[0] = 2;
+  y[1] = q - 50;
 
   intel::hexl::EltwiseAddMod(z.data(), x.data(), y.data(), N, q);
   BENCH_PRINT("x[0]=" << x[0] << " + y[0]=" << y[0] << " = " << z[0] << " (expect 1)");
@@ -72,14 +66,13 @@ void PirTest::test_hexl_ntt() {
   bool add_ok = (z[0] == 1 && z[1] == 50);
   BENCH_PRINT("Addition correct: " << (add_ok ? "YES" : "NO"));
 
-  // ===================== Test 4: Simulated BFV decryption (phase = c0 + c1*s) =====================
   BENCH_PRINT("\n--- Test 4: BFV-like decrypt: phase = c0 + c1*s ---");
   const uint64_t t = pir_params.get_plain_mod();
   const uint64_t delta = q / t;
   BENCH_PRINT("t=" << t << ", delta=floor(q/t)=" << delta);
 
   std::vector<uint64_t> sk(N, 0);
-  sk[0] = 1; sk[1] = q - 1; sk[2] = 1; // s = 1 - x + x^2
+  sk[0] = 1; sk[1] = q - 1; sk[2] = 1;
 
   std::vector<uint64_t> a_poly(N);
   for (size_t i = 0; i < N; i++) a_poly[i] = rng() % q;
@@ -106,7 +99,6 @@ void PirTest::test_hexl_ntt() {
   BENCH_PRINT("Encrypted m=" << m << ", decrypted m=" << m_recovered);
   BENCH_PRINT("Decryption correct: " << ((m_recovered == m) ? "YES" : "NO"));
 
-  // ===================== Test 5: utils:: wrapper matches direct HEXL =====================
   BENCH_PRINT("\n--- Test 5: utils::ntt_fwd/inv matches direct HEXL NTT ---");
   std::vector<uint64_t> input(N);
   for (size_t i = 0; i < N; i++) input[i] = rng() % q;
@@ -129,7 +121,6 @@ void PirTest::test_hexl_ntt() {
   BENCH_PRINT("utils vs direct HEXL: " << (wrap_match ? "MATCH" : "DIFFER")
               << " (fwd diffs=" << fwd_diffs << ", inv diffs=" << inv_diffs << ")");
 
-  // ===================== Test 6: Performance of utils:: wrapper =====================
   BENCH_PRINT("\n--- Test 6: utils::ntt_fwd/inv performance ---");
   constexpr int warmup = 100;
   constexpr int iters  = 10000;
@@ -156,7 +147,6 @@ void PirTest::test_hexl_ntt() {
   double util_us = std::chrono::duration<double, std::micro>(t1 - t0).count() / iters;
   BENCH_PRINT("  utils::ntt_fwd + utils::ntt_inv: " << util_us << " us / iter (" << iters << " iters)");
 
- // ===================== Summary =====================
   BENCH_PRINT("\n--- Summary ---");
   int pass = match + mult_ok + add_ok + (m_recovered == m) + wrap_match;
   BENCH_PRINT("Passed " << pass << "/5 correctness tests (Test 6 is perf-only)");
