@@ -7,8 +7,8 @@
 // the measurements): ExpandBFV, RGSW completion, the first-dimension query
 // NTT, the q1/q2 query packing, the first-dimension matrix core, the CRT
 // compose + INTT finalize, the remaining-dimension CMux tree, and the final
-// modulus switch. Used by the layer-layout sweep and the layerwise benchmark
-// to attribute server time; make_query itself never pays for a profile.
+// modulus switch. It attributes server time to the stages; make_query itself
+// never pays for a profile.
 struct PirPipelineProfile {
   std::chrono::nanoseconds expand{};
   std::chrono::nanoseconds convert{};

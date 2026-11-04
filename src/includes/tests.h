@@ -26,7 +26,7 @@ inline void require_test(bool condition, const std::string &message) {
 }
 
 // A test whose precondition this build does not meet: a single-limb-only
-// feature, or the paper parameter point the Merkle baselines are defined for.
+// feature, or the paper parameter point its frozen constants are defined for.
 // `--test all` counts these separately from failures; a direct run still
 // exits non-zero with the reason.
 struct TestNotApplicable : std::runtime_error {
@@ -37,28 +37,15 @@ inline void require_applicable(bool condition, const std::string &reason) {
     throw TestNotApplicable(reason);
   }
 }
-// The Merkle/cuckoo baselines, their codec and their frozen constants are
-// defined for the paper parameter point CONFIG_N2048_K1_COMP (2048 x 12-bit
-// v2 plaintexts, 96 nodes each).
+// Frozen sizes, moduli and fixtures are defined for the paper parameter point
+// CONFIG_N2048_K1_COMP (2048 x 12-bit plaintexts).
 inline bool paper_config_active() {
   return ACTIVE_CONFIG == CONFIG_N2048_K1_COMP;
 }
-// Planner fingerprints (frozen layouts, padded totals, peak estimates) were
-// derived with the paper's exact EP6 selector gadget. A build on the 3-row
-// approximate gadget sizes each level's expansion from N0 + 3d instead of
-// N0 + 6d and so plans other layouts; those fingerprints apply to EP6 only.
-inline bool exact_ep6_gadget_active() {
-  return paper_config_active() && DBConsts::L_EP == 6 && DBConsts::EP_LOW_BITS == 0;
-}
-inline std::string exact_ep6_reason(const char *what) {
-  return std::string(what) +
-         " freezes plans derived with the exact EP6 selector gadget; this "
-         "build uses another gadget";
-}
 inline std::string paper_config_reason(const char *what) {
   return std::string(what) +
-         " is defined for CONFIG_N2048_K1_COMP (v2 96-node plaintexts and "
-         "frozen constants); this build uses another parameter point";
+         " is defined for CONFIG_N2048_K1_COMP (frozen constants); this "
+         "build uses another parameter point";
 }
 // Tree-test shapes are (a, b) pairs: the height with `b` beta bits for
 // first-dimension bits `a` and `g` slots per node is L = log2(n / g) + a + b,
@@ -77,21 +64,6 @@ inline void print_throughput(const std::string &name, const size_t db_size) {
 class PirTest {
   public:
     size_t num_experiments = 10;
-    // Timed benchmarks (tree_multiplane_bench, cuckoo_bench) take their
-    // workload from these when main.cpp received the matching flag
-    // (--leaf-count, --experiments, --warmup, --trial-seed). Without the
-    // flag each benchmark keeps its own documented default, so archived runs
-    // started without flags stay reproducible.
-    std::optional<size_t> bench_leaf_count;
-    std::optional<size_t> bench_measured_trials;
-    std::optional<size_t> bench_warmups;
-    std::optional<uint64_t> bench_trial_seed;
-    std::optional<std::string> bench_output_json;
-    // --reference-expansion-height: pins the Merkle reference geometry that
-    // cuckoo_bench derives its bucket envelope from (see MerkleWorkload).
-    std::optional<size_t> bench_reference_expansion_height;
-    // log2 of --leaf-count (a power of two) or default_height when unset.
-    size_t bench_tree_height(size_t default_height) const;
 
     void run_test(const std::string &test_name);
 
@@ -127,24 +99,15 @@ class PirTest {
     void test_tree_packing();
     // Milestone 6: scalar vs NTT first-dimension kernels, bit-for-bit.
     void test_tree_kernel();
-    void test_tree_multiplane_benchmark();
-    // Cuckoo-hash batch PIR baseline: correctness gate and L=22 benchmark.
-    void test_cuckoo_batch();
-    void test_cuckoo_benchmark();
     // h=1 entry codec: bitstream packing, zero padding and layout policy.
     void test_tree_entry_codec();
     void test_mod_switch();
     void test_db_shape();
     void test_runtime_layout();
-    void test_merkle_baseline();
     void test_server_loader();
     void test_shared_session();
-    void test_merkle_benchmark_stats();
-    void test_merkle_integration();
     // Stage-profiled make_query is bit-for-bit the plain pipeline.
     void test_pir_profile();
-    // Layer layout candidates, features, Pareto frontier, profile selection.
-    void test_layer_layout_planner();
     void test_bv_keyswitch();
     void test_hexl_ntt();
     void test_utils_arith();
@@ -157,13 +120,3 @@ class PirTest {
     // current config's num_pt, L_EP, L_KEY and BFV ciphertext size.
     void plan_params();
 };
-
-inline size_t PirTest::bench_tree_height(size_t default_height) const {
-  if (!bench_leaf_count) return default_height;
-  const size_t leaves = *bench_leaf_count;
-  if (leaves < 2 || (leaves & (leaves - 1)) != 0) {
-    throw std::invalid_argument(
-        "--leaf-count must be a power of two for the tree benchmarks");
-  }
-  return static_cast<size_t>(std::bit_width(leaves) - 1);
-}

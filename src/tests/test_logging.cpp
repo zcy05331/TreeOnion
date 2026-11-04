@@ -1,9 +1,6 @@
-// TimerLogger semantics that every benchmark figure is built on. The Merkle
-// ServerPhaseAccumulator (merkle_benchmark.cpp) and the tree benchmarks'
-// stages_ms read GET_LAST_TIME after END_EXPERIMENT and rely on repeated
-// sections being summed within one experiment; the pir averages rely on
-// getAvgTime skipping exactly WARMUP_ITERATIONS records. Nothing else
-// asserts these values: the benchmarks only copy them into JSON.
+// TimerLogger semantics the stage timers rely on: GET_LAST_TIME after
+// END_EXPERIMENT sums repeated sections within one experiment, and the pir
+// averages rely on getAvgTime skipping exactly WARMUP_ITERATIONS records.
 #include "tests.h"
 
 #include <chrono>
