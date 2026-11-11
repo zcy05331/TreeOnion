@@ -194,18 +194,29 @@ void write_level_m32(const TreeLevelDatabase &db, const LevelPlan &plan,
   require(first_row + rows <= total_rows, "m32 rows exceed the matrix");
 
   const uint64_t q = scheme.get_rns_mods()[0];
-  std::vector<uint64_t> ntt(N);
+  constexpr size_t TILE = 8;
+  const uint64_t q1 = crt.q1, q2 = crt.q2;
+  std::vector<uint64_t> tile(TILE * N);
   for (size_t row = 0; row < rows; ++row) {
-    for (size_t col = 0; col < cols; ++col) {
-      const size_t p = plan.select_case == SelectCase::AlphaBeta
-                           ? col * rows + row
-                           : col;
-      std::copy(db.plaintexts[p].begin(), db.plaintexts[p].end(), ntt.begin());
-      utils::ntt_fwd(ntt.data(), N, q);
+    for (size_t col0 = 0; col0 < cols; col0 += TILE) {
+      const size_t bs = std::min(TILE, cols - col0);
+      for (size_t b = 0; b < bs; ++b) {
+        const size_t col = col0 + b;
+        const size_t p = plan.select_case == SelectCase::AlphaBeta
+                             ? col * rows + row
+                             : col;
+        std::copy(db.plaintexts[p].begin(), db.plaintexts[p].end(),
+                  tile.begin() + b * N);
+        utils::ntt_fwd(tile.data() + b * N, N, q);
+      }
       for (size_t coeff = 0; coeff < N; ++coeff) {
-        const size_t at = (coeff * total_rows + first_row + row) * cols + col;
-        lo[at] = static_cast<uint32_t>(ntt[coeff] % crt.q1);
-        hi[at] = static_cast<uint32_t>(ntt[coeff] % crt.q2);
+        const size_t base =
+            (coeff * total_rows + first_row + row) * cols + col0;
+        for (size_t b = 0; b < bs; ++b) {
+          const uint64_t c = tile[b * N + coeff];
+          lo[base + b] = static_cast<uint32_t>(c % q1);
+          hi[base + b] = static_cast<uint32_t>(c % q2);
+        }
       }
     }
   }

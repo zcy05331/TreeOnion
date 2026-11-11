@@ -65,6 +65,40 @@ TreeLevelDatabase pack_level(size_t level, size_t plane, const Params &params,
   return pack_tree_level(level, params.tree, chunks);
 }
 
+namespace {
+
+std::vector<TreeLevelDatabase> pack_level_all_planes(
+    size_t level, const Params &params, const EntrySource &source) {
+  const TreePirParams &tree = params.tree;
+  require(level <= tree.L, "level is out of range");
+  const size_t planes = params.codec.plane_count;
+  const size_t R = level >= tree.r ? size_t{1} << (level - tree.r) : size_t{1};
+  const size_t node_count = size_t{1} << level;
+  std::vector<TreeLevelDatabase> dbs(planes);
+  for (TreeLevelDatabase &db : dbs) {
+    db.level = level;
+    db.R = R;
+    db.plaintexts.assign(R, std::vector<uint64_t>(tree.n, 0));
+  }
+  for (size_t p = 0; p < R; ++p) {
+    for (size_t u = 0; u < tree.rho; ++u) {
+      const size_t node = p + u * R;
+      if (node >= node_count) break;
+      const tree_entry_codec::EncodedEntry encoded =
+          encode_entry(source(level, node), params);
+      for (size_t plane = 0; plane < planes; ++plane) {
+        std::vector<uint64_t> &pt = dbs[plane].plaintexts[p];
+        for (size_t j = 0; j < tree.g; ++j) {
+          pt[u + j * tree.rho] = encoded[plane][j] % tree.t;
+        }
+      }
+    }
+  }
+  return dbs;
+}
+
+}
+
 Database preprocess(const Params &params, const EntrySource &source,
                     const PirParams &scheme) {
   constexpr size_t N = DBConsts::PolyDegree;
@@ -88,18 +122,23 @@ Database preprocess(const Params &params, const EntrySource &source,
     stacked.lo.assign(N * stacked.rows * stacked.cols, 0);
     stacked.hi.assign(N * stacked.rows * stacked.cols, 0);
   }
-  db.planes.reserve(params.codec.plane_count);
-  for (size_t plane = 0; plane < params.codec.plane_count; ++plane) {
-    PreprocessedTree out;
+  const size_t plane_count = params.codec.plane_count;
+  std::vector<PreprocessedTree> outs(plane_count);
+  for (PreprocessedTree &out : outs) {
     out.plans = plans;
     if (m32) {
       out.m32.reserve(params.tree.L + 1);
     } else {
       out.ntt.reserve(params.tree.L + 1);
     }
-    for (size_t level = 0; level <= params.tree.L; ++level) {
-      TreeLevelDatabase level_db = pack_level(level, plane, params, source);
-      const LevelPlan &plan = out.plans[level];
+  }
+  for (size_t level = 0; level <= params.tree.L; ++level) {
+    const std::vector<TreeLevelDatabase> level_dbs =
+        pack_level_all_planes(level, params, source);
+    const LevelPlan &plan = plans[level];
+    for (size_t plane = 0; plane < plane_count; ++plane) {
+      const TreeLevelDatabase &level_db = level_dbs[plane];
+      PreprocessedTree &out = outs[plane];
       if (m32 && plan.select_case == SelectCase::AlphaBeta) {
         write_level_m32(level_db, plan, params.tree, scheme, stacked.rows,
                         stacked.first_row[plane][level], stacked.lo.data(),
@@ -116,8 +155,9 @@ Database preprocess(const Params &params, const EntrySource &source,
         out.ntt.push_back(build_level_ntt_view(level_db, scheme));
       }
     }
-    db.planes.push_back(std::move(out));
   }
+  db.planes.reserve(plane_count);
+  for (PreprocessedTree &out : outs) db.planes.push_back(std::move(out));
   return db;
 }
 
