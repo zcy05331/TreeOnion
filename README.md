@@ -1,8 +1,8 @@
-# OnionTreePIR
+# TreeOnion
 
-Implementation of **OnionTreePIR: Efficient Private Retrieval of Tree Paths**.
+Implementation of **TreeOnion: Efficient Private Retrieval of Tree Paths**.
 
-OnionTreePIR is a single-server PIR scheme that lets a client privately
+TreeOnion is a single-server PIR scheme that lets a client privately
 retrieve all nodes on a root-to-leaf path of a public binary tree, such as a
 Merkle proof. The client sends one query that locates only the leaf; the server
 derives the location of every path node from it, selects one node per level,
@@ -48,20 +48,20 @@ thread on an Intel Xeon Platinum 8358:
 - Online communication: **25.5 KiB** (14.5 KiB query + 11.0 KiB response),
   the same as one OnionPIRv2 single-entry query.
 - Server time: **0.35 s to 5.74 s**, 10–20% above a single OnionPIRv2 query.
-- Up to 30× faster server computation and 35× less communication than the
-  level-wise, path-per-leaf, batch PIR (OnionPIRv2 + PBC, Respire) and
-  TreePIR baselines.
+- Up to 49× faster server computation and 42× less communication than the
+  level-wise, path-per-leaf, batch PIR (PBC, Respire) and Cao et al.
+  baselines.
 
 At 1 GiB (2^24 leaves):
 
 | Scheme | Communication | Throughput |
 |---|---:|---:|
-| OnionTreePIR | 25.5 KiB | 1223 MB/s |
 | Level-wise | 463.5 KiB | 894 MB/s |
 | Path-per-leaf | 25.5 KiB | 137 MB/s |
-| OnionPIRv2 + PBC | 944.7 KiB | 240 MB/s |
-| Respire-B | 128.6 KiB | 37 MB/s |
-| TreePIR + OnionPIRv2 | 612.8 KiB | 573 MB/s |
+| Batch PIR (PBC) | 944.7 KiB | 240 MB/s |
+| Respire | 128.6 KiB | 37 MB/s |
+| Cao et al. | 612.8 KiB | 573 MB/s |
+| TreeOnion | 25.5 KiB | 1223 MB/s |
 
 ## Build and test
 
