@@ -111,6 +111,43 @@ void require_path_update(tree_multiplane::Database &db, PirClient &client,
                "sibling path decodes the updated ancestors");
 }
 
+void require_database_matches_reference(
+    const tree_multiplane::Database &db, const PirParams &scheme,
+    const tree_multiplane::Params &params,
+    const tree_multiplane::EntrySource &source) {
+  constexpr size_t N = DBConsts::PolyDegree;
+  for (size_t plane = 0; plane < params.codec.plane_count; ++plane) {
+    for (size_t level = 0; level <= params.tree.L; ++level) {
+      const LevelPlan &plan = db.planes[plane].plans[level];
+      const TreeLevelDatabaseM32 expected = build_level_m32_view(
+          tree_multiplane::pack_level(level, plane, params, source), plan,
+          params.tree, scheme);
+      const TreeLevelDatabaseM32 &built = db.planes[plane].m32[level];
+      require_test(built.level == expected.level && built.R == expected.R &&
+                       built.rows == expected.rows &&
+                       built.cols == expected.cols,
+                   "streamed level has the reference shape");
+      if (plan.select_case != SelectCase::AlphaBeta) {
+        require_test(built.lo == expected.lo && built.hi == expected.hi,
+                     "streamed level equals the reference packing");
+        continue;
+      }
+      const size_t first_row = db.stacked.first_row[plane][level];
+      bool equal = db.stacked.cols == expected.cols;
+      for (size_t coeff = 0; equal && coeff < N; ++coeff) {
+        for (size_t at = 0; at < expected.rows * expected.cols; ++at) {
+          const size_t stacked =
+              (coeff * db.stacked.rows + first_row) * expected.cols + at;
+          const size_t own = coeff * expected.rows * expected.cols + at;
+          equal = equal && db.stacked.lo[stacked] == expected.lo[own] &&
+                  db.stacked.hi[stacked] == expected.hi[own];
+        }
+      }
+      require_test(equal, "streamed stacked rows equal the reference packing");
+    }
+  }
+}
+
 void require_stacked_scan_matches_levels(
     const tree_multiplane::Database &db, PirClient &client, PirServer &server,
     const PirParams &scheme, const tree_multiplane::Params &params,
@@ -171,6 +208,9 @@ void exercise_e2e(tree_packing::ResponsePacking packing) {
                "preprocess builds one tree per plane");
   require_test(db.planes[0].canonical.empty(),
                "multiplane preprocessing releases canonical levels");
+  if (scheme.get_composite_rns().enabled) {
+    require_database_matches_reference(db, scheme, params, source);
+  }
 
   for (size_t leaf : {size_t{0}, tree.N - 1,
                       static_cast<size_t>(0x2BADBEEFULL % tree.N)}) {

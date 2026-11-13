@@ -97,6 +97,85 @@ std::vector<TreeLevelDatabase> pack_level_all_planes(
   return dbs;
 }
 
+struct M32Rows {
+  uint32_t *lo = nullptr;
+  uint32_t *hi = nullptr;
+  size_t total_rows = 0;
+  size_t first_row = 0;
+};
+
+// Streams one level into the m32 matrices of all planes, TILE polynomials at
+// a time as PirServer::load_data does: encode each node once, transform the
+// tile, then write it coefficient by coefficient. The result equals
+// build_level_m32_view(pack_level(level, plane, ...)) for every plane.
+void write_level_m32_streamed(size_t level, const LevelPlan &plan,
+                              const Params &params, const EntrySource &source,
+                              const PirParams &scheme,
+                              std::span<const M32Rows> planes) {
+  constexpr size_t N = DBConsts::PolyDegree;
+  constexpr size_t TILE = 8;
+  const TreePirParams &tree = params.tree;
+  const CompositeRnsTables &crt = scheme.get_composite_rns();
+  require(crt.enabled, "the m32 view needs a composite configuration");
+  require(plan.level == level, "level plan does not match the level");
+  const auto [rows, cols] = level_m32_shape(plan, tree);
+  require(rows * cols == plan.R, "m32 view must cover every record");
+  for (const M32Rows &plane : planes) {
+    require(plane.first_row + rows <= plane.total_rows,
+            "m32 rows exceed the matrix");
+  }
+
+  require((uint64_t{1} << params.codec.payload_bits_per_coeff) <= tree.t,
+          "encoded digits must fit the plaintext modulus");
+
+  const size_t plane_count = planes.size();
+  const size_t g = tree.g, rho = tree.rho;
+  const size_t node_count = size_t{1} << level;
+  // A full level overwrites every coefficient of every polynomial it packs.
+  const bool full = node_count >= plan.R * rho;
+  const bool alpha_beta = plan.select_case == SelectCase::AlphaBeta;
+  const uint64_t q = scheme.get_rns_mods()[0];
+  const uint64_t q1 = crt.q1, q2 = crt.q2;
+  std::vector<uint64_t> tile(plane_count * TILE * N);
+  std::vector<uint64_t> digits(plane_count * g);
+  for (size_t row = 0; row < rows; ++row) {
+    for (size_t col0 = 0; col0 < cols; col0 += TILE) {
+      const size_t bs = std::min(TILE, cols - col0);
+      if (!full) std::fill(tile.begin(), tile.end(), 0);
+      for (size_t b = 0; b < bs; ++b) {
+        const size_t col = col0 + b;
+        const size_t p = alpha_beta ? col * rows + row : col;
+        for (size_t u = 0; u < rho; ++u) {
+          const size_t node = p + u * plan.R;
+          if (node >= node_count) break;
+          // Every digit is below 2^c <= t, so it is already reduced mod t.
+          tree_entry_codec::encode_entry_flat(source(level, node),
+                                              params.codec, digits);
+          for (size_t plane = 0; plane < plane_count; ++plane) {
+            uint64_t *pt = tile.data() + (plane * TILE + b) * N;
+            const uint64_t *d = digits.data() + plane * g;
+            for (size_t j = 0; j < g; ++j) pt[u + j * rho] = d[j];
+          }
+        }
+      }
+      for (size_t plane = 0; plane < plane_count; ++plane) {
+        uint64_t *block = tile.data() + plane * TILE * N;
+        for (size_t b = 0; b < bs; ++b) utils::ntt_fwd(block + b * N, N, q);
+        const M32Rows &out = planes[plane];
+        for (size_t coeff = 0; coeff < N; ++coeff) {
+          const size_t base =
+              (coeff * out.total_rows + out.first_row + row) * cols + col0;
+          for (size_t b = 0; b < bs; ++b) {
+            const uint64_t c = block[b * N + coeff];
+            out.lo[base + b] = static_cast<uint32_t>(c % q1);
+            out.hi[base + b] = static_cast<uint32_t>(c % q2);
+          }
+        }
+      }
+    }
+  }
+}
+
 }
 
 Database preprocess(const Params &params, const EntrySource &source,
@@ -132,29 +211,35 @@ Database preprocess(const Params &params, const EntrySource &source,
       out.ntt.reserve(params.tree.L + 1);
     }
   }
+  std::vector<M32Rows> targets(plane_count);
   for (size_t level = 0; level <= params.tree.L; ++level) {
-    const std::vector<TreeLevelDatabase> level_dbs =
-        pack_level_all_planes(level, params, source);
     const LevelPlan &plan = plans[level];
+    if (!m32) {
+      const std::vector<TreeLevelDatabase> level_dbs =
+          pack_level_all_planes(level, params, source);
+      for (size_t plane = 0; plane < plane_count; ++plane) {
+        outs[plane].ntt.push_back(
+            build_level_ntt_view(level_dbs[plane], scheme));
+      }
+      continue;
+    }
+    const bool alpha_beta = plan.select_case == SelectCase::AlphaBeta;
     for (size_t plane = 0; plane < plane_count; ++plane) {
-      const TreeLevelDatabase &level_db = level_dbs[plane];
-      PreprocessedTree &out = outs[plane];
-      if (m32 && plan.select_case == SelectCase::AlphaBeta) {
-        write_level_m32(level_db, plan, params.tree, scheme, stacked.rows,
-                        stacked.first_row[plane][level], stacked.lo.data(),
-                        stacked.hi.data());
-        TreeLevelDatabaseM32 shape;
-        shape.level = level;
-        shape.R = plan.R;
-        std::tie(shape.rows, shape.cols) = level_m32_shape(plan, params.tree);
-        out.m32.push_back(std::move(shape));
-      } else if (m32) {
-        out.m32.push_back(
-            build_level_m32_view(level_db, plan, params.tree, scheme));
+      outs[plane].m32.emplace_back();
+      TreeLevelDatabaseM32 &view = outs[plane].m32.back();
+      view.level = level;
+      view.R = plan.R;
+      std::tie(view.rows, view.cols) = level_m32_shape(plan, params.tree);
+      if (alpha_beta) {
+        targets[plane] = {stacked.lo.data(), stacked.hi.data(), stacked.rows,
+                          stacked.first_row[plane][level]};
       } else {
-        out.ntt.push_back(build_level_ntt_view(level_db, scheme));
+        view.lo.assign(N * view.rows * view.cols, 0);
+        view.hi.assign(N * view.rows * view.cols, 0);
+        targets[plane] = {view.lo.data(), view.hi.data(), view.rows, 0};
       }
     }
+    write_level_m32_streamed(level, plan, params, source, scheme, targets);
   }
   db.planes.reserve(plane_count);
   for (PreprocessedTree &out : outs) db.planes.push_back(std::move(out));

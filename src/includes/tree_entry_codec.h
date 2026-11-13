@@ -46,6 +46,10 @@ LayoutChoice choose_layout(size_t entry_bits, size_t payload_bits_per_coeff,
                            size_t ring_degree);
 
 EncodedEntry encode_entry(const EntryBits &entry, const CodecSpec &spec);
+// encode_entry without allocation: digits[plane * record_coeffs + digit]. The
+// caller has validated the spec.
+void encode_entry_flat(const EntryBits &entry, const CodecSpec &spec,
+                       std::span<uint64_t> digits);
 EntryBits decode_entry(const EncodedEntry &encoded, const CodecSpec &spec);
 
 }

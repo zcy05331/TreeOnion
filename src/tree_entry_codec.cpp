@@ -141,25 +141,27 @@ LayoutChoice choose_layout(size_t entry_bits, size_t payload_bits_per_coeff,
   return best;
 }
 
-EncodedEntry encode_entry(const EntryBits &entry, const CodecSpec &spec) {
-  validate_codec_spec(spec);
+void encode_entry_flat(const EntryBits &entry, const CodecSpec &spec,
+                       std::span<uint64_t> digits) {
   validate_entry(entry);
   require(entry.bit_length == spec.entry_bits,
           "entry bit length does not match the codec");
+  require(digits.size() == spec.plane_count * spec.record_coeffs,
+          "digit buffer does not match the codec");
 
   const size_t c = spec.payload_bits_per_coeff;
-  EncodedEntry planes(spec.plane_count, PlaneDigits(spec.record_coeffs, 0));
-  size_t plane = 0;
+  std::fill(digits.begin(), digits.end(), 0);
   size_t digit = 0;
   size_t digit_offset = 0;
   size_t remaining_entry_bits = spec.entry_bits;
   for (uint8_t byte : entry.bytes) {
     size_t fragment_bits = std::min<size_t>(8, remaining_entry_bits);
+    remaining_entry_bits -= fragment_bits;
     size_t consumed = 0;
     while (fragment_bits > 0) {
       const size_t take = std::min(fragment_bits, c - digit_offset);
       const uint64_t mask = (uint64_t{1} << take) - 1;
-      planes[plane][digit] |=
+      digits[digit] |=
           static_cast<uint64_t>((byte >> consumed) & mask) << digit_offset;
       fragment_bits -= take;
       consumed += take;
@@ -167,13 +169,19 @@ EncodedEntry encode_entry(const EntryBits &entry, const CodecSpec &spec) {
       if (digit_offset == c) {
         digit_offset = 0;
         ++digit;
-        if (digit == spec.record_coeffs) {
-          digit = 0;
-          ++plane;
-        }
       }
     }
-    remaining_entry_bits -= std::min<size_t>(8, remaining_entry_bits);
+  }
+}
+
+EncodedEntry encode_entry(const EntryBits &entry, const CodecSpec &spec) {
+  validate_codec_spec(spec);
+  std::vector<uint64_t> digits(spec.plane_count * spec.record_coeffs);
+  encode_entry_flat(entry, spec, digits);
+  EncodedEntry planes(spec.plane_count);
+  for (size_t plane = 0; plane < spec.plane_count; ++plane) {
+    const auto first = digits.begin() + plane * spec.record_coeffs;
+    planes[plane].assign(first, first + spec.record_coeffs);
   }
   return planes;
 }
