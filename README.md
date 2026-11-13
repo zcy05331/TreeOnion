@@ -47,7 +47,8 @@ thread on an Intel Xeon Platinum 8358:
 
 - Online communication: **25.5 KiB** (14.5 KiB query + 11.0 KiB response),
   the same as one OnionPIRv2 single-entry query.
-- Server time: **0.35 s to 5.74 s**, 10–20% above a single OnionPIRv2 query.
+- Server time: **0.35 s to 5.74 s**, 9–29% above a single OnionPIRv2 query
+  (29% at 256 MiB, falling to 9% at 8 GiB).
 - Up to 49× faster server computation and 42× less communication than the
   level-wise, path-per-leaf, batch PIR (PBC, Respire) and Cao et al.
   baselines.
