@@ -150,28 +150,33 @@ void encode_entry_flat(const EntryBits &entry, const CodecSpec &spec,
           "digit buffer does not match the codec");
 
   const size_t c = spec.payload_bits_per_coeff;
+  require(c > 0 && c < 64 && digits.size() * c >= spec.entry_bits,
+          "digit buffer is too small for the entry");
+
+  // Read the entry eight bytes at a time into a bit window and cut c-bit
+  // digits off its low end; a last partial digit keeps its low bits.
+  const uint64_t mask = (uint64_t{1} << c) - 1;
   std::fill(digits.begin(), digits.end(), 0);
+  const uint8_t *bytes = entry.bytes.data();
+  const size_t byte_count = entry.bytes.size();
+  unsigned __int128 window = 0;
+  size_t have = 0;
   size_t digit = 0;
-  size_t digit_offset = 0;
-  size_t remaining_entry_bits = spec.entry_bits;
-  for (uint8_t byte : entry.bytes) {
-    size_t fragment_bits = std::min<size_t>(8, remaining_entry_bits);
-    remaining_entry_bits -= fragment_bits;
-    size_t consumed = 0;
-    while (fragment_bits > 0) {
-      const size_t take = std::min(fragment_bits, c - digit_offset);
-      const uint64_t mask = (uint64_t{1} << take) - 1;
-      digits[digit] |=
-          static_cast<uint64_t>((byte >> consumed) & mask) << digit_offset;
-      fragment_bits -= take;
-      consumed += take;
-      digit_offset += take;
-      if (digit_offset == c) {
-        digit_offset = 0;
-        ++digit;
-      }
+  for (size_t at = 0; at < byte_count; at += 8) {
+    const size_t n = std::min<size_t>(8, byte_count - at);
+    uint64_t word = 0;
+    for (size_t j = 0; j < n; ++j) {
+      word |= static_cast<uint64_t>(bytes[at + j]) << (8 * j);
+    }
+    window |= static_cast<unsigned __int128>(word) << have;
+    have += std::min(8 * n, spec.entry_bits - 8 * at);
+    while (have >= c) {
+      digits[digit++] = static_cast<uint64_t>(window) & mask;
+      window >>= c;
+      have -= c;
     }
   }
+  if (have > 0) digits[digit] = static_cast<uint64_t>(window);
 }
 
 EncodedEntry encode_entry(const EntryBits &entry, const CodecSpec &spec) {
